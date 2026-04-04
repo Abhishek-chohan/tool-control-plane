@@ -29,7 +29,9 @@ class ClientFactory(BaseClientFactory):
         try:
             from ..toolplane_client import Toolplane
 
-            self.register_client(ClientProtocol.GRPC, Toolplane, self._validate_grpc_config)
+            self.register_client(
+                ClientProtocol.GRPC, Toolplane, self._validate_grpc_config
+            )
         except ImportError:
             pass
 
