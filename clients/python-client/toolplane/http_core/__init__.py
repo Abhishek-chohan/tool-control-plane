@@ -3,11 +3,11 @@
 from ..core.errors import (
     ConnectionError,
     MachineError,
-    ToolplaneError,
     RequestError,
     SessionError,
     TaskError,
     ToolError,
+    ToolplaneError,
 )
 from .http_config import HTTPClientConfig
 from .http_connection import HTTPConnectionManager

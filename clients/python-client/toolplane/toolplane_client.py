@@ -18,12 +18,12 @@ try:
         ConnectionError,
         ConnectionManager,
         MachineManager,
-        ToolplaneError,
         RequestManager,
         SessionContext,
         SessionManager,
         TaskManager,
         ToolManager,
+        ToolplaneError,
     )
 except ImportError:
     # Fallback for direct execution
@@ -40,12 +40,12 @@ except ImportError:
         ConnectionError,
         ConnectionManager,
         MachineManager,
-        ToolplaneError,
         RequestManager,
         SessionContext,
         SessionManager,
         TaskManager,
         ToolManager,
+        ToolplaneError,
     )
 
 

@@ -5,11 +5,11 @@ from .connection import ConnectionManager
 from .errors import (
     ConnectionError,
     MachineError,
-    ToolplaneError,
     RequestError,
     SessionError,
     TaskError,
     ToolError,
+    ToolplaneError,
 )
 from .machine import MachineManager
 from .request import RequestManager
