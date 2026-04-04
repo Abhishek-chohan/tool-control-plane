@@ -47,8 +47,6 @@ For runtime semantics behind this flow, including request lifecycle, streaming, 
 - `server/docs/local-development.md`: explicit local bootstrap path with env-based auth, storage, and proxy settings.
 - `SDK_MAP.md`: per-RPC parity plus support-tier caveats.
 - `clients/typescript-mcp-adapter/README.md`: optional stdio adapter usage, session binding, and validation path.
-- `.plans/roadmap-latest/prioritized-roadmap.md`: current roadmap status and intake point for future unfinished work.
-- `.plans/roadmap-latest/tier-0-artifact-policy.md`: current tracked-versus-disposable artifact policy for the repository.
 
 ## Local Development
 

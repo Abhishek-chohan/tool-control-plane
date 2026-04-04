@@ -51,9 +51,9 @@ The drift workflow installs the following toolchain family so CI and local regen
 - `protoc-gen-go` v1.36.6
 - `protoc-gen-go-grpc` v1.5.1
 - `protoc-gen-grpc-gateway` v2.26.3
-- `grpcio` v1.71.0
-- `grpcio-tools` v1.71.0
-- `protobuf` v5.29.4
+- `grpcio` v1.78.0
+- `grpcio-tools` v1.78.0
+- `protobuf` v6.31.1
 - Node dependencies from `clients/typescript-client/package-lock.json`, including `grpc-tools` and `grpc_tools_node_protoc_ts`
 
 ## Regeneration Flow
@@ -61,8 +61,7 @@ The drift workflow installs the following toolchain family so CI and local regen
 1. Regenerate the server Go and gRPC-gateway outputs from `server/proto/service.proto`.
 2. Sync the checked-in client `service.proto` copies and the minimal `google/api` import copies used by the Go and TypeScript clients.
 3. Regenerate the tracked Go client stubs in `clients/go-client/proto/`.
-4. Regenerate the tracked Python client stubs in `clients/python-client/toolplane/proto/`.
-	Normalize the generated gRPC stub import so it uses the package-relative `toolplane.proto` layout instead of depending on a top-level `proto` package.
+4. Regenerate the tracked Python client stubs in `clients/python-client/toolplane/proto/`. The follow-up import-fix step normalizes the generated gRPC stub so it uses the package-relative `toolplane.proto` layout instead of depending on a top-level `proto` package.
 5. Regenerate the tracked TypeScript JavaScript and declaration outputs in `clients/typescript-client/src/proto/` via `npm run generate:proto`.
 
 ## JavaScript And TypeScript Outputs
