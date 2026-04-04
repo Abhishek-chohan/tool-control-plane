@@ -1,0 +1,16 @@
+{
+  "id": "session_list_user_scope",
+  "feature": "session_list",
+  "description": "List sessions for a user and ensure the newly created session is returned.",
+  "request": {
+    "user_id": "conformance-user",
+    "page_size": 100,
+    "page_token": 0,
+    "filter": ""
+  },
+  "expected": {
+    "contains_created_session": true,
+    "sessions_array_present": true
+  },
+  "tags": ["core", "session", "pagination"]
+}

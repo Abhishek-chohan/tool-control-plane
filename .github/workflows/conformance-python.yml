@@ -1,0 +1,229 @@
+name: SDK Conformance & Verification
+
+# Cross-SDK shared-fixture verification for the maintained public surface.
+# This workflow runs Python shared-fixture conformance, TypeScript shared-fixture
+# conformance, the optional TypeScript MCP adapter integration suite, and Go
+# client unit tests. It is the primary CI signal that maintained SDK behavior
+# and the translated adapter boundary still match the repo's validation story.
+# See conformance/README.md
+# for the fixture semantics and conformance/ARCHITECTURE.md for coverage model.
+#
+# This is NOT the authoritative release gate; see release-gate.yml for the
+# end-to-end secure-startup scenario.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  python-conformance:
+    name: Python Conformance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r clients/python-client/requirements.txt
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go modules
+        working-directory: server
+        run: go mod download
+
+      - name: Validate conformance test collection
+        run: |
+          python -m pytest clients/python-client/tests/conformance/test_conformance_runner.py --collect-only -q
+
+      - name: Run Python conformance suite
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_STORAGE_MODE: "memory"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+        run: |
+          python -m pytest clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -q
+
+  go-client:
+    name: Go Client
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-client-${{ hashFiles('clients/go-client/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-client-
+
+      - name: Download Go client modules
+        working-directory: clients/go-client
+        run: go mod download
+
+      - name: Run Go client tests
+        working-directory: clients/go-client
+        run: go test ./...
+
+  typescript-client:
+    name: TypeScript Client
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/typescript-client/package-lock.json
+
+      - name: Cache server Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-server-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-server-
+
+      - name: Download server Go modules
+        working-directory: server
+        run: go mod download
+
+      - name: Install TypeScript dependencies
+        working-directory: clients/typescript-client
+        run: npm ci
+
+      - name: Run TypeScript build
+        working-directory: clients/typescript-client
+        run: npm run build
+
+      - name: Run TypeScript unit tests
+        working-directory: clients/typescript-client
+        run: npm test
+
+      - name: Run TypeScript conformance suite
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_STORAGE_MODE: "memory"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+        working-directory: clients/typescript-client
+        run: npm run test:conformance
+
+  typescript-mcp-adapter:
+    name: TypeScript MCP Adapter
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            clients/typescript-client/package-lock.json
+            clients/typescript-mcp-adapter/package-lock.json
+
+      - name: Cache server Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-server-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-server-
+
+      - name: Download server Go modules
+        working-directory: server
+        run: go mod download
+
+      - name: Install TypeScript client dependencies
+        working-directory: clients/typescript-client
+        run: npm ci
+
+      - name: Install TypeScript MCP adapter dependencies
+        working-directory: clients/typescript-mcp-adapter
+        run: npm ci
+
+      - name: Run TypeScript MCP adapter integration suite
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_STORAGE_MODE: "memory"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+        working-directory: clients/typescript-mcp-adapter
+        run: npm test

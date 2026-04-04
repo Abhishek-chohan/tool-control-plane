@@ -1,0 +1,26 @@
+{
+  "id": "provider_runtime_drain_under_load",
+  "feature": "provider_runtime",
+  "description": "Drain a machine while the explicit provider runtime is executing work and verify the in-flight request still completes before the machine disappears.",
+  "request": {
+    "mode": "drain",
+    "tool_name": "provider_runtime_delayed_echo",
+    "tool_description": "Delayed provider runtime tool",
+    "params": {
+      "message": "provider-drain",
+      "delay_ms": 750
+    },
+    "timeout_seconds": 30
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "status_equals": "done",
+    "executing_machine_present": true,
+    "result_equals": {
+      "echo": "provider-drain"
+    },
+    "drain_success": true,
+    "absent_after_drain": true
+  },
+  "tags": ["core", "provider", "runtime", "drain"]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "toolplane-typescript-mcp-adapter",
+  "version": "1.0.0",
+  "description": "Optional stdio MCP adapter for one Toolplane session",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build:client": "npm --prefix ../typescript-client run build",
+    "build": "npm run build:client && tsc",
+    "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "npm run build && npm run test:integration",
+    "test:integration": "node scripts/run-tests.mjs tests",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts"
+  },
+  "keywords": [
+    "toolplane",
+    "mcp",
+    "adapter",
+    "typescript"
+  ],
+  "author": "Toolplane Team",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "toolplane-typescript-client": "file:../typescript-client"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
+    "eslint": "^8.57.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.0.0"
+  }
+}

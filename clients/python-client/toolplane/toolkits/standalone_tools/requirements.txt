@@ -1,0 +1,37 @@
+# Requirements for standalone tools
+# These are optional dependencies that can enhance functionality
+
+# For better encoding detection in read_file.py
+
+# For syntax highlighting in read_file.py  
+pygments>=2.10.0
+
+# For advanced HTTP requests in fetch_webpage.py and web_search.py
+requests>=2.25.0
+
+# For better HTML parsing in fetch_webpage.py and web_search.py
+beautifulsoup4>=4.9.0
+lxml>=4.6.0
+
+# For JSON schema validation (if needed)
+jsonschema>=3.2.0
+
+# For advanced regex operations
+regex>=2021.0.0
+
+# For better file watching capabilities
+watchdog>=2.1.0
+
+# For configuration file support
+# pyyaml>=5.4.0
+toml>=0.10.0
+
+# For advanced text processing
+nltk>=3.6.0
+
+# For better command-line interfaces
+click>=8.0.0
+rich>=10.0.0
+
+# All tools are designed to work with Python standard library only
+# These optional dependencies can be installed if enhanced functionality is needed

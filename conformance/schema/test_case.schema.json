@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Toolplane Conformance Test Case",
+  "type": "object",
+  "required": ["id", "feature", "description", "request", "expected"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature": {
+      "type": "string",
+      "enum": [
+        "session_create",
+        "session_list",
+        "invoke_unary",
+        "invoke_stream",
+        "tool_discovery",
+        "session_update",
+        "request_create",
+        "request_recovery",
+        "api_key_lifecycle",
+        "machine_lifecycle",
+        "provider_runtime"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request": {
+      "type": "object"
+    },
+    "expected": {
+      "type": "object"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "request_recovery_resume_expired_window",
+  "feature": "request_recovery",
+  "description": "Create a long streaming request, verify the retained window was trimmed, and assert ResumeStream fails with out_of_range when replay falls behind it.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-request-recovery-expired-session",
+    "description": "session for request recovery expired-window fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_recovery_expired",
+    "tool_description": "conformance request recovery expired-window tool",
+    "params": {
+      "prefix": "overflow",
+      "count": 105
+    },
+    "resume_from_seq": 0
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "final_status_equals": "done",
+    "chunk_count_equals": 100,
+    "first_chunk_equals": "overflow-6",
+    "last_chunk_equals": "overflow-105",
+    "start_seq_equals": 6,
+    "next_seq_equals": 106,
+    "resume_error_code_equals": "out_of_range"
+  },
+  "tags": ["core", "request", "recovery", "resume", "expiry"]
+}

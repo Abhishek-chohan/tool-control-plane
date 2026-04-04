@@ -1,0 +1,117 @@
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Local environment and secret overrides
+.env
+.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+*.local
+
+# Node.js dependencies
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.github/copilot-instructions.md
+.github/repo-manifest.json
+.github/agents/
+.github/instructions/
+.plans/
+.tmp/
+attached_assets/
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest cache
+.pytest_cache/
+
+# Python virtual environments
+venv/
+venv*/
+env/
+env*/
+ENV/
+.venv/
+.venv*/
+
+# Python distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Python test, lint, and coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.pyre/
+.nox/
+.tox/
+.python-version
+
+# TypeScript compiled output
+clients/typescript-client/dist/
+clients/typescript-client/*.tsbuildinfo
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# Go binaries
+server/bin/
+
+# Proto generated files
+server/proto/googleapis/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.pid
+*.pid.lock
+*.stackdump
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+/tmp/logs/

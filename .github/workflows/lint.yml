@@ -1,0 +1,118 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Python Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python lint dependencies
+        working-directory: clients/python-client
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run Black
+        working-directory: clients/python-client
+        run: python -m black --check toolplane
+
+      - name: Run isort
+        working-directory: clients/python-client
+        run: python -m isort --check-only toolplane
+
+      - name: Run Flake8
+        working-directory: clients/python-client
+        run: python -m flake8 toolplane
+
+  go:
+    name: Go Lint (${{ matrix.module-name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module-name: server
+            working-directory: server
+          - module-name: go-client
+            working-directory: clients/go-client
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: ${{ matrix.working-directory }}
+          args: --timeout=5m
+
+  typescript:
+    name: TypeScript Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/typescript-client/package-lock.json
+
+      - name: Install TypeScript dependencies
+        working-directory: clients/typescript-client
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: clients/typescript-client
+        run: npm run lint
+
+  typescript-mcp-adapter:
+    name: TypeScript MCP Adapter Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/typescript-mcp-adapter/package-lock.json
+
+      - name: Install TypeScript MCP adapter dependencies
+        working-directory: clients/typescript-mcp-adapter
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: clients/typescript-mcp-adapter
+        run: npm run lint

@@ -1,0 +1,15 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+issues:
+  exclude-generated: strict
+
+linters:
+  enable:
+    - errcheck
+    - gofmt
+    - govet
+    - ineffassign
+    - unused

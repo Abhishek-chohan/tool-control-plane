@@ -1,0 +1,32 @@
+{
+  "id": "request_recovery_chunk_window",
+  "feature": "request_recovery",
+  "description": "Create a streaming request, let it complete, and verify the retained chunk window metadata exposed by GetRequestChunks.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-request-recovery-window-session",
+    "description": "session for request recovery chunk window fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_recovery_window",
+    "tool_description": "conformance request recovery stream tool",
+    "params": {
+      "prefix": "recover",
+      "count": 5
+    }
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "final_status_equals": "done",
+    "ordered_chunks": [
+      "recover-1",
+      "recover-2",
+      "recover-3",
+      "recover-4",
+      "recover-5"
+    ],
+    "chunk_count_equals": 5,
+    "start_seq_equals": 1,
+    "next_seq_equals": 6
+  },
+  "tags": ["core", "request", "recovery", "stream"]
+}

@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203,W503,D,ANN001,ANN002,ANN003,ANN101,ANN102,ANN201,ANN202,ANN204,ANN401,A001,A002,A003,A004,E501
+exclude =
+    .git,
+    __pycache__,
+    build,
+    dist,
+    toolplane/proto,
+    toolplane/toolkits,
+    toolplane.egg-info,
+    toolplane_python_client.egg-info
+per-file-ignores =
+    toolplane/__init__.py:F401

@@ -1,0 +1,84 @@
+name: Release Gate
+
+# Authoritative end-to-end release gate for the maintained Toolplane architecture.
+# Proves secure startup, provider registration, session creation, unary and
+# streaming execution, request inspection, and graceful drain through the
+# Python shared-fixture conformance suite running against a live server.
+#
+# See server/docs/release-gate.md for the full scenario description and
+# local reproduction instructions.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  release-gate:
+    name: Release Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: toolplane
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d toolplane"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r clients/python-client/requirements.txt
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go modules
+        working-directory: server
+        run: go mod download
+
+      - name: Run release gate
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_STORAGE_MODE: "postgres"
+          TOOLPLANE_DATABASE_URL: "postgres://postgres:postgres@localhost:5432/toolplane?sslmode=disable"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+        working-directory: server
+        run: make release-gate

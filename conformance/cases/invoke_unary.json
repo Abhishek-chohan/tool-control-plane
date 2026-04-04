@@ -1,0 +1,18 @@
+{
+  "id": "invoke_unary_echo",
+  "feature": "invoke_unary",
+  "description": "Register a unary echo tool, invoke it, and verify returned payload.",
+  "request": {
+    "tool_name": "conformance_echo",
+    "tool_description": "Unary echo tool for conformance",
+    "params": {
+      "message": "hello-conformance"
+    }
+  },
+  "expected": {
+    "result_equals": {
+      "echo": "hello-conformance"
+    }
+  },
+  "tags": ["core", "invoke", "unary"]
+}

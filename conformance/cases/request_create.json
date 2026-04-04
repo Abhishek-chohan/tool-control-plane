@@ -1,0 +1,26 @@
+{
+  "id": "request_create_basic",
+  "feature": "request_create",
+  "description": "Create a request and validate pending state plus list membership.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-request-session",
+    "description": "session for request creation fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_request_tool",
+    "tool_description": "conformance request tool",
+    "params": {
+      "message": "queued"
+    },
+    "list_status": "pending",
+    "limit": 10
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "request_id_matches_created": true,
+    "status_equals": "pending",
+    "tool_name_equals": "conformance_request_tool",
+    "listed_request_present": true
+  },
+  "tags": ["core", "request"]
+}

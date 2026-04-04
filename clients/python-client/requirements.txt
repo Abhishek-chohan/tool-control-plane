@@ -1,0 +1,22 @@
+# Core dependencies
+google-api-python-client==2.168.0 
+grpcio==1.78.0
+protobuf==6.31.1
+grpcio-tools==1.78.0
+googleapis-common-protos>=1.63.0
+
+# Development dependencies
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=23.0.0
+isort>=5.10.0
+mypy>=1.0.0
+flake8>=6.0.0
+
+# Optional dependencies
+ipython>=8.0.0  # For interactive development
+setuptools>=68.1.2
+
+langchain==0.3.19
+langchain-core==0.3.63
+chardet==5.2.0

@@ -1,0 +1,89 @@
+name: Proto Drift
+
+on:
+  pull_request:
+    paths:
+      - 'server/Makefile'
+      - 'server/generate_client_protos.sh'
+      - 'server/proto/service.proto'
+      - 'server/google/api/**'
+      - 'clients/go-client/proto/**'
+      - 'clients/go-client/google/api/**'
+      - 'clients/python-client/toolplane/proto/**'
+      - 'clients/python-client/requirements.txt'
+      - 'clients/typescript-client/proto/**'
+      - 'clients/typescript-client/google/api/**'
+      - 'clients/typescript-client/src/proto/**'
+      - 'clients/typescript-client/package.json'
+      - 'clients/typescript-client/package-lock.json'
+      - '.github/workflows/proto-drift.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'server/Makefile'
+      - 'server/generate_client_protos.sh'
+      - 'server/proto/service.proto'
+      - 'server/google/api/**'
+      - 'clients/go-client/proto/**'
+      - 'clients/go-client/google/api/**'
+      - 'clients/python-client/toolplane/proto/**'
+      - 'clients/python-client/requirements.txt'
+      - 'clients/typescript-client/proto/**'
+      - 'clients/typescript-client/google/api/**'
+      - 'clients/typescript-client/src/proto/**'
+      - 'clients/typescript-client/package.json'
+      - 'clients/typescript-client/package-lock.json'
+      - '.github/workflows/proto-drift.yml'
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/typescript-client/package-lock.json
+
+      - name: Set up protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          version: '21.12'
+
+      - name: Install Go protobuf plugins
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.6
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
+          go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.26.3
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install Python protobuf tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install grpcio==1.71.0 grpcio-tools==1.71.0 protobuf==5.29.4
+
+      - name: Install TypeScript proto tooling
+        working-directory: clients/typescript-client
+        run: npm ci
+
+      - name: Verify tracked proto artifacts
+        working-directory: server
+        run: make check-proto-drift

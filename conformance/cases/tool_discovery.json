@@ -1,0 +1,24 @@
+{
+  "id": "tool_discovery",
+  "feature": "tool_discovery",
+  "description": "Validate tool listing, direct lookup, and delete semantics for a registered tool.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "tool-discovery-session",
+    "description": "conformance session",
+    "namespace": "conformance",
+    "tool_name": "conformance_lookup",
+    "tool_description": "tool discovery coverage"
+  },
+  "expected": {
+    "listed_after_register": true,
+    "tool_id_non_empty": true,
+    "session_id_matches_created": true,
+    "name_equals": "conformance_lookup",
+    "description_equals": "tool discovery coverage",
+    "lookup_by_id": true,
+    "lookup_by_name": true,
+    "delete_success": true,
+    "absent_after_delete": true
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "provider_runtime_unary_claim_submit",
+  "feature": "provider_runtime",
+  "description": "Start the explicit provider runtime, claim queued unary work, and verify final result submission.",
+  "request": {
+    "mode": "unary",
+    "tool_name": "provider_runtime_echo",
+    "tool_description": "Unary provider runtime tool",
+    "params": {
+      "message": "provider-runtime"
+    },
+    "timeout_seconds": 30
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "status_equals": "done",
+    "executing_machine_present": true,
+    "result_equals": {
+      "echo": "provider-runtime"
+    }
+  },
+  "tags": ["core", "provider", "runtime", "unary"]
+}

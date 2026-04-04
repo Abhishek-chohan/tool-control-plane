@@ -1,0 +1,24 @@
+{
+  "id": "machine_lifecycle_basic",
+  "feature": "machine_lifecycle",
+  "description": "Register a machine, verify list and lookup visibility, then drain it out of the session.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-machine-session",
+    "description": "session for machine lifecycle fixture",
+    "namespace": "conformance",
+    "sdk_version": "1.0.0-conformance",
+    "sdk_language": "conformance"
+  },
+  "expected": {
+    "machine_id_non_empty": true,
+    "session_id_matches_created": true,
+    "sdk_version_equals": "1.0.0-conformance",
+    "sdk_language_equals": "conformance",
+    "listed_after_register": true,
+    "retrieved_by_id": true,
+    "drain_success": true,
+    "absent_after_drain": true
+  },
+  "tags": ["core", "machine", "lifecycle"]
+}

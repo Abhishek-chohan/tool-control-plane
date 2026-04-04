@@ -1,0 +1,21 @@
+{
+  "id": "session_update_basic",
+  "feature": "session_update",
+  "description": "Update a session and validate persisted mutable fields.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-session-before",
+    "description": "session before update",
+    "namespace": "conformance-before",
+    "updated_name": "conformance-session-after",
+    "updated_description": "session after update",
+    "updated_namespace": "conformance-after"
+  },
+  "expected": {
+    "session_id_matches_created": true,
+    "name_equals": "conformance-session-after",
+    "description_equals": "session after update",
+    "namespace_equals": "conformance-after"
+  },
+  "tags": ["core", "session", "mutation"]
+}

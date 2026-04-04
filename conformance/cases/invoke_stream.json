@@ -1,0 +1,24 @@
+{
+  "id": "invoke_stream_ordered_chunks",
+  "feature": "invoke_stream",
+  "description": "Register a streaming tool and validate ordered chunks and final callback marker.",
+  "request": {
+    "tool_name": "conformance_stream",
+    "tool_description": "Streaming tool for conformance",
+    "params": {
+      "prefix": "chunk",
+      "count": 5
+    }
+  },
+  "expected": {
+    "ordered_chunks": [
+      "chunk-1",
+      "chunk-2",
+      "chunk-3",
+      "chunk-4",
+      "chunk-5"
+    ],
+    "final_marker": true
+  },
+  "tags": ["core", "invoke", "stream"]
+}

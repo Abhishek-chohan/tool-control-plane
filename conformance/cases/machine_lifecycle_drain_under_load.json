@@ -1,0 +1,33 @@
+{
+  "id": "machine_lifecycle_drain_under_load",
+  "feature": "machine_lifecycle",
+  "description": "Drain a machine while it is actively running a request and verify the in-flight request still completes before the machine disappears.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-machine-busy-drain-session",
+    "description": "session for busy machine drain fixture",
+    "namespace": "conformance",
+    "sdk_version": "1.0.0-conformance",
+    "sdk_language": "conformance",
+    "tool_name": "delayed_echo",
+    "tool_description": "conformance delayed unary tool",
+    "invoke_params": {
+      "message": "busy drain",
+      "delay_ms": 750
+    }
+  },
+  "expected": {
+    "machine_id_non_empty": true,
+    "session_id_matches_created": true,
+    "sdk_version_equals": "1.0.0-conformance",
+    "sdk_language_equals": "conformance",
+    "listed_after_register": true,
+    "retrieved_by_id": true,
+    "inflight_result_equals": {
+      "echo": "busy drain"
+    },
+    "drain_success": true,
+    "absent_after_drain": true
+  },
+  "tags": ["core", "machine", "drain", "runtime"]
+}

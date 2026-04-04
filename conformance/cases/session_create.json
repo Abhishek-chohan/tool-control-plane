@@ -1,0 +1,16 @@
+{
+  "id": "session_create_basic",
+  "feature": "session_create",
+  "description": "Create a session and validate identifier and context presence.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-session",
+    "description": "session created by conformance runner",
+    "namespace": "conformance"
+  },
+  "expected": {
+    "session_id_non_empty": true,
+    "session_context_available": true
+  },
+  "tags": ["core", "session"]
+}

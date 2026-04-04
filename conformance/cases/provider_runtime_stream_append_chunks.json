@@ -1,0 +1,27 @@
+{
+  "id": "provider_runtime_stream_append_chunks",
+  "feature": "provider_runtime",
+  "description": "Start the explicit provider runtime, execute a streaming request, and verify appended chunks on the request record.",
+  "request": {
+    "mode": "stream",
+    "tool_name": "provider_runtime_stream",
+    "tool_description": "Streaming provider runtime tool",
+    "params": {
+      "prefix": "provider",
+      "count": 4
+    },
+    "timeout_seconds": 30
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "status_equals": "done",
+    "executing_machine_present": true,
+    "ordered_chunks": [
+      "provider-1",
+      "provider-2",
+      "provider-3",
+      "provider-4"
+    ]
+  },
+  "tags": ["core", "provider", "runtime", "stream"]
+}

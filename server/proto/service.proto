@@ -1,0 +1,804 @@
+syntax = "proto3";
+
+package api;
+option go_package = "toolplane/proto"; // Adjusted go_package
+
+import "google/api/annotations.proto";
+
+// ======================
+// Tool Service
+// ======================
+service ToolService {
+  // Tool management
+  rpc RegisterTool(RegisterToolRequest) returns (RegisterToolResponse) {
+    option (google.api.http) = {
+      post: "/api/RegisterTool";
+      body: "*";
+    };
+  }
+  rpc ListTools(ListToolsRequest) returns (ListToolsResponse) {
+    option (google.api.http) = {
+      post: "/api/ListTools";
+      body: "*";
+    };
+  }
+  rpc GetToolById(GetToolByIdRequest) returns (GetToolResponse) {
+    option (google.api.http) = {
+      post: "/api/GetToolById";
+      body: "*";
+    };
+  }
+  rpc GetToolByName(GetToolByNameRequest) returns (GetToolResponse) {
+    option (google.api.http) = {
+      post: "/api/GetToolByName";
+      body: "*";
+    };
+  }
+  rpc DeleteTool(DeleteToolRequest) returns (DeleteToolResponse) {
+    option (google.api.http) = {
+      post: "/api/DeleteTool";
+      body: "*";
+    };
+  }
+  rpc UpdateToolPing(UpdateToolPingRequest) returns (Tool) {
+    option (google.api.http) = {
+      post: "/api/UpdateToolPing";
+      body: "*";
+    };
+  }
+
+  // Consumer execution entrypoints create request-backed work on the control plane.
+  // Request state, claim, and result lifecycle ownership stays in RequestsService.
+  rpc StreamExecuteTool(ExecuteToolRequest) returns (stream ExecuteToolChunk) {
+    option (google.api.http) = {
+      post: "/api/StreamExecuteTool";
+      body: "*";
+    };
+  }
+  // Resume a broken stream from the last acknowledged sequence number.
+  // The server retains a bounded chunk window; if the requested sequence has
+  // fallen out of that window, this RPC fails with OUT_OF_RANGE.
+  rpc ResumeStream(ResumeStreamRequest) returns (stream ExecuteToolChunk) {
+    option (google.api.http) = {
+      post: "/api/ResumeStream";
+      body: "*";
+    };
+  }
+
+  rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse) {
+    option (google.api.http) = {
+      post: "/api/ExecuteTool";
+      body: "*";
+    };
+  }
+
+  // Health check (can be in any service or its own)
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
+    option (google.api.http) = {
+      post: "/api/HealthCheck"; // Or use get: "/healthz"
+      body: "*";
+    };
+  }
+}
+
+// ResumeStreamRequest resumes a chunk stream after the provided absolute sequence number.
+message ResumeStreamRequest {
+  string request_id = 1;
+  int32 last_seq = 2;  // last absolute sequence number received by the client
+}
+
+// ======================
+// Session Service
+// ======================
+service SessionsService {
+  // Session management
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse) {
+    option (google.api.http) = {
+      post: "/api/CreateSession";
+      body: "*";
+    };
+  }
+  rpc GetSession(GetSessionRequest) returns (Session) {
+    option (google.api.http) = {
+      post: "/api/GetSession";
+      body: "*";
+    };
+  }
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
+    option (google.api.http) = {
+      post: "/api/ListSessions";
+      body: "*";
+    };
+  }
+  rpc UpdateSession(UpdateSessionRequest) returns (Session) {
+    option (google.api.http) = {
+      post: "/api/UpdateSession";
+      body: "*";
+    };
+  }
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse) {
+    option (google.api.http) = {
+      post: "/api/DeleteSession";
+      body: "*";
+    };
+  }
+
+  // Enhanced session management
+  rpc ListUserSessions(ListUserSessionsRequest) returns (ListUserSessionsResponse) {
+    option (google.api.http) = {
+      post: "/api/ListUserSessions";
+      body: "*";
+    };
+  }
+  rpc BulkDeleteSessions(BulkDeleteSessionsRequest) returns (BulkDeleteSessionsResponse) {
+    option (google.api.http) = {
+      post: "/api/BulkDeleteSessions";
+      body: "*";
+    };
+  }
+  rpc GetSessionStats(GetSessionStatsRequest) returns (GetSessionStatsResponse) {
+    option (google.api.http) = {
+      post: "/api/GetSessionStats";
+      body: "*";
+    };
+  }
+  rpc RefreshSessionToken(RefreshSessionTokenRequest) returns (RefreshSessionTokenResponse) {
+    option (google.api.http) = {
+      post: "/api/RefreshSessionToken";
+      body: "*";
+    };
+  }
+  rpc InvalidateSession(InvalidateSessionRequest) returns (InvalidateSessionResponse) {
+    option (google.api.http) = {
+      post: "/api/InvalidateSession";
+      body: "*";
+    };
+  }
+
+  // API key management
+  rpc CreateApiKey(CreateApiKeyRequest) returns (ApiKey) {
+    option (google.api.http) = {
+      post: "/api/CreateApiKey";
+      body: "*";
+    };
+  }
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse) {
+    option (google.api.http) = {
+      post: "/api/ListApiKeys";
+      body: "*";
+    };
+  }
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse) {
+    option (google.api.http) = {
+      post: "/api/RevokeApiKey";
+      body: "*";
+    };
+  }
+}
+
+// ======================
+// Machine Service
+// ======================
+service MachinesService {
+  // Machine management
+  rpc RegisterMachine(RegisterMachineRequest) returns (Machine) {
+    option (google.api.http) = {
+      post: "/api/RegisterMachine";
+      body: "*";
+    };
+  }
+  rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse) {
+    option (google.api.http) = {
+      post: "/api/ListMachines";
+      body: "*";
+    };
+  }
+  rpc GetMachine(GetMachineRequest) returns (Machine) {
+    option (google.api.http) = {
+      post: "/api/GetMachine";
+      body: "*";
+    };
+  }
+  rpc UpdateMachinePing(UpdateMachinePingRequest) returns (Machine) {
+    option (google.api.http) = {
+      post: "/api/UpdateMachinePing";
+      body: "*";
+    };
+  }
+  rpc UnregisterMachine(UnregisterMachineRequest) returns (UnregisterMachineResponse) {
+    option (google.api.http) = {
+      post: "/api/UnregisterMachine";
+      body: "*";
+    };
+  }
+  // Drain a machine: finish in-flight work then unregister
+  rpc DrainMachine(DrainMachineRequest) returns (DrainMachineResponse) {
+    option (google.api.http) = {
+      post: "/api/DrainMachine";
+      body: "*";
+    };
+  }
+}
+
+// DrainMachineRequest initiates graceful drain of machine
+message DrainMachineRequest {
+  string session_id = 1;
+  string machine_id = 2;
+}
+message DrainMachineResponse {
+  bool drained = 1;
+}
+
+// ======================
+// Request Service
+// ======================
+service RequestsService {
+  // Request management
+  rpc CreateRequest(CreateRequestRequest) returns (Request) {
+    option (google.api.http) = {
+      post: "/api/CreateRequest";
+      body: "*";
+    };
+  }
+  rpc GetRequest(GetRequestRequest) returns (Request) {
+    option (google.api.http) = {
+      post: "/api/GetRequest";
+      body: "*";
+    };
+  }
+  rpc ListRequests(ListRequestsRequest) returns (ListRequestsResponse) {
+    option (google.api.http) = {
+      post: "/api/ListRequests";
+      body: "*";
+    };
+  }
+  rpc UpdateRequest(UpdateRequestRequest) returns (Request) {
+    option (google.api.http) = {
+      post: "/api/UpdateRequest";
+      body: "*";
+    };
+  }
+  rpc ClaimRequest(ClaimRequestRequest) returns (Request) {
+    option (google.api.http) = {
+      post: "/api/ClaimRequest";
+      body: "*";
+    };
+  }
+  rpc CancelRequest(CancelRequestRequest) returns (CancelRequestResponse) {
+    option (google.api.http) = {
+      post: "/api/CancelRequest";
+      body: "*";
+    };
+  }
+  rpc SubmitRequestResult(SubmitRequestResultRequest) returns (SubmitRequestResultResponse) {
+    option (google.api.http) = {
+      post: "/api/SubmitRequestResult";
+      body: "*";
+    };
+  }
+  rpc AppendRequestChunks(AppendRequestChunksRequest) returns (AppendRequestChunksResponse) {
+    option (google.api.http) = {
+      post: "/api/AppendRequestChunks";
+      body: "*";
+    };
+  }
+  rpc GetRequestChunks(GetRequestChunksRequest) returns (GetRequestChunksResponse) {
+    option (google.api.http) = {
+      post: "/api/GetRequestChunks";
+      body: "*";
+    };
+  }
+}
+
+// ======================
+// Task Service (Tasks)
+// ======================
+service TasksService {
+  // Task management
+  rpc CreateTask(CreateTaskRequest) returns (Task) {
+    option (google.api.http) = {
+      post: "/api/CreateTask";
+      body: "*";
+    };
+  }
+  rpc GetTask(GetTaskRequest) returns (Task) {
+    option (google.api.http) = {
+      post: "/api/GetTask";
+      body: "*";
+    };
+  }
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse) {
+    option (google.api.http) = {
+      post: "/api/ListTasks";
+      body: "*";
+    };
+  }
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse) {
+    option (google.api.http) = {
+      post: "/api/CancelTask";
+      body: "*";
+    };
+  }
+}
+
+// Tool definition
+message Tool {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string schema = 4;  // JSON schema as string
+  map<string, string> config = 5;
+  string created_at = 6;
+  string last_ping_at = 7;
+  string session_id = 8;
+  string machine_id = 9;
+  repeated string tags = 10;  // Optional tags for categorization
+}
+
+// Session definition
+message Session {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string created_at = 4;
+  string created_by = 5;
+  string api_key = 6;
+  string namespace = 7;  // Optional namespace for organization
+}
+
+// API Key definition
+message ApiKey {
+  string id = 1;
+  string name = 2;
+  string key = 3;
+  string session_id = 4;
+  string created_at = 5;
+  string created_by = 6;
+  string revoked_at = 7;
+}
+
+// Machine definition
+message Machine {
+  string id = 1;
+  string session_id = 2;
+  string sdk_version = 3;
+  string sdk_language = 4;
+  string ip = 5;
+  string created_at = 6;
+  string last_ping_at = 7;
+}
+
+// Request definition
+message Request {
+  string id = 1;
+  string session_id = 2;
+  string tool_name = 3;
+  string status = 4;
+  string input = 5;  // JSON input as string
+  string result = 6;  // JSON result as string
+  string result_type = 7;
+  string error = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  string executing_machine_id = 11;
+  repeated string stream_results = 12;
+}
+
+// RegisterToolRequest
+message RegisterToolRequest {
+  string session_id = 1;
+  string machine_id = 2;
+  string name = 3;
+  string description = 4;
+  string schema = 5;  // JSON schema as string
+  map<string, string> config = 6;
+  repeated string tags = 7;  // Optional tags for categorization
+}
+
+// RegisterToolResponse
+message RegisterToolResponse {
+  Tool tool = 1;
+}
+
+// ListToolsRequest
+message ListToolsRequest {
+  string session_id = 1;
+}
+
+// ListToolsResponse
+message ListToolsResponse {
+  repeated Tool tools = 1;
+}
+
+// GetToolByIdRequest
+message GetToolByIdRequest {
+  string session_id = 1;
+  string tool_id = 2;
+}
+
+// GetToolByNameRequest
+message GetToolByNameRequest {
+  string session_id = 1;
+  string tool_name = 2;
+}
+
+// GetToolResponse
+message GetToolResponse {
+  Tool tool = 1;
+}
+
+// DeleteToolRequest
+message DeleteToolRequest {
+  string session_id = 1;
+  string tool_id = 2;
+}
+
+// DeleteToolResponse
+message DeleteToolResponse {
+  bool success = 1;
+}
+
+// UpdateToolPingRequest
+message UpdateToolPingRequest {
+  string session_id = 1;
+  string tool_id = 2;
+}
+
+// CreateSessionRequest
+message CreateSessionRequest {
+  string user_id = 1;
+  string name = 2;
+  string description = 3;
+  string api_key = 4;
+  // Optional client-specified session ID
+  string session_id = 5;
+  string namespace = 6;  // Optional namespace for organization
+}
+
+// CreateSessionResponse
+message CreateSessionResponse {
+  Session session = 1;
+}
+
+// GetSessionRequest
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+// ListSessionsRequest
+message ListSessionsRequest {
+  string user_id = 1;
+}
+
+// ListSessionsResponse
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// ListUserSessionsRequest
+message ListUserSessionsRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  int32 page_token = 3;
+  string filter = 4; // Optional filter (e.g., by namespace or status)
+}
+
+// ListUserSessionsResponse
+message ListUserSessionsResponse {
+  repeated Session sessions = 1;
+  int32 next_page_token = 2;
+  int32 total_count = 3;
+}
+
+// BulkDeleteSessionsRequest
+message BulkDeleteSessionsRequest {
+  string user_id = 1;
+  repeated string session_ids = 2; // Specific sessions to delete
+  string filter = 3; // Optional filter to delete matching sessions
+}
+
+// BulkDeleteSessionsResponse
+message BulkDeleteSessionsResponse {
+  int32 deleted_count = 1;
+  repeated string failed_deletions = 2; // Session IDs that failed to delete
+}
+
+// GetSessionStatsRequest
+message GetSessionStatsRequest {
+  string user_id = 1;
+}
+
+// GetSessionStatsResponse
+message GetSessionStatsResponse {
+  int32 total_sessions = 1;
+  int32 active_sessions = 2;
+  int32 expired_sessions = 3;
+}
+
+// RefreshSessionTokenRequest
+message RefreshSessionTokenRequest {
+  string session_id = 1;
+}
+
+// RefreshSessionTokenResponse
+message RefreshSessionTokenResponse {
+  string new_token = 1;
+  string expires_at = 2;
+}
+
+// InvalidateSessionRequest
+message InvalidateSessionRequest {
+  string session_id = 1;
+  string reason = 2; // Optional reason for invalidation
+}
+
+// InvalidateSessionResponse
+message InvalidateSessionResponse {
+  bool success = 1;
+}
+
+// UpdateSessionRequest
+message UpdateSessionRequest {
+  string session_id = 1;
+  string name = 2;
+  string description = 3;
+  string namespace = 4;  // Optional namespace for organization
+}
+
+// DeleteSessionRequest
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+// DeleteSessionResponse
+message DeleteSessionResponse {
+  bool success = 1;
+}
+
+// CreateApiKeyRequest
+message CreateApiKeyRequest {
+  string session_id = 1;
+  string name = 2;
+}
+
+// ListApiKeysRequest
+message ListApiKeysRequest {
+  string session_id = 1;
+}
+
+// ListApiKeysResponse
+message ListApiKeysResponse {
+  repeated ApiKey api_keys = 1;
+}
+
+// RevokeApiKeyRequest
+message RevokeApiKeyRequest {
+  string session_id = 1;
+  string key_id = 2;
+}
+
+// RevokeApiKeyResponse
+message RevokeApiKeyResponse {
+  bool success = 1;
+}
+
+// RegisterMachineRequest
+message RegisterMachineRequest {
+  string session_id = 1;
+  string machine_id = 2;
+  string sdk_version = 3;
+  string sdk_language = 4;
+  repeated RegisterToolRequest tools = 5; // Re-uses RegisterToolRequest for embedded tool definitions
+}
+
+// ListMachinesRequest
+message ListMachinesRequest {
+  string session_id = 1;
+}
+
+// ListMachinesResponse
+message ListMachinesResponse {
+  repeated Machine machines = 1;
+}
+
+// GetMachineRequest
+message GetMachineRequest {
+  string session_id = 1;
+  string machine_id = 2;
+}
+
+// UpdateMachinePingRequest
+message UpdateMachinePingRequest {
+  string session_id = 1;
+  string machine_id = 2;
+}
+
+// UnregisterMachineRequest
+message UnregisterMachineRequest {
+  string session_id = 1;
+  string machine_id = 2;
+}
+
+// UnregisterMachineResponse
+message UnregisterMachineResponse {
+  bool success = 1;
+}
+
+// ExecuteToolRequest for tool execution
+message ExecuteToolRequest {
+  string session_id = 1;
+  string tool_name = 2;
+  string input = 3;  // JSON input as string
+}
+
+// ExecuteToolResponse
+message ExecuteToolResponse {
+  string request_id = 1;
+  string status = 2;
+  string result = 3;  // JSON result as string
+  string result_type = 4;
+  string error = 5;
+}
+
+// ExecuteToolChunk is an absolute-sequence stream event.
+// Non-final chunks use retained chunk sequence numbers; the terminal chunk, if sent,
+// uses the request's current next sequence number.
+message ExecuteToolChunk {
+  int32 seq = 1;             // sequential chunk index
+  string request_id = 2;
+  string chunk = 3;
+  bool is_final = 4;
+  string error = 5;
+}
+
+// CreateRequestRequest
+message CreateRequestRequest {
+  string session_id = 1;
+  string tool_name = 2;
+  string input = 3;  // JSON input as string
+}
+
+// GetRequestRequest
+message GetRequestRequest {
+  string session_id = 1;
+  string request_id = 2;
+}
+
+// ListRequestsRequest
+message ListRequestsRequest {
+  string session_id = 1;
+  string status = 2;
+  string tool_name = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// ListRequestsResponse
+message ListRequestsResponse {
+  repeated Request requests = 1;
+}
+
+// UpdateRequestRequest
+message UpdateRequestRequest {
+  string session_id = 1;
+  string request_id = 2;
+  string status = 3;
+  string result = 4;
+  string result_type = 5;
+}
+
+// ClaimRequestRequest
+message ClaimRequestRequest {
+  string session_id = 1;
+  string request_id = 2;
+  string machine_id = 3;
+}
+
+// CancelRequestRequest
+message CancelRequestRequest {
+  string session_id = 1;
+  string request_id = 2;
+}
+
+// CancelRequestResponse
+message CancelRequestResponse {
+  bool success = 1;
+}
+
+// SubmitRequestResultRequest
+message SubmitRequestResultRequest {
+  string session_id = 1;
+  string request_id = 2;
+  string result = 3;
+  string result_type = 4;
+  map<string, string> meta = 5;
+}
+
+// SubmitRequestResultResponse
+message SubmitRequestResultResponse {
+  bool success = 1;
+}
+
+// AppendRequestChunksRequest
+message AppendRequestChunksRequest {
+  string session_id = 1;
+  string request_id = 2;
+  repeated string chunks = 3;
+  string result_type = 4;
+}
+
+// AppendRequestChunksResponse
+message AppendRequestChunksResponse {
+  bool success = 1;
+}
+
+// GetRequestChunksRequest
+message GetRequestChunksRequest {
+  string session_id = 1;
+  string request_id = 2;
+}
+
+// GetRequestChunksResponse describes the currently retained chunk window.
+message GetRequestChunksResponse {
+  repeated string chunks = 1;
+  int32 start_seq = 2;  // absolute sequence number of chunks[0], or next_seq when empty
+  int32 next_seq = 3;   // next absolute chunk sequence number; terminal marker uses this seq
+}
+
+// Health check
+message HealthCheckRequest {
+}
+
+message HealthCheckResponse {
+  string status = 1;
+  string version = 2;
+}
+
+// Task definition
+message Task {
+  string id = 1;
+  string session_id = 2;
+  string tool_name = 3;
+  string status = 4;
+  string input = 5;  // JSON input as string
+  string result = 6;  // JSON result as string
+  string result_type = 7;
+  string error = 8;
+  string created_at = 9;
+  string updated_at = 10;
+  string completed_at = 11;
+}
+
+// CreateTaskRequest
+message CreateTaskRequest {
+  string session_id = 1;
+  string tool_name = 2;
+  string input = 3;  // JSON input as string
+}
+
+// GetTaskRequest
+message GetTaskRequest {
+  string session_id = 1;
+  string task_id = 2;
+}
+
+// ListTasksRequest
+message ListTasksRequest {
+  string session_id = 1;
+}
+
+// ListTasksResponse
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+// CancelTaskRequest
+message CancelTaskRequest {
+  string session_id = 1;
+  string task_id = 2;
+}
+
+// CancelTaskResponse
+message CancelTaskResponse {
+  bool success = 1;
+}

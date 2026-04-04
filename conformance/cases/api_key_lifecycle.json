@@ -1,0 +1,22 @@
+{
+  "id": "api_key_lifecycle_basic",
+  "feature": "api_key_lifecycle",
+  "description": "Create, list, and revoke an API key for a session.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-api-key-session",
+    "description": "session for API key lifecycle fixture",
+    "namespace": "conformance",
+    "api_key_name": "conformance-key"
+  },
+  "expected": {
+    "api_key_id_non_empty": true,
+    "api_key_value_non_empty": true,
+    "session_id_matches_created": true,
+    "name_equals": "conformance-key",
+    "listed_after_create": true,
+    "revoke_success": true,
+    "absent_after_revoke": true
+  },
+  "tags": ["core", "auth", "api-key"]
+}
