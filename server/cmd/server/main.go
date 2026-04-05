@@ -30,37 +30,8 @@ func main() {
 		log.Fatalf("invalid server configuration: %v", err)
 	}
 
-	validateAPIKey, authSummary, err := cfg.buildValidator()
-	if err != nil {
-		log.Fatalf("failed to configure auth: %v", err)
-	}
-
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	serverOptions := make([]grpc.ServerOption, 0, 2)
-	if validateAPIKey != nil {
-		serverOptions = append(serverOptions,
-			grpc.UnaryInterceptor(auth.UnaryAPIKeyInterceptor(validateAPIKey)),
-			grpc.StreamInterceptor(auth.StreamAPIKeyInterceptor(validateAPIKey)),
-		)
-	}
-	server := grpc.NewServer(serverOptions...)
-
-	// graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		log.Println("shutdown signal received, graceful stop")
-		cancel()
-		server.GracefulStop()
-	}()
 
 	var tracer trace.SessionTracer
 	if *enableTrace {
@@ -94,6 +65,40 @@ func main() {
 	machineSvc := service.NewMachinesService(toolSvc, tracer, store)
 	requestSvc := service.NewRequestsService(toolSvc, machineSvc, tracer, store)
 	tasksSvc := service.NewTasksService(ctx, toolSvc, machineSvc, requestSvc, tracer, store)
+
+	postgresValidator := func(_ context.Context, token string) bool {
+		_, err := sessionSvc.ValidateApiKey(token)
+		return err == nil
+	}
+
+	validateAPIKey, authSummary, err := cfg.buildValidator(postgresValidator)
+	if err != nil {
+		log.Fatalf("failed to configure auth: %v", err)
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	serverOptions := make([]grpc.ServerOption, 0, 2)
+	if validateAPIKey != nil {
+		serverOptions = append(serverOptions,
+			grpc.UnaryInterceptor(auth.UnaryAPIKeyInterceptor(validateAPIKey)),
+			grpc.StreamInterceptor(auth.StreamAPIKeyInterceptor(validateAPIKey)),
+		)
+	}
+	server := grpc.NewServer(serverOptions...)
+
+	// graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		log.Println("shutdown signal received, graceful stop")
+		cancel()
+		server.GracefulStop()
+	}()
 
 	adapter := service.NewGRPCServer(
 		toolSvc, sessionSvc, machineSvc, requestSvc, tasksSvc,

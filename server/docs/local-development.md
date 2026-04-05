@@ -34,18 +34,20 @@ That path builds the server and gateway, exports the explicit development settin
 
 ## Production-Like Startup
 
-For production-oriented testing, replace the development auth and storage settings explicitly:
+For production-oriented testing, replace the development auth and storage settings explicitly.
+
+For local Postgres-backed API key auth:
 
 ```bash
 export TOOLPLANE_ENV_MODE=production
-export TOOLPLANE_AUTH_MODE=supabase
-export TOOLPLANE_SUPABASE_URL=https://your-project.supabase.co
-export TOOLPLANE_SUPABASE_SERVICE_KEY=replace-me
+export TOOLPLANE_AUTH_MODE=postgres
 export TOOLPLANE_STORAGE_MODE=postgres
 export TOOLPLANE_DATABASE_URL=postgres://username:password@localhost:5432/toolplane?sslmode=disable
 export TOOLPLANE_PROXY_ALLOWED_ORIGINS=https://your-app.example.com
 export TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=0
 ```
+
+If the database does not have any API keys yet, bootstrap one against the same Postgres database first. The simplest path is to start once in fixed auth mode, call `SessionsService.CreateApiKey`, then restart with `TOOLPLANE_AUTH_MODE=postgres`.
 
 The server now fails fast when required auth or storage configuration is missing, and the proxy rejects insecure backend dialing and wildcard origins in production mode.
 
@@ -61,5 +63,6 @@ The gateway's `/health` endpoint reports circuit-breaker and throttle counters s
 
 - `TOOLPLANE_STORAGE_MODE=memory` is an explicit development-mode choice, not a silent fallback.
 - `TOOLPLANE_ENV_MODE=production` now requires Postgres-backed storage. In-memory mode remains development or test only.
+- `TOOLPLANE_AUTH_MODE=postgres` validates against the server-managed `api_keys` records already loaded into the session service from Postgres-backed storage.
 - The HTTP gateway remains a compatibility surface over the canonical gRPC contract.
 - If you use the Python or TypeScript conformance harnesses with auto-boot enabled, they now set the same development-mode env contract automatically.

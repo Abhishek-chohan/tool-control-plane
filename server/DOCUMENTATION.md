@@ -36,7 +36,7 @@ See `server/docs/local-development.md` for the development env contract and `.gi
 
 Production mode is now an explicit runtime contract, not an implied deployment preference.
 
-- `TOOLPLANE_ENV_MODE=production` requires a maintained production auth path. In practice that means `TOOLPLANE_AUTH_MODE=supabase`; disabled auth and fixed fixture auth are rejected at startup.
+- `TOOLPLANE_ENV_MODE=production` requires a maintained production auth path. In practice that means `TOOLPLANE_AUTH_MODE=postgres`; disabled auth and fixed fixture auth are rejected at startup.
 - `TOOLPLANE_ENV_MODE=production` now also requires durable Postgres-backed storage. In-memory mode remains a development or test choice only.
 - The HTTP gateway in production requires explicit `TOOLPLANE_PROXY_ALLOWED_ORIGINS` and rejects insecure backend dialing.
 - Proxy guardrails such as per-API-key and per-IP throttling are configured explicitly through `toolplane-gateway` flags like `--api-rate`, `--api-burst`, `--ip-rate`, and `--ip-burst`.
@@ -255,7 +255,7 @@ The HTTP gateway adds two more operator-facing diagnostics:
 
 The intended first checks for common operational failures are now:
 
-- Startup rejected in production mode: inspect auth and storage env validation first. Production now requires Supabase auth, Postgres storage, explicit origins, and a secure backend path.
+- Startup rejected in production mode: inspect auth and storage env validation first. Production now requires Postgres-backed API-key auth, Postgres storage, explicit origins, and a secure backend path.
 - Repeated `request_lease_expired`, `request_requeued`, or `request_dead_lettered` events: inspect provider health, request timeout sizing, and machine drain or disconnect behavior.
 - Stuck drains: look for `machine_drain_started` without `machine_drain_completed`, then inspect active requests for the target machine.
 - Repeated `task_retry_scheduled` or `task_dead_lettered` events: inspect the underlying request failures and the owning machine capacity for that tool.

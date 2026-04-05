@@ -60,7 +60,7 @@ Provider-runtime coverage in shared conformance now explicitly includes claim-an
 
 ## What It Does Not Prove
 
-- Live Supabase validation. The gate now proves the production storage guardrail and a Postgres-backed recovery path, but it does not hit a real Supabase project.
+- Live Postgres-backed API-key validation. The gate now proves the production storage guardrail and a Postgres-backed recovery path, but it does not exercise that production auth backend directly.
 - The separate server-side `/rpc` reference path documented in `server/docs/rpc-retirement.md`.
 - Tool-discovery RPCs without shared fixture coverage (see `SDK_MAP.md` for current `partial` claims).
 - Every transport permutation (HTTP gateway behavior is covered by shared conformance, not duplicated here).

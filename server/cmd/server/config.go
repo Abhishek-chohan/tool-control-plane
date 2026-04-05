@@ -10,26 +10,27 @@ import (
 )
 
 type serverConfig struct {
-	environment        string
-	authMode           string
-	authDebug          bool
-	fixedAPIKey        string
-	supabaseURL        string
-	supabaseServiceKey string
-	storageMode        string
-	databaseURL        string
+	environment string
+	authMode    string
+	authDebug   bool
+	fixedAPIKey string
+	storageMode string
+	databaseURL string
 }
 
 func loadServerConfig() (serverConfig, error) {
 	cfg := serverConfig{
-		environment:        normalizedEnvValue(os.Getenv("TOOLPLANE_ENV_MODE"), "development"),
-		authMode:           normalizedEnvValue(os.Getenv("TOOLPLANE_AUTH_MODE"), "disabled"),
-		authDebug:          boolEnv("TOOLPLANE_AUTH_DEBUG", false),
-		fixedAPIKey:        strings.TrimSpace(os.Getenv("TOOLPLANE_AUTH_FIXED_API_KEY")),
-		supabaseURL:        strings.TrimSpace(os.Getenv("TOOLPLANE_SUPABASE_URL")),
-		supabaseServiceKey: strings.TrimSpace(os.Getenv("TOOLPLANE_SUPABASE_SERVICE_KEY")),
-		storageMode:        normalizedEnvValue(os.Getenv("TOOLPLANE_STORAGE_MODE"), ""),
-		databaseURL:        strings.TrimSpace(os.Getenv("TOOLPLANE_DATABASE_URL")),
+		environment: normalizedEnvValue(os.Getenv("TOOLPLANE_ENV_MODE"), "development"),
+		authMode:    normalizedEnvValue(os.Getenv("TOOLPLANE_AUTH_MODE"), "disabled"),
+		authDebug:   boolEnv("TOOLPLANE_AUTH_DEBUG", false),
+		fixedAPIKey: strings.TrimSpace(os.Getenv("TOOLPLANE_AUTH_FIXED_API_KEY")),
+		storageMode: normalizedEnvValue(os.Getenv("TOOLPLANE_STORAGE_MODE"), ""),
+		databaseURL: strings.TrimSpace(os.Getenv("TOOLPLANE_DATABASE_URL")),
+	}
+
+	effectiveStorageMode := cfg.storageMode
+	if effectiveStorageMode == "" && cfg.databaseURL != "" {
+		effectiveStorageMode = "postgres"
 	}
 
 	switch cfg.environment {
@@ -50,17 +51,12 @@ func loadServerConfig() (serverConfig, error) {
 		if cfg.environment == "production" {
 			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=fixed is for development or test only")
 		}
-	case "supabase":
-		if cfg.supabaseURL == "" || cfg.supabaseServiceKey == "" {
-			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=supabase requires TOOLPLANE_SUPABASE_URL and TOOLPLANE_SUPABASE_SERVICE_KEY")
+	case "postgres":
+		if effectiveStorageMode != "postgres" || cfg.databaseURL == "" {
+			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=postgres requires TOOLPLANE_STORAGE_MODE=postgres or TOOLPLANE_DATABASE_URL")
 		}
 	default:
-		return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE must be one of disabled, fixed, or supabase")
-	}
-
-	effectiveStorageMode := cfg.storageMode
-	if effectiveStorageMode == "" && cfg.databaseURL != "" {
-		effectiveStorageMode = "postgres"
+		return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE must be one of disabled, fixed, or postgres")
 	}
 
 	switch effectiveStorageMode {
@@ -79,16 +75,18 @@ func loadServerConfig() (serverConfig, error) {
 	return cfg, nil
 }
 
-func (cfg serverConfig) buildValidator() (func(context.Context, string) bool, string, error) {
+func (cfg serverConfig) buildValidator(postgresValidate func(context.Context, string) bool) (func(context.Context, string) bool, string, error) {
 	switch cfg.authMode {
 	case "disabled":
 		return nil, "disabled (development or legacy mode)", nil
 	case "fixed":
 		validator := auth.NewFixedAPIKeyValidator(cfg.fixedAPIKey, cfg.authDebug)
 		return validator.Validate, "fixed fixture token", nil
-	case "supabase":
-		validator := auth.NewSupabaseValidator(cfg.supabaseURL, cfg.supabaseServiceKey, cfg.authDebug)
-		return validator.Validate, "supabase", nil
+	case "postgres":
+		if postgresValidate == nil {
+			return nil, "", fmt.Errorf("postgres auth validator not configured")
+		}
+		return postgresValidate, "postgres-backed api_keys table", nil
 	default:
 		return nil, "", fmt.Errorf("unsupported auth mode %q", cfg.authMode)
 	}

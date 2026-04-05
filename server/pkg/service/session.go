@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -404,15 +405,30 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 
 // ValidateApiKey validates an API key and returns the session ID if valid
 func (s *SessionsService) ValidateApiKey(key string) (string, error) {
-	// Check if key matches format "sk_<sessionID>_<random>"
-	// In a real implementation, we would do more sophisticated validation
+	normalizedKey := strings.TrimSpace(key)
+	if strings.HasPrefix(strings.ToLower(normalizedKey), "bearer ") {
+		normalizedKey = strings.TrimSpace(normalizedKey[7:])
+	}
+	if normalizedKey == "" {
+		return "", fmt.Errorf("api key is empty")
+	}
 
-	// For simplicity, assume we can extract the session ID from key format sk_<sessionID>_<random>
-	// This is a very simplified validation logic
-	// Real implementation should use cryptographic verification
+	s.apiKeysMutex.RLock()
+	defer s.apiKeysMutex.RUnlock()
 
-	// This is a stub implementation
-	return "", fmt.Errorf("not implemented")
+	for sessionID, keys := range s.apiKeys {
+		for _, apiKey := range keys {
+			if apiKey == nil || apiKey.Key != normalizedKey {
+				continue
+			}
+			if apiKey.IsRevoked() {
+				return "", fmt.Errorf("api key is revoked")
+			}
+			return sessionID, nil
+		}
+	}
+
+	return "", fmt.Errorf("api key not found")
 }
 
 // ListUserSessions lists sessions for a user with pagination and filtering

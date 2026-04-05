@@ -44,3 +44,45 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit")
+	if err != nil {
+		t.Fatalf("create api key: %v", err)
+	}
+
+	resolvedSessionID, err := svc.ValidateApiKey(apiKey.Key)
+	if err != nil {
+		t.Fatalf("validate active api key: %v", err)
+	}
+	if resolvedSessionID != session.ID {
+		t.Fatalf("validate active api key returned session %q, want %q", resolvedSessionID, session.ID)
+	}
+
+	resolvedSessionID, err = svc.ValidateApiKey("Bearer " + apiKey.Key)
+	if err != nil {
+		t.Fatalf("validate bearer api key: %v", err)
+	}
+	if resolvedSessionID != session.ID {
+		t.Fatalf("validate bearer api key returned session %q, want %q", resolvedSessionID, session.ID)
+	}
+
+	if err := svc.RevokeApiKey(session.ID, apiKey.ID); err != nil {
+		t.Fatalf("revoke api key: %v", err)
+	}
+
+	if _, err := svc.ValidateApiKey(apiKey.Key); err == nil {
+		t.Fatal("expected revoked api key to fail validation")
+	}
+
+	if _, err := svc.ValidateApiKey("missing-key"); err == nil {
+		t.Fatal("expected unknown api key to fail validation")
+	}
+}
