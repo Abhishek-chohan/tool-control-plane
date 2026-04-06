@@ -1,19 +1,40 @@
 # Release Gate
 
-This document defines the authoritative release signal for the maintained Toolplane architecture. The gate now runs the canonical end-to-end scenario against Postgres in CI, then follows with a narrow Postgres-backed platform slice so the repo proves more than a development-only happy path.
+This document defines the authoritative release signal for the maintained Toolplane architecture. The gate now runs the canonical end-to-end scenario against Postgres in CI, then follows with a narrow runtime slice so the repo proves more than a development-only happy path.
 
-## What It Proves
+## Durability Proof Surface
 
-The release gate exercises one canonical end-to-end path and one narrow platform-validation slice:
+The release signal is intentionally split into three categories so the repo can state what is proven directly, what is proven by focused runtime tests, and what remains a documented limit.
+
+### Proven Directly By `make release-gate`
+
+The shared-fixture conformance leg proves one canonical provider-backed flow and the portable recovery behavior that goes with it:
 
 1. **Secure startup**: server and gateway start through the env-driven configuration path with fixed-key auth and Postgres-backed storage in CI — no committed secrets, no hardcoded bootstrap.
 2. **Provider registration**: a machine registers and advertises tools via the maintained gRPC control-plane surface.
 3. **Session creation**: a session is created to scope subsequent operations.
 4. **Unary execution**: a tool invocation completes synchronously and returns a matching result.
 5. **Streaming execution**: a streaming tool invocation delivers ordered chunks with a terminal marker.
-6. **Request inspection**: the request lifecycle is visible to the consumer after execution.
-7. **Graceful drain**: `DrainMachine` stops new routing, waits for in-flight work, then unregisters the machine.
-8. **Persistence-backed recovery and policy checks**: focused Go tests verify that production mode rejects in-memory storage, session and task audit events are emitted, and expired persisted requests are requeued after a restart-like service reload.
+6. **Request inspection and bounded replay**: `GetRequestChunks()` exposes retained-window metadata, `ResumeStream()` replays from within the retained window, and replay before the retained window fails with the canonical `out_of_range` error.
+7. **Graceful drain**: drain-under-load fixtures prove that new routing stops while in-flight work still completes before the machine disappears.
+
+### Proven By Focused Go Tests In `release-gate-runtime`
+
+The focused runtime slice keeps the gate narrow while making the durability claims precise:
+
+- Production-mode startup rejects in-memory storage and allows the maintained Postgres-backed path.
+- In-memory lease expiry requeues leased work and frees machine load.
+- Postgres-backed restart-like reload requeues an expired persisted lease.
+- Graceful drain waits for both running and claimed in-flight work to resolve before unregistering the machine.
+- Stream replay returns ordered retained chunks plus the terminal marker, including replay from inside a trimmed retained window.
+- Replay before the retained window still fails with `OUT_OF_RANGE` instead of silently skipping lost chunks.
+
+### Documented Limits, Not Durability Guarantees
+
+- Toolplane does **not** currently promise durable full-history stream replay beyond the retained 100-chunk window.
+- `TOOLPLANE_STORAGE_MODE=memory` is intentionally non-durable; restart recovery guarantees do not apply there.
+- Pending requests are not automatically migrated during drain; they remain pending until another machine owns the tool.
+- The release gate still does not directly exercise live Postgres-backed API-key validation.
 
 ## Env Contract
 
@@ -41,7 +62,7 @@ cd server && TOOLPLANE_DATABASE_URL=postgres://postgres:postgres@localhost:5432/
 
 This target always runs the Python shared-fixture conformance suite, which exercises the first seven steps above through the auto-boot harness in `clients/python-client/tests/conformance/conftest.py`. When `TOOLPLANE_DATABASE_URL` is set, the Makefile infers `TOOLPLANE_STORAGE_MODE=postgres` so the full conformance leg runs on Postgres rather than falling back to in-memory storage. The maintained provider path in that suite now runs through the explicit Python `ProviderRuntime` surface rather than ad hoc polling threads embedded in the adapters.
 
-If `TOOLPLANE_DATABASE_URL` points at a reachable Postgres instance, the same target also runs focused Go tests that validate the production storage guardrail and persisted request recovery path. If the variable is unset, the conformance leg falls back to in-memory storage and the persisted recovery test is skipped for local convenience.
+If `TOOLPLANE_DATABASE_URL` points at a reachable Postgres instance, the same target also runs focused Go tests that validate the production storage guardrail, lease-expiry requeue behavior, bounded replay semantics, drain waiting behavior, and persisted request recovery path. If the variable is unset, the conformance leg falls back to in-memory storage and the persisted recovery test is skipped for local convenience.
 
 ## CI
 
@@ -56,7 +77,7 @@ The `.github/workflows/release-gate.yml` workflow runs the same `make release-ga
 
 The release gate remains intentionally narrow and fast. Shared conformance is broader and verifies parity across SDKs. Both must pass before a release is trusted.
 
-Provider-runtime coverage in shared conformance now explicitly includes claim-and-submit, chunk append, and drain-under-load behavior on the maintained Python provider harness.
+Provider-runtime coverage in shared conformance now explicitly includes claim-and-submit, chunk append, bounded replay recovery, and drain-under-load behavior on the maintained Python provider harness.
 
 ## What It Does Not Prove
 

@@ -59,6 +59,40 @@ The current recovery behavior is:
 
 Some maintenance paths still log persistence failures instead of surfacing them directly to clients. Operators should treat those log lines as durability degradation and use the release gate plus the runtime diagnostics below to catch them before release.
 
+## Durable Execution Contract
+
+This section is the canonical summary of the durability guarantees supported by the repo today. It answers four questions directly: what a request lease means, what survives disconnect or restart, what stream resume guarantees, and what machine drain guarantees.
+
+### Supported Guarantees
+
+- **Request leases are explicit and time-bounded.** A request moves into `claimed` or `running` with a machine-owned lease. If that lease expires, the server emits `request_lease_expired`, releases any reserved machine slot, and either requeues the request with linear backoff or dead-letters it after `MaxAttempts`.
+- **Postgres-backed restart recovery reuses persisted lease state.** When a `storage.Store` is attached, request lease metadata survives restart-like reloads. Expired persisted leases are scanned after startup and follow the same requeue-or-dead-letter path as in-memory leases.
+- **Consumer disconnect does not cancel work.** A broken `StreamExecuteTool()` or `ResumeStream()` client connection leaves the request record intact. Callers can inspect final request state later and may resume from the retained chunk window if the missing sequence range is still retained.
+- **Resume is retained-window replay, not durable full-history replay.** `GetRequestChunks()` and `ResumeStream()` expose only the retained chunk window. Resuming from within that window replays ordered remaining chunks plus the terminal marker. Resuming before the retained window fails with `OUT_OF_RANGE` rather than silently skipping missing data.
+- **Machine drain blocks new work immediately and lets in-flight work resolve normally.** `DrainMachine()` removes tool ownership and marks the machine draining before unregister. New request creation and new claims stop targeting that machine immediately. Claimed or running requests already assigned to the machine may finish or age out through the normal lease-expiry path. The machine unregisters only after no active `claimed` or `running` requests remain.
+- **Pending requests are not migrated automatically during drain.** If a request was never claimed, it remains pending until another machine registers the same tool or some other control path resolves it.
+
+### Proof Matrix
+
+| Guarantee | Automated proof | Current limit |
+| --- | --- | --- |
+| Lease expiry requeues or dead-letters claimed/running work and frees machine load | `server/pkg/service/request_runtime_test.go`, `server/pkg/service/request_persistence_test.go`, `server/pkg/service/machine_test.go` | Retries stop after `MaxAttempts`; in-memory mode still has no restart guarantee |
+| Consumer reconnect can inspect state and replay the retained chunk window deterministically | `server/pkg/service/request_stream_test.go`, `conformance/cases/request_recovery_chunk_window.json`, `conformance/cases/request_recovery_resume.json`, `conformance/cases/request_recovery_resume_trimmed_window.json`, `conformance/cases/request_recovery_expired_window.json` | The retained window is capped at 100 chunks; there is no durable full-history replay API |
+| Graceful drain stops new routing immediately and lets in-flight work finish or age out before unregister | `server/pkg/service/machine_test.go`, `conformance/cases/machine_lifecycle_drain_under_load.json`, `conformance/cases/provider_runtime_drain_under_load.json` | Pending requests are not automatically reassigned during drain |
+| The authoritative release signal covers the maintained durability slice | `cd server && make release-gate`, plus `release-gate-runtime` focused Go tests | The gate remains intentionally narrow and does not directly prove live Postgres-backed auth or every deployment topology |
+
+### Failure-Mode Matrix
+
+| Failure mode | What happens now | Signals and proof | Important limit |
+| --- | --- | --- | --- |
+| Consumer disconnect during `StreamExecuteTool()` or `ResumeStream()` | The request continues. The caller can inspect request state later and may resume from the retained chunk window. | `request_chunks_appended`, `request_execution_completed` / `request_execution_failed`; `server/pkg/service/request_stream_test.go`; `conformance/cases/request_recovery_resume.json` | Replay is limited to the retained window only |
+| Provider disconnect or crash after a request is claimed or running | When the lease expires, the server releases machine capacity and either requeues the request with linear backoff or dead-letters it after retry exhaustion. | `request_lease_expired`, `request_requeued`, `request_dead_lettered`; `server/pkg/service/request_runtime_test.go`; `server/pkg/service/machine_test.go` | Tool ownership may still exist until drain or inactive-machine cleanup completes |
+| Server restart with Postgres-backed storage | Persisted request state reloads on startup, and expired persisted leases are requeued or dead-lettered by the same expiry path. | `server/pkg/service/request_persistence_test.go`; `cd server && make release-gate` | `TOOLPLANE_STORAGE_MODE=memory` does not carry this guarantee |
+| Machine drain with claimed or running work | New routing and new claims stop immediately. In-flight work either completes normally or ages out through lease expiry. The machine unregisters after the active request count reaches zero. | `machine_drain_started`, `machine_drain_completed`, request lifecycle trace events; `server/pkg/service/machine_test.go`; drain-under-load conformance cases | Pending requests remain pending until another machine exists |
+| Retained-window overflow before a caller resumes | `GetRequestChunks()` exposes the current `start_seq` / `next_seq` window. Resume from inside that window replays the retained tail plus the final marker. Resume from before `start_seq` fails with `OUT_OF_RANGE`. | `server/pkg/service/request_stream_test.go`; `conformance/cases/request_recovery_resume_trimmed_window.json`; `conformance/cases/request_recovery_expired_window.json` | The runtime does not promise durable replay of every chunk ever emitted |
+
+The detailed lifecycle sections below expand these guarantees. If a future behavior change is not reflected here and in the tests or fixtures named above, it should not be treated as part of the maintained durability contract.
+
 ## Tenant And Policy Boundary
 
 The maintained isolation boundary is session-scoped.
