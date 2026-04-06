@@ -1356,10 +1356,6 @@ print(f"Optimal worker count: {worker_count}")
 | `debug` | bool | False | Enable debug logging |
 | `log_level` | str | "INFO" | Logging level |
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## Support
 
 For issues and feature requests, please open an issue on the GitHub repository. We aim to respond within 24 hours.

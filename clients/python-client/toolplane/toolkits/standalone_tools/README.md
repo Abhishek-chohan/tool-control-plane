@@ -221,7 +221,3 @@ To add new tools:
 3. Support multiple output formats (default, json)
 4. Include proper error handling and validation
 5. Add documentation to this README
-
-## License
-
-These tools are provided as-is for development and analysis purposes.

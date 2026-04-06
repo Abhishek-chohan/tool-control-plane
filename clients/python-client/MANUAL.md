@@ -375,7 +375,3 @@ Write unit tests for all public APIs:
 2. Create feature branch
 3. Write tests for new functionality
 4. Submit pull request with clear description
-
-## License
-
-MIT License - see LICENSE file for details.
