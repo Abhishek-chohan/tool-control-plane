@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -75,18 +74,18 @@ func loadServerConfig() (serverConfig, error) {
 	return cfg, nil
 }
 
-func (cfg serverConfig) buildValidator(postgresValidate func(context.Context, string) bool) (func(context.Context, string) bool, string, error) {
+func (cfg serverConfig) buildAuthenticator(postgresAuthenticate auth.AuthenticateFunc) (auth.AuthenticateFunc, string, error) {
 	switch cfg.authMode {
 	case "disabled":
 		return nil, "disabled (development or legacy mode)", nil
 	case "fixed":
 		validator := auth.NewFixedAPIKeyValidator(cfg.fixedAPIKey, cfg.authDebug)
-		return validator.Validate, "fixed fixture token", nil
+		return validator.Authenticate, "fixed fixture token", nil
 	case "postgres":
-		if postgresValidate == nil {
+		if postgresAuthenticate == nil {
 			return nil, "", fmt.Errorf("postgres auth validator not configured")
 		}
-		return postgresValidate, "postgres-backed api_keys table", nil
+		return postgresAuthenticate, "postgres-backed api_keys table", nil
 	default:
 		return nil, "", fmt.Errorf("unsupported auth mode %q", cfg.authMode)
 	}

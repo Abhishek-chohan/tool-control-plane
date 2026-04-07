@@ -346,6 +346,8 @@ message Session {
   string description = 3;
   string created_at = 4;
   string created_by = 5;
+  // Legacy transitional field. New auth enforcement is owned by api_keys records.
+  // The server no longer uses this as the maintained auth boundary.
   string api_key = 6;
   string namespace = 7;  // Optional namespace for organization
 }
@@ -354,11 +356,15 @@ message Session {
 message ApiKey {
   string id = 1;
   string name = 2;
+  // Secret material is only returned from CreateApiKey.
+  // ListApiKeys returns metadata with this field empty.
   string key = 3;
   string session_id = 4;
   string created_at = 5;
   string created_by = 6;
   string revoked_at = 7;
+  repeated string capabilities = 8;
+  string key_preview = 9;
 }
 
 // Machine definition
@@ -453,6 +459,8 @@ message CreateSessionRequest {
   string user_id = 1;
   string name = 2;
   string description = 3;
+  // Legacy transitional field retained for compatibility only.
+  // New callers should leave this empty.
   string api_key = 4;
   // Optional client-specified session ID
   string session_id = 5;
@@ -563,6 +571,9 @@ message DeleteSessionResponse {
 message CreateApiKeyRequest {
   string session_id = 1;
   string name = 2;
+  // Supported values are read, execute, and admin.
+  // Empty means the server default full capability set.
+  repeated string capabilities = 3;
 }
 
 // ListApiKeysRequest

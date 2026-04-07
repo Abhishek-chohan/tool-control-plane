@@ -1,6 +1,9 @@
 package model
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/hex"
 	"log"
 	"time"
 
@@ -81,7 +84,7 @@ type Session struct {
 	Namespace   string    `json:"namespace,omitempty"` // Optional namespace for organization
 	CreatedAt   time.Time `json:"createdAt"`
 	CreatedBy   string    `json:"createdBy"`        // User ID of creator
-	ApiKey      string    `json:"apiKey,omitempty"` // optional api key to lock session
+	ApiKey      string    `json:"apiKey,omitempty"` // legacy session lock field retained only for migration
 }
 
 // NewSession creates a new session with generated ID and timestamp
@@ -99,24 +102,38 @@ func NewSession(name, description, createdBy, apiKey, namespace string) *Session
 
 // ApiKey represents an API key for authentication
 type ApiKey struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Key       string     `json:"key"`
-	SessionID string     `json:"sessionId"`
-	CreatedAt time.Time  `json:"createdAt"`
-	CreatedBy string     `json:"createdBy"` // User ID of creator
-	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Key                string             `json:"key,omitempty"`
+	KeyHash            string             `json:"-"`
+	KeyPreview         string             `json:"keyPreview,omitempty"`
+	SessionID          string             `json:"sessionId"`
+	CreatedAt          time.Time          `json:"createdAt"`
+	CreatedBy          string             `json:"createdBy"`
+	Capabilities       []APIKeyCapability `json:"capabilities,omitempty"`
+	RevokedAt          *time.Time         `json:"revokedAt,omitempty"`
+	PlaintextPersisted bool               `json:"-"`
 }
 
 // NewApiKey creates a new API key with generated ID, key, and timestamp
-func NewApiKey(name, sessionID, createdBy string) *ApiKey {
+
+func NewApiKey(name, sessionID, createdBy string, capabilities []APIKeyCapability) *ApiKey {
+	key := generateApiKey(sessionID)
+	resolvedCapabilities := capabilities
+	if len(resolvedCapabilities) == 0 {
+		resolvedCapabilities = DefaultAPIKeyCapabilities()
+	}
 	return &ApiKey{
-		ID:        uuid.New().String(),
-		Name:      name,
-		Key:       generateApiKey(sessionID),
-		SessionID: sessionID,
-		CreatedAt: time.Now(),
-		CreatedBy: createdBy,
+		ID:                 uuid.New().String(),
+		Name:               name,
+		Key:                key,
+		KeyHash:            HashAPIKeySecret(key),
+		KeyPreview:         BuildAPIKeyPreview(key),
+		SessionID:          sessionID,
+		CreatedAt:          time.Now(),
+		CreatedBy:          createdBy,
+		Capabilities:       append([]APIKeyCapability(nil), resolvedCapabilities...),
+		PlaintextPersisted: false,
 	}
 }
 
@@ -124,6 +141,86 @@ func NewApiKey(name, sessionID, createdBy string) *ApiKey {
 func generateApiKey(sessionID string) string {
 	randomPart := uuid.New().String()
 	return "toolplane_session_" + sessionID + "_" + randomPart
+}
+
+func HashAPIKeySecret(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
+}
+
+func BuildAPIKeyPreview(secret string) string {
+	if secret == "" {
+		return ""
+	}
+	if len(secret) <= 12 {
+		return "****"
+	}
+	return secret[:8] + "..." + secret[len(secret)-4:]
+}
+
+func (k *ApiKey) EnsureSecurityMetadata() bool {
+	if k == nil {
+		return false
+	}
+
+	changed := false
+	if len(k.Capabilities) == 0 {
+		k.Capabilities = DefaultAPIKeyCapabilities()
+		changed = true
+	}
+	if k.Key != "" && k.KeyHash == "" {
+		k.KeyHash = HashAPIKeySecret(k.Key)
+		changed = true
+	}
+	if k.Key != "" && k.KeyPreview == "" {
+		k.KeyPreview = BuildAPIKeyPreview(k.Key)
+		changed = true
+	}
+	if k.KeyHash != "" && k.PlaintextPersisted {
+		k.PlaintextPersisted = false
+		changed = true
+	}
+
+	return changed
+}
+
+func (k *ApiKey) Matches(secret string) bool {
+	if k == nil || secret == "" {
+		return false
+	}
+	if k.KeyHash != "" {
+		computed := HashAPIKeySecret(secret)
+		return subtle.ConstantTimeCompare([]byte(computed), []byte(k.KeyHash)) == 1
+	}
+	if k.Key == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(secret), []byte(k.Key)) == 1
+}
+
+func (k *ApiKey) CloneWithoutSecret() *ApiKey {
+	if k == nil {
+		return nil
+	}
+	copyKey := *k
+	copyKey.Key = ""
+	copyKey.PlaintextPersisted = false
+	if len(k.Capabilities) > 0 {
+		copyKey.Capabilities = append([]APIKeyCapability(nil), k.Capabilities...)
+	}
+	return &copyKey
+}
+
+func (k *ApiKey) HasCapability(required APIKeyCapability) bool {
+	if k == nil {
+		return false
+	}
+	for _, capability := range k.Capabilities {
+		if capability == required {
+			return true
+		}
+	}
+	return false
 }
 
 // IsRevoked checks if an API key is revoked

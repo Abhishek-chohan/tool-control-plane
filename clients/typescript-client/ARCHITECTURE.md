@@ -7,18 +7,21 @@ The TypeScript client is the maintained JavaScript-family projection of Toolplan
 ```text
 src/index.ts
   -> src/core/toolplane_client.ts
+  -> src/provider_runtime.ts
   -> src/interfaces/*
   -> src/errors/*
 src/client.ts
   -> src/core/toolplane_client.ts
 src/examples/*.ts
   -> src/core/toolplane_client.ts
+  -> src/provider_runtime.ts
 ```
 
 ## Entry Points
 
 - `src/index.ts`: public exports for the SDK.
 - `src/core/toolplane_client.ts`: main implementation.
+- `src/provider_runtime.ts`: explicit provider lifecycle surface for maintained TypeScript provider mode.
 - `src/client.ts`: executable entry used by scripts and defaulted to the maintained gRPC control-plane path.
 - `src/examples/`: maintained gRPC-first example flows.
 
@@ -27,28 +30,35 @@ src/examples/*.ts
 `ToolplaneClient` exposes:
 
 - Lifecycle: `connect()`, `disconnect()`, `isConnected()`, `getConnectionStatus()`.
+- Provider entry: `providerRuntime()`.
 - Connectivity and execution helpers: `executeTool()`, `add()`, `subtract()`, `multiply()`, `divide()`, `ping()`.
 - Tool helpers: `registerTool()`, `listTools()`, `getToolById()`, `getToolByName()`, `deleteTool()`.
 - Session and API-key helpers: `createSession()`, `getSession()`, `listSessions()`, `updateSession()`, `createApiKey()`, `listApiKeys()`, `revokeApiKey()`.
-- Machine helpers: `registerMachine()`, `listMachines()`, `getMachine()`, `unregisterMachine()`, `drainMachine()`.
-- Request helpers: `createRequest()`, `getRequest()`, `listRequests()`, `cancelRequest()`.
+- Machine helpers: `registerMachine()`, `listMachines()`, `getMachine()`, `updateMachinePing()`, `unregisterMachine()`, `drainMachine()`.
+- Request helpers: `createRequest()`, `getRequest()`, `listRequests()`, `updateRequest()`, `claimRequest()`, `appendRequestChunks()`, `submitRequestResult()`, `cancelRequest()`.
 - Task helpers: `createTask()`, `getTask()`, `listTasks()`, `cancelTask()`.
 - Factory: `createGRPCClient()`.
-- No maintained provider runtime loop that claims requests and submits results.
+
+`ProviderRuntime` exposes:
+
+- Session ownership: `createSession()`, `attachSession()`, `managedSessionIds()`.
+- Tool registration: `registerTool()`, `tool()`.
+- Runtime control: `pollOnce()`, `startInBackground()`, `runForever()`, `stop()`, `drain()`, `close()`.
 
 ## Transport Model
 
 - The public SDK transport is gRPC only and initializes `ToolServiceClient`, `SessionsServiceClient`, `MachinesServiceClient`, `RequestsServiceClient`, and `TasksServiceClient` from the generated protobuf surface.
 - The shared-fixture conformance runner under `tests/conformance/` still includes an internal HTTP adapter so fixture behavior can be checked against the maintained HTTP gateway. That adapter is not part of the public SDK surface.
 - Public gRPC helpers in `src/core/toolplane_client.ts` now follow the live request lifecycle: auth metadata, health-check connect, request polling, and machine-aware tool registration.
+- Provider-mode ownership is now explicit in `src/provider_runtime.ts`, which composes the maintained gRPC wrappers for machine registration, heartbeat, claim, chunk append, result submission, and drain-aware shutdown.
 - Broader protobuf coverage still remains narrower than Python; verify missing public wrappers against `server/proto/service.proto` before assuming parity.
-- Provider-mode ownership remains explicit: TypeScript exposes direct machine and tool wrappers but not the maintained Python-style provider runtime harness.
 
 ## Key Files
 
 | File | Responsibility |
 | --- | --- |
 | `src/core/toolplane_client.ts` | Main client implementation, connection logic, request polling, and shipped live gRPC wrappers |
+| `src/provider_runtime.ts` | Explicit provider lifecycle orchestration over the maintained gRPC wrappers |
 | `src/interfaces/` | Shared transport and domain types |
 | `src/errors/` | Error classes for connection, timeout, protocol, and validation failures |
 | `src/examples/` | Example usage flows for basic and advanced scenarios |

@@ -3,8 +3,6 @@ import { randomUUID } from 'node:crypto';
 import * as grpc from '@grpc/grpc-js';
 
 import {
-  AppendRequestChunksRequest,
-  ClaimRequestRequest,
   CreateApiKeyRequest,
   CreateRequestRequest,
   CreateSessionRequest,
@@ -30,7 +28,6 @@ import {
   ListUserSessionsRequest,
   Machine as ProtoMachine,
   RegisterMachineRequest,
-  RegisterToolRequest,
   RevokeApiKeyRequest,
   UnregisterMachineRequest,
   Session as ProtoSession,
@@ -38,11 +35,14 @@ import {
   Request as ProtoRequest,
   ResumeStreamRequest,
   UnregisterMachineResponse,
-  UpdateRequestRequest,
   UpdateSessionRequest,
-  SubmitRequestResultRequest,
   Tool as ProtoTool,
 } from '../../../src/proto/proto/service_pb';
+
+import {
+  ProviderRuntime,
+  ToolplaneClient,
+} from '../../../src';
 
 import {
   MachinesServiceClient,
@@ -52,21 +52,6 @@ import {
 } from '../../../src/proto/proto/service_grpc_pb';
 
 import type { ConformanceAdapter } from '../types';
-
-interface ProviderTool {
-  stream: boolean;
-}
-
-interface ProviderState {
-  machineId: string;
-  tools: Map<string, ProviderTool>;
-}
-
-interface PendingRequestTarget {
-  requestId?: string;
-  toolName?: string;
-  serializedInput?: string;
-}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -120,11 +105,9 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
 
   private readonly requestsClient: RequestsServiceClient;
 
-  private readonly providerStates = new Map<string, ProviderState>();
+  private readonly providerClient: ToolplaneClient;
 
-  private readonly requestProcessors = new Map<string, Promise<void>>();
-
-  private readonly requestProcessorErrors = new Map<string, Error>();
+  private readonly runtimes = new Map<string, ProviderRuntime>();
 
   constructor(host: string, port: number, private readonly userId: string, private readonly apiKey: string = '') {
     this.target = `${host}:${port}`;
@@ -133,6 +116,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     this.sessionClient = new SessionsServiceClient(this.target, credentials);
     this.machineClient = new MachinesServiceClient(this.target, credentials);
     this.requestsClient = new RequestsServiceClient(this.target, credentials);
+    this.providerClient = ToolplaneClient.createGRPCClient(host, port, '', userId, apiKey);
   }
 
   async connect(): Promise<void> {
@@ -151,25 +135,8 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async close(): Promise<void> {
-    const processors = Array.from(this.requestProcessors.values());
-    this.requestProcessors.clear();
-    await Promise.allSettled(processors);
-
-    const providers = Array.from(this.providerStates.entries());
-    this.providerStates.clear();
-
-    await Promise.allSettled(
-      providers.map(async ([sessionId, state]) => {
-        const request = new UnregisterMachineRequest();
-        request.setSessionId(sessionId);
-        request.setMachineId(state.machineId);
-
-        await this.callUnary(
-          (metadata, options, callback) => this.machineClient.unregisterMachine(request, metadata, options, callback),
-          `failed to unregister machine ${state.machineId}`,
-        );
-      }),
-    );
+    await Promise.allSettled(Array.from(this.runtimes.values()).map((runtime) => runtime.close()));
+    this.runtimes.clear();
 
     this.toolClient.close();
     this.sessionClient.close();
@@ -183,7 +150,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     message.setName(String(request.name ?? ''));
     message.setDescription(String(request.description ?? ''));
     message.setNamespace(String(request.namespace ?? ''));
-    message.setApiKey(this.apiKey);
+		message.setApiKey('');
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.sessionClient.createSession(message, metadata, options, callback),
@@ -246,64 +213,55 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async registerUnaryEchoTool(sessionId: string, toolName: string, description: string): Promise<void> {
-    const state = await this.ensureMachine(sessionId);
-    if (state.tools.has(toolName)) {
-      return;
-    }
-
-    const request = new RegisterToolRequest();
-    request.setSessionId(sessionId);
-    request.setMachineId(state.machineId);
-    request.setName(toolName);
-    request.setDescription(description);
-    request.setSchema(
-      JSON.stringify({
+    await this.getRuntime(sessionId).registerTool({
+      sessionId,
+      name: toolName,
+      description,
+      schema: {
         type: 'object',
         properties: {
           message: { type: 'string' },
+          delay_ms: { type: 'integer' },
         },
         required: ['message'],
-      }),
-    );
-    request.setTagsList(['conformance']);
-
-    await this.callUnary(
-      (metadata, options, callback) => this.toolClient.registerTool(request, metadata, options, callback),
-      `failed to register unary tool ${toolName}`,
-    );
-
-    state.tools.set(toolName, { stream: false });
+      },
+      tags: ['conformance'],
+      handler: async (input) => {
+        const message = typeof input.message === 'string' ? input.message : String(input.message ?? '');
+        const delayMs = numberValue(input.delay_ms, 0);
+        if (delayMs > 0) {
+          await sleep(delayMs);
+        }
+        return { echo: message };
+      },
+    });
   }
 
   async registerStreamTool(sessionId: string, toolName: string, description: string): Promise<void> {
-    const state = await this.ensureMachine(sessionId);
-    if (state.tools.has(toolName)) {
-      return;
-    }
-
-    const request = new RegisterToolRequest();
-    request.setSessionId(sessionId);
-    request.setMachineId(state.machineId);
-    request.setName(toolName);
-    request.setDescription(description);
-    request.setSchema(
-      JSON.stringify({
+    await this.getRuntime(sessionId).registerTool({
+      sessionId,
+      name: toolName,
+      description,
+      schema: {
         type: 'object',
         properties: {
           prefix: { type: 'string' },
           count: { type: 'integer' },
         },
         required: ['prefix', 'count'],
-      }),
-    );
-    request.setTagsList(['conformance', 'stream']);
+      },
+      tags: ['conformance', 'stream'],
+      stream: true,
+      handler: async function* (input) {
+        const prefix = typeof input.prefix === 'string' && input.prefix.length > 0 ? input.prefix : 'chunk';
+        const count = numberValue(input.count, 5);
 
-    await this.callUnary(
-      (metadata, options, callback) => this.toolClient.registerTool(request, metadata, options, callback),
-      `failed to register stream tool ${toolName}`,
-    );
-
-    state.tools.set(toolName, { stream: true });
+        for (let index = 0; index < count; index += 1) {
+          await sleep(250);
+          yield `${prefix}-${index + 1}`;
+        }
+      },
+    });
   }
 
   async listTools(sessionId: string): Promise<Record<string, unknown>[]> {
@@ -385,16 +343,19 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async startProviderRuntime(sessionId: string): Promise<void> {
-    await this.ensureMachine(sessionId);
+    await this.getRuntime(sessionId).attachSession(sessionId);
+    await this.getRuntime(sessionId).startInBackground();
   }
 
   async startRequestProcessing(sessionId: string, requestId: string): Promise<void> {
-    void this.startRequestProcessor(sessionId, requestId);
+    void requestId;
+    void this.getRuntime(sessionId).pollOnce();
   }
 
   async startStreamingRequest(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<string> {
     const requestId = await this.createRequest(sessionId, toolName, params);
-    this.startRequestProcessor(sessionId, requestId);
+    await this.startProviderRuntime(sessionId);
+    void this.getRuntime(sessionId).pollOnce();
     return requestId;
   }
 
@@ -523,10 +484,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return response.getRequestsList().map((item) => this.normalizeRequest(item));
   }
 
-  async createApiKey(sessionId: string, name: string): Promise<Record<string, unknown>> {
+  async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
     const request = new CreateApiKeyRequest();
     request.setSessionId(sessionId);
     request.setName(name);
+		request.setCapabilitiesList(capabilities);
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.sessionClient.createApiKey(request, metadata, options, callback),
@@ -628,6 +590,8 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async invoke(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<unknown> {
+    await this.startProviderRuntime(sessionId);
+
     const request = new ExecuteToolRequest();
     request.setSessionId(sessionId);
     request.setToolName(toolName);
@@ -643,22 +607,18 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       throw new Error('No request ID returned from ExecuteTool');
     }
 
-    await this.processPendingRequests(sessionId, { requestId });
+    void this.getRuntime(sessionId).pollOnce();
     const status = await this.waitForRequestCompletion(sessionId, requestId);
     return status.result;
   }
 
   async stream(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<[unknown[], boolean]> {
+    await this.startProviderRuntime(sessionId);
+
     const request = new ExecuteToolRequest();
-    const serializedInput = JSON.stringify(params);
     request.setSessionId(sessionId);
     request.setToolName(toolName);
-    request.setInput(serializedInput);
-
-    const processor = this.processPendingRequests(sessionId, {
-      toolName,
-      serializedInput,
-    });
+    request.setInput(JSON.stringify(params));
 
     const stream = this.toolClient.streamExecuteTool(request, this.createMetadata(), this.callOptions(60_000));
     const collected: unknown[] = [];
@@ -666,13 +626,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return new Promise<[unknown[], boolean]>((resolve, reject) => {
       let settled = false;
 
-      const rejectWithProcessor = async (error: unknown) => {
-        try {
-          await processor.catch(() => undefined);
-        } finally {
-          reject(error);
-        }
-      };
+      void this.getRuntime(sessionId).pollOnce();
 
       stream.on('data', (chunk) => {
         if (settled) {
@@ -682,21 +636,17 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
         if (chunk.getIsFinal()) {
           settled = true;
           const finalPayload = parseMaybeJSON(chunk.getChunk());
-          void processor
-            .then(() => {
-              if (chunk.getError()) {
-                reject(new Error(`gRPC stream request failed: ${chunk.getError()}`));
-                return;
-              }
+          if (chunk.getError()) {
+            reject(new Error(`gRPC stream request failed: ${chunk.getError()}`));
+            return;
+          }
 
-              if (Array.isArray(finalPayload) && finalPayload.length >= collected.length) {
-                resolve([finalPayload, true]);
-                return;
-              }
+          if (Array.isArray(finalPayload) && finalPayload.length >= collected.length) {
+            resolve([finalPayload, true]);
+            return;
+          }
 
-              resolve([collected, true]);
-            })
-            .catch(reject);
+          resolve([collected, true]);
           return;
         }
 
@@ -711,7 +661,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
           return;
         }
         settled = true;
-        void rejectWithProcessor(error);
+        reject(error);
       });
 
       stream.on('end', () => {
@@ -719,7 +669,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
           return;
         }
         settled = true;
-        void rejectWithProcessor(new Error('gRPC stream ended before final marker'));
+        reject(new Error('gRPC stream ended before final marker'));
       });
     });
   }
@@ -727,19 +677,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   async waitForRequestCompletion(sessionId: string, requestId: string): Promise<Record<string, unknown>> {
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
-      const processorError = this.requestProcessorErrors.get(requestId);
-      if (processorError) {
-        this.requestProcessorErrors.delete(requestId);
-        throw processorError;
-      }
-
       const status = await this.getRequestStatus(sessionId, requestId);
       if (status.status === 'done') {
-        await this.awaitRequestProcessor(requestId);
         return status;
       }
       if (status.status === 'failure') {
-        await this.awaitRequestProcessor(requestId).catch(() => undefined);
         throw new Error(`Request ${requestId} failed: ${String(status.error ?? 'unknown error')}`);
       }
       await sleep(100);
@@ -748,200 +690,20 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     throw new Error(`Timed out waiting for request ${requestId}`);
   }
 
-  private startRequestProcessor(sessionId: string, requestId: string): Promise<void> {
-    const existing = this.requestProcessors.get(requestId);
+  private getRuntime(sessionId: string): ProviderRuntime {
+    const existing = this.runtimes.get(sessionId);
     if (existing) {
       return existing;
     }
 
-    const processor = this.processPendingRequests(sessionId, { requestId }).finally(() => {
-      this.requestProcessors.delete(requestId);
+    const runtime = this.providerClient.providerRuntime({
+      pollIntervalMs: 50,
+      heartbeatIntervalMs: 5_000,
+      sdkVersion: '1.0.0-conformance',
     });
 
-    const trackedProcessor = processor.catch((error) => {
-      this.requestProcessorErrors.set(
-        requestId,
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    });
-
-    this.requestProcessors.set(requestId, trackedProcessor);
-    return trackedProcessor;
-  }
-
-  private async awaitRequestProcessor(requestId: string): Promise<void> {
-    const processor = this.requestProcessors.get(requestId);
-    if (processor) {
-      await processor;
-    }
-  }
-
-  private async ensureMachine(sessionId: string): Promise<ProviderState> {
-    const existing = this.providerStates.get(sessionId);
-    if (existing) {
-      return existing;
-    }
-
-    const state: ProviderState = {
-      machineId: randomUUID(),
-      tools: new Map(),
-    };
-
-    const request = new RegisterMachineRequest();
-    request.setSessionId(sessionId);
-    request.setMachineId(state.machineId);
-    request.setSdkVersion('1.0.0-conformance');
-    request.setSdkLanguage('typescript');
-
-    await this.callUnary(
-      (metadata, options, callback) => this.machineClient.registerMachine(request, metadata, options, callback),
-      `failed to register machine for session ${sessionId}`,
-    );
-
-    this.providerStates.set(sessionId, state);
-    return state;
-  }
-
-  private async processPendingRequests(sessionId: string, target: PendingRequestTarget): Promise<void> {
-    const state = this.providerStates.get(sessionId);
-    if (!state) {
-      throw new Error(`No provider state registered for session ${sessionId}`);
-    }
-
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      const listRequest = new ListRequestsRequest();
-      listRequest.setSessionId(sessionId);
-      listRequest.setStatus('pending');
-      listRequest.setLimit(20);
-
-      const response = await this.callUnary(
-        (metadata, options, callback) => this.requestsClient.listRequests(listRequest, metadata, options, callback),
-        `failed to list pending requests for session ${sessionId}`,
-      );
-
-      const request = response.getRequestsList().find((candidate) => {
-        if (target.requestId && candidate.getId() !== target.requestId) {
-          return false;
-        }
-        if (target.toolName && candidate.getToolName() !== target.toolName) {
-          return false;
-        }
-        if (target.serializedInput && candidate.getInput() !== target.serializedInput) {
-          return false;
-        }
-        return true;
-      });
-
-      if (!request) {
-        await sleep(100);
-        continue;
-      }
-
-      const claimRequest = new ClaimRequestRequest();
-      claimRequest.setSessionId(sessionId);
-      claimRequest.setRequestId(request.getId());
-      claimRequest.setMachineId(state.machineId);
-
-      const claimedRequest = await this.callUnary(
-        (metadata, options, callback) => this.requestsClient.claimRequest(claimRequest, metadata, options, callback),
-        `failed to claim request ${request.getId()}`,
-      );
-
-      const runningRequest = new UpdateRequestRequest();
-      runningRequest.setSessionId(sessionId);
-      runningRequest.setRequestId(claimedRequest.getId());
-      runningRequest.setStatus('running');
-      await this.callUnary(
-        (metadata, options, callback) => this.requestsClient.updateRequest(runningRequest, metadata, options, callback),
-        `failed to mark request ${claimedRequest.getId()} as running`,
-      );
-
-      const tool = state.tools.get(claimedRequest.getToolName());
-      const params = this.parseRequestParams(claimedRequest.getInput());
-
-      if (!tool) {
-        await this.submitResult(sessionId, claimedRequest.getId(), JSON.stringify({ error: 'tool not found' }), 'rejection');
-        return;
-      }
-
-      if (tool.stream) {
-        await this.fulfillStreamingRequest(sessionId, claimedRequest.getId(), params);
-      } else {
-        await this.fulfillUnaryRequest(sessionId, claimedRequest.getId(), params);
-      }
-      return;
-    }
-
-    throw new Error(`Timed out waiting to claim request for session ${sessionId}`);
-  }
-
-  private async fulfillUnaryRequest(sessionId: string, requestId: string, params: Record<string, unknown>): Promise<void> {
-    const message = typeof params.message === 'string' ? params.message : String(params.message ?? '');
-    const delayMs = numberValue(params.delay_ms, 0);
-    if (delayMs > 0) {
-      await sleep(delayMs);
-    }
-    await this.submitResult(sessionId, requestId, JSON.stringify({ echo: message }), 'resolution');
-  }
-
-  private async fulfillStreamingRequest(sessionId: string, requestId: string, params: Record<string, unknown>): Promise<void> {
-    const prefix = typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : 'chunk';
-    const count = numberValue(params.count, 5);
-    const chunks: string[] = [];
-
-    const updateRequest = new UpdateRequestRequest();
-    updateRequest.setSessionId(sessionId);
-    updateRequest.setRequestId(requestId);
-    updateRequest.setResultType('streaming');
-    await this.callUnary(
-      (metadata, options, callback) => this.requestsClient.updateRequest(updateRequest, metadata, options, callback),
-      `failed to set streaming mode for request ${requestId}`,
-    );
-
-    for (let index = 0; index < count; index += 1) {
-      const value = `${prefix}-${index + 1}`;
-      chunks.push(value);
-
-      const appendRequest = new AppendRequestChunksRequest();
-      appendRequest.setSessionId(sessionId);
-      appendRequest.setRequestId(requestId);
-      appendRequest.setChunksList([value]);
-      appendRequest.setResultType('streaming');
-      await this.callUnary(
-        (metadata, options, callback) =>
-          this.requestsClient.appendRequestChunks(appendRequest, metadata, options, callback),
-        `failed to append chunk for request ${requestId}`,
-      );
-
-      await sleep(250);
-    }
-
-    await this.submitResult(sessionId, requestId, JSON.stringify(chunks), 'resolution');
-  }
-
-  private async submitResult(
-    sessionId: string,
-    requestId: string,
-    result: string,
-    resultType: string,
-  ): Promise<void> {
-    const request = new SubmitRequestResultRequest();
-    request.setSessionId(sessionId);
-    request.setRequestId(requestId);
-    request.setResult(result);
-    request.setResultType(resultType);
-    request.getMetaMap().set('handled_by', 'typescript-conformance');
-
-    await this.callUnary(
-      (metadata, options, callback) => this.requestsClient.submitRequestResult(request, metadata, options, callback),
-      `failed to submit result for request ${requestId}`,
-    );
-  }
-
-  private parseRequestParams(input: string): Record<string, unknown> {
-    const parsed = parseMaybeJSON(input);
-    return typeof parsed === 'object' && parsed !== null ? { ...parsed } : {};
+    this.runtimes.set(sessionId, runtime);
+    return runtime;
   }
 
   private normalizeSession(session: ProtoSession): Record<string, unknown> {
@@ -964,9 +726,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       id: apiKey.getId(),
       name: apiKey.getName(),
       key: apiKey.getKey(),
+		key_preview: apiKey.getKeyPreview(),
       session_id: apiKey.getSessionId(),
       created_at: apiKey.getCreatedAt(),
       created_by: apiKey.getCreatedBy(),
+		capabilities: apiKey.getCapabilitiesList(),
       revoked_at: apiKey.getRevokedAt(),
     };
   }

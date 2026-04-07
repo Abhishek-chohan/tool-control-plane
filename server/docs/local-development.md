@@ -15,6 +15,7 @@ The supported local path uses:
 - `TOOLPLANE_AUTH_FIXED_API_KEY=toolplane-conformance-fixture-key`
 - `TOOLPLANE_STORAGE_MODE=memory`
 - `TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=1`
+- `TOOLPLANE_METRICS_LISTEN=127.0.0.1:9102`
 
 The fixed API key above is an intentionally non-secret local fixture value. It is suitable for local development and CI only.
 
@@ -32,6 +33,8 @@ set +a
 
 That path builds the server and gateway, exports the explicit development settings, and starts the local stack through `start.sh`.
 
+The supported local bootstrap keeps metrics on loopback at `127.0.0.1:9102` so Prometheus-style scraping uses a stable address without exposing the endpoint beyond the host.
+
 ## Production-Like Startup
 
 For production-oriented testing, replace the development auth and storage settings explicitly.
@@ -43,11 +46,12 @@ export TOOLPLANE_ENV_MODE=production
 export TOOLPLANE_AUTH_MODE=postgres
 export TOOLPLANE_STORAGE_MODE=postgres
 export TOOLPLANE_DATABASE_URL=postgres://username:password@localhost:5432/toolplane?sslmode=disable
+export TOOLPLANE_METRICS_LISTEN=:9102
 export TOOLPLANE_PROXY_ALLOWED_ORIGINS=https://your-app.example.com
 export TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=0
 ```
 
-If the database does not have any API keys yet, bootstrap one against the same Postgres database first. The simplest path is to start once in fixed auth mode, call `SessionsService.CreateApiKey`, then restart with `TOOLPLANE_AUTH_MODE=postgres`.
+If the database does not have any API keys yet, bootstrap one against the same Postgres database first. The simplest path is to start once in fixed auth mode, call `SessionsService.CreateApiKey`, record the returned secret immediately, then restart with `TOOLPLANE_AUTH_MODE=postgres`. `ListApiKeys` is metadata-only and will not return the full secret later.
 
 The server now fails fast when required auth or storage configuration is missing, and the proxy rejects insecure backend dialing and wildcard origins in production mode.
 
@@ -59,10 +63,13 @@ For production-oriented proxy policy controls, start the gateway with explicit r
 
 The gateway's `/health` endpoint reports circuit-breaker and throttle counters so operators can confirm those controls are active without reproducing failures locally.
 
+The supported container bootstrap in `server/entrypoint.sh` also defaults `TOOLPLANE_METRICS_LISTEN` to `:9102`, and the server image exposes port `9102`, so deployment manifests can publish or scrape that endpoint directly.
+
 ## Notes
 
 - `TOOLPLANE_STORAGE_MODE=memory` is an explicit development-mode choice, not a silent fallback.
 - `TOOLPLANE_ENV_MODE=production` now requires Postgres-backed storage. In-memory mode remains development or test only.
 - `TOOLPLANE_AUTH_MODE=postgres` validates against the server-managed `api_keys` records already loaded into the session service from Postgres-backed storage.
+- Postgres-backed API keys are verified by stored hash, carry explicit `read` or `execute` or `admin` capabilities, and remain session-scoped credentials.
 - The HTTP gateway remains a compatibility surface over the canonical gRPC contract.
 - If you use the Python or TypeScript conformance harnesses with auto-boot enabled, they now set the same development-mode env contract automatically.

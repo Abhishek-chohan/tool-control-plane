@@ -995,10 +995,44 @@ func (s *RequestsService) recordRequestEvent(
 	s.tracer.Record(trace.SessionEvent{
 		SessionID: req.SessionID,
 		MachineID: eventMachineID,
+		RequestID: req.ID,
 		Event:     event,
 		Timestamp: timestamp,
 		Metadata:  eventMetadata,
 	})
+}
+
+// RequestMetricsSnapshot returns current request counts for observability scrapes.
+func (s *RequestsService) RequestMetricsSnapshot() (pending, claimed, running, done, failed, stalled, deadLetter int) {
+	s.requestsMutex.RLock()
+	defer s.requestsMutex.RUnlock()
+
+	for _, sessionRequests := range s.requests {
+		for _, request := range sessionRequests {
+			if request == nil {
+				continue
+			}
+			switch request.Status {
+			case model.RequestStatusPending:
+				pending++
+			case model.RequestStatusClaimed:
+				claimed++
+			case model.RequestStatusRunning:
+				running++
+			case model.RequestStatusDone:
+				done++
+			case model.RequestStatusFailed:
+				failed++
+			case model.RequestStatusStalled:
+				stalled++
+			}
+			if request.DeadLetter {
+				deadLetter++
+			}
+		}
+	}
+
+	return pending, claimed, running, done, failed, stalled, deadLetter
 }
 
 func (s *RequestsService) getRequestLocked(sessionID, requestID string) (*model.Request, error) {

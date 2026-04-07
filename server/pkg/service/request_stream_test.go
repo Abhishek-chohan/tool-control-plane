@@ -123,6 +123,48 @@ func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *tes
 	}
 }
 
+func TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker(t *testing.T) {
+	server, requestService, sessionID := newRequestStreamTestServer(t)
+
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trimmed"}`)
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
+		t.Fatalf("append chunks: %v", err)
+	}
+	if err := requestService.SubmitRequestResult(sessionID, request.ID, map[string]string{"done": "trimmed"}, model.ResultTypeResolution, nil); err != nil {
+		t.Fatalf("submit result: %v", err)
+	}
+
+	stream := newCollectingExecuteToolStream(context.Background())
+	err = server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID, LastSeq: 100}, stream)
+	if err != nil {
+		t.Fatalf("resume stream: %v", err)
+	}
+
+	if len(stream.chunks) != 6 {
+		t.Fatalf("sent chunk count = %d, want 6", len(stream.chunks))
+	}
+
+	for index, expectedChunk := range []string{"chunk-101", "chunk-102", "chunk-103", "chunk-104", "chunk-105"} {
+		chunk := stream.chunks[index]
+		wantSeq := int32(101 + index)
+		if chunk.GetSeq() != wantSeq || chunk.GetChunk() != expectedChunk || chunk.GetIsFinal() {
+			t.Fatalf("resumed chunk %d = %+v, want seq=%d chunk=%s final=false", index, chunk, wantSeq, expectedChunk)
+		}
+	}
+
+	finalChunk := stream.chunks[5]
+	if finalChunk.GetSeq() != 106 || !finalChunk.GetIsFinal() {
+		t.Fatalf("final resumed chunk = %+v, want seq=106 final=true", finalChunk)
+	}
+	if !strings.Contains(finalChunk.GetChunk(), `"done":"trimmed"`) {
+		t.Fatalf("final resumed payload = %q, want JSON result containing done=trimmed", finalChunk.GetChunk())
+	}
+}
+
 func newRequestStreamTestServer(t *testing.T) (*GRPCServer, *RequestsService, string) {
 	t.Helper()
 

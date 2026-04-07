@@ -45,7 +45,7 @@ This directory contains language-agnostic behavior fixtures used by SDK conforma
 ## Request recovery semantics
 
 - Recovery cases assert the retained chunk window returned by `GetRequestChunks()`, including ordered chunks plus the `start_seq` and `next_seq` metadata that define the current replay window.
-- Resume cases assert ordered replay after the last acknowledged sequence number and the terminal callback marker for the resumed stream.
+- Resume cases assert ordered replay after the last acknowledged sequence number and the terminal callback marker for the resumed stream, including replay from inside a trimmed retained window after long-running streams overflow the cap.
 - Expired-window cases assert that resuming before the retained window fails with the canonical `out_of_range` error instead of silently skipping lost chunks.
 
 ## Mutation semantics

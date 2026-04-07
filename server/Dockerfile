@@ -41,7 +41,9 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 # Expose the ports
 EXPOSE 9001
 EXPOSE 8080
+EXPOSE 9102
 
 ENV TOOLPLANE_DATABASE_URL=postgres://user:password@localhost:5432/user?sslmode=disable
+ENV TOOLPLANE_METRICS_LISTEN=:9102
 # Run the entrypoint script
 CMD ["/app/entrypoint.sh"]

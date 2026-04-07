@@ -7,14 +7,20 @@
     "name": "conformance-api-key-session",
     "description": "session for API key lifecycle fixture",
     "namespace": "conformance",
-    "api_key_name": "conformance-key"
+    "api_key_name": "conformance-key",
+    "api_key_capabilities": ["execute"]
   },
   "expected": {
     "api_key_id_non_empty": true,
     "api_key_value_non_empty": true,
+    "key_preview_non_empty": true,
     "session_id_matches_created": true,
     "name_equals": "conformance-key",
+    "capabilities_equal": ["execute"],
     "listed_after_create": true,
+    "listed_key_value_empty": true,
+    "listed_key_preview_non_empty": true,
+    "listed_capabilities_equal": ["execute"],
     "revoke_success": true,
     "absent_after_revoke": true
   },

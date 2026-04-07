@@ -176,6 +176,12 @@ export class ApiKey extends jspb.Message {
     setCreatedBy(value: string): ApiKey;
     getRevokedAt(): string;
     setRevokedAt(value: string): ApiKey;
+    clearCapabilitiesList(): void;
+    getCapabilitiesList(): Array<string>;
+    setCapabilitiesList(value: Array<string>): ApiKey;
+    addCapabilities(value: string, index?: number): string;
+    getKeyPreview(): string;
+    setKeyPreview(value: string): ApiKey;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ApiKey.AsObject;
@@ -196,6 +202,8 @@ export namespace ApiKey {
         createdAt: string,
         createdBy: string,
         revokedAt: string,
+        capabilitiesList: Array<string>,
+        keyPreview: string,
     }
 }
 
@@ -970,6 +978,10 @@ export class CreateApiKeyRequest extends jspb.Message {
     setSessionId(value: string): CreateApiKeyRequest;
     getName(): string;
     setName(value: string): CreateApiKeyRequest;
+    clearCapabilitiesList(): void;
+    getCapabilitiesList(): Array<string>;
+    setCapabilitiesList(value: Array<string>): CreateApiKeyRequest;
+    addCapabilities(value: string, index?: number): string;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): CreateApiKeyRequest.AsObject;
@@ -985,6 +997,7 @@ export namespace CreateApiKeyRequest {
     export type AsObject = {
         sessionId: string,
         name: string,
+        capabilitiesList: Array<string>,
     }
 }
 

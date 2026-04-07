@@ -24,7 +24,10 @@ func (s *Store) migrate(ctx context.Context) error {
             id TEXT PRIMARY KEY,
             session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
             name TEXT NOT NULL,
-            key TEXT NOT NULL,
+            key TEXT,
+		    key_hash TEXT,
+		    key_preview TEXT,
+		    capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb,
             created_at TIMESTAMPTZ NOT NULL,
             created_by TEXT NOT NULL,
             revoked_at TIMESTAMPTZ
@@ -135,6 +138,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 60`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dead_letter BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_error TEXT`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
+		`ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

@@ -43,7 +43,7 @@ class SessionManager(BaseSessionManager):
             "created_at": session.created_at,
             "created_by": created_by,
             "user_id": created_by,
-            "api_key": getattr(session, "api_key", ""),
+            "api_key": "",
             "status": "active",
         }
 
@@ -52,6 +52,8 @@ class SessionManager(BaseSessionManager):
             "id": api_key.id,
             "name": api_key.name,
             "key": api_key.key,
+            "key_preview": getattr(api_key, "key_preview", ""),
+            "capabilities": list(getattr(api_key, "capabilities", [])),
             "session_id": api_key.session_id,
             "created_at": api_key.created_at,
             "created_by": api_key.created_by,
@@ -72,7 +74,6 @@ class SessionManager(BaseSessionManager):
             user_id=user_id or "",
             name=name or "",
             description=description or "",
-            api_key=api_key or "",
             session_id=session_id or "",
             namespace=namespace or "",
         )
@@ -140,12 +141,21 @@ class SessionManager(BaseSessionManager):
 
         return self._normalize_session(response)
 
-    def create_api_key(self, session_id: str, name: str) -> Dict[str, Any]:
+    def create_api_key(
+        self,
+        session_id: str,
+        name: str,
+        capabilities: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Create a new API key for a session."""
         try:
             self.connection_manager.ensure_connected()
 
-            request = CreateApiKeyRequest(session_id=session_id, name=name)
+            request = CreateApiKeyRequest(
+                session_id=session_id,
+                name=name,
+                capabilities=capabilities or [],
+            )
             response = self.connection_manager.session_stub.CreateApiKey(
                 request, metadata=self.connection_manager.get_metadata()
             )

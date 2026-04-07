@@ -291,14 +291,16 @@ func (x *Tool) GetTags() []string {
 
 // Session definition
 type Session struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	CreatedBy     string                 `protobuf:"bytes,5,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
-	ApiKey        string                 `protobuf:"bytes,6,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	Namespace     string                 `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	CreatedAt   string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedBy   string                 `protobuf:"bytes,5,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	// Legacy transitional field. New auth enforcement is owned by api_keys records.
+	// The server no longer uses this as the maintained auth boundary.
+	ApiKey        string `protobuf:"bytes,6,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -384,14 +386,18 @@ func (x *Session) GetNamespace() string {
 
 // API Key definition
 type ApiKey struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Key           string                 `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
-	SessionId     string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	CreatedBy     string                 `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
-	RevokedAt     string                 `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Secret material is only returned from CreateApiKey.
+	// ListApiKeys returns metadata with this field empty.
+	Key           string   `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	SessionId     string   `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	CreatedAt     string   `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedBy     string   `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	RevokedAt     string   `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	Capabilities  []string `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	KeyPreview    string   `protobuf:"bytes,9,opt,name=key_preview,json=keyPreview,proto3" json:"key_preview,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -471,6 +477,20 @@ func (x *ApiKey) GetCreatedBy() string {
 func (x *ApiKey) GetRevokedAt() string {
 	if x != nil {
 		return x.RevokedAt
+	}
+	return ""
+}
+
+func (x *ApiKey) GetCapabilities() []string {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
+}
+
+func (x *ApiKey) GetKeyPreview() string {
+	if x != nil {
+		return x.KeyPreview
 	}
 	return ""
 }
@@ -1237,7 +1257,9 @@ type CreateSessionRequest struct {
 	UserId      string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	ApiKey      string                 `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	// Legacy transitional field retained for compatibility only.
+	// New callers should leave this empty.
+	ApiKey string `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	// Optional client-specified session ID
 	SessionId     string `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Namespace     string `protobuf:"bytes,6,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
@@ -2204,9 +2226,12 @@ func (x *DeleteSessionResponse) GetSuccess() bool {
 
 // CreateApiKeyRequest
 type CreateApiKeyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// Supported values are read, execute, and admin.
+	// Empty means the server default full capability set.
+	Capabilities  []string `protobuf:"bytes,3,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2253,6 +2278,13 @@ func (x *CreateApiKeyRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *CreateApiKeyRequest) GetCapabilities() []string {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
 }
 
 // ListApiKeysRequest
@@ -4413,7 +4445,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"created_by\x18\x05 \x01(\tR\tcreatedBy\x12\x17\n" +
 	"\aapi_key\x18\x06 \x01(\tR\x06apiKey\x12\x1c\n" +
-	"\tnamespace\x18\a \x01(\tR\tnamespace\"\xba\x01\n" +
+	"\tnamespace\x18\a \x01(\tR\tnamespace\"\xff\x01\n" +
 	"\x06ApiKey\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -4425,7 +4457,10 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"created_by\x18\x06 \x01(\tR\tcreatedBy\x12\x1d\n" +
 	"\n" +
-	"revoked_at\x18\a \x01(\tR\trevokedAt\"\xcd\x01\n" +
+	"revoked_at\x18\a \x01(\tR\trevokedAt\x12\"\n" +
+	"\fcapabilities\x18\b \x03(\tR\fcapabilities\x12\x1f\n" +
+	"\vkey_preview\x18\t \x01(\tR\n" +
+	"keyPreview\"\xcd\x01\n" +
 	"\aMachine\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4561,11 +4596,12 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"1\n" +
 	"\x15DeleteSessionResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"H\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"l\n" +
 	"\x13CreateApiKeyRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"3\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
+	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\"3\n" +
 	"\x12ListApiKeysRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"=\n" +

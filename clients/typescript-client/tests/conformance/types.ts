@@ -44,7 +44,7 @@ export interface ConformanceAdapter {
   resumeStream(requestId: string, lastSeq: number): Promise<Record<string, unknown>>;
   waitForRequestCompletion(sessionId: string, requestId: string): Promise<Record<string, unknown>>;
   listRequests(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>[]>;
-  createApiKey(sessionId: string, name: string): Promise<Record<string, unknown>>;
+  createApiKey(sessionId: string, name: string, capabilities?: string[]): Promise<Record<string, unknown>>;
   listApiKeys(sessionId: string): Promise<Record<string, unknown>[]>;
   revokeApiKey(sessionId: string, keyId: string): Promise<boolean>;
   registerMachine(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>>;

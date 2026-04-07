@@ -74,18 +74,22 @@ function createApiKey(overrides: Partial<{
   id: string;
   name: string;
   key: string;
+  keyPreview: string;
   sessionId: string;
   createdAt: string;
   createdBy: string;
+  capabilities: string[];
   revokedAt: string;
 }> = {}): ProtoApiKey {
   const apiKey = new ProtoApiKey();
   apiKey.setId(overrides.id ?? 'key-1');
   apiKey.setName(overrides.name ?? 'cli');
   apiKey.setKey(overrides.key ?? 'secret');
+	apiKey.setKeyPreview(overrides.keyPreview ?? 'toolplan...cret');
   apiKey.setSessionId(overrides.sessionId ?? 'session-1');
   apiKey.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
   apiKey.setCreatedBy(overrides.createdBy ?? 'unit-user');
+	apiKey.setCapabilitiesList(overrides.capabilities ?? ['read', 'execute', 'admin']);
   apiKey.setRevokedAt(overrides.revokedAt ?? '');
   return apiKey;
 }
@@ -219,16 +223,19 @@ test('createApiKey returns a normalized api key payload', async () => {
       createApiKey: unaryResponse((request) => {
         assert.equal((request as { getSessionId(): string }).getSessionId(), 'session-1');
         assert.equal((request as { getName(): string }).getName(), 'cli');
+		assert.deepEqual((request as { getCapabilitiesList(): string[] }).getCapabilitiesList(), ['read', 'admin']);
         return createApiKey({ name: 'cli' });
       }),
     },
   });
 
-  const apiKey = await client.createApiKey('cli');
+	const apiKey = await client.createApiKey('cli', ['read', 'admin']);
 
   assert.equal(apiKey.id, 'key-1');
   assert.equal(apiKey.name, 'cli');
   assert.equal(apiKey.key, 'secret');
+	assert.equal(apiKey.keyPreview, 'toolplan...cret');
+	assert.deepEqual(apiKey.capabilities, ['read', 'execute', 'admin']);
 });
 
 test('listApiKeys normalizes api key responses', async () => {
@@ -247,6 +254,8 @@ test('listApiKeys normalizes api key responses', async () => {
   const apiKeys = await client.listApiKeys();
 
   assert.deepEqual(apiKeys.map((apiKey) => apiKey.id), ['key-1', 'key-2']);
+	assert.equal(apiKeys[0].keyPreview, 'toolplan...cret');
+	assert.deepEqual(apiKeys[0].capabilities, ['read', 'execute', 'admin']);
   assert.equal(apiKeys[1].revokedAt, '2025-01-01T01:00:00Z');
 });
 

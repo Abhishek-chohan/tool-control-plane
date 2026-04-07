@@ -73,6 +73,14 @@ type responseRecorder struct {
 	status int
 }
 
+type healthResponse struct {
+	Status           string              `json:"status"`
+	Circuit          CircuitBreakerStats `json:"circuit"`
+	RateLimitRejects int64               `json:"rateLimitRejects"`
+	Throttle         ThrottleSnapshot    `json:"throttle"`
+	Timestamp        time.Time           `json:"timestamp"`
+}
+
 func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
 	return &responseRecorder{ResponseWriter: w, status: http.StatusOK}
 }
@@ -184,6 +192,67 @@ func extractClientIP(r *http.Request) string {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+func newProxyRootHandler(
+	cfg proxyConfig,
+	breaker *CircuitBreakerManager,
+	rateLimiter *RateLimiterManager,
+	throttleTracker *ThrottleTracker,
+	apiHandler http.Handler,
+) http.Handler {
+	root := http.NewServeMux()
+	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(breaker, rateLimiter, throttleTracker, apiHandler)))
+	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		writeHealthResponse(w, breaker, rateLimiter, throttleTracker, time.Now().UTC())
+	})
+	return root
+}
+
+func buildHealthResponse(
+	breaker *CircuitBreakerManager,
+	rateLimiter *RateLimiterManager,
+	throttleTracker *ThrottleTracker,
+	now time.Time,
+) (healthResponse, int) {
+	stats := breaker.Stats()
+	throttleStats := ThrottleSnapshot{}
+	if throttleTracker != nil {
+		throttleStats = throttleTracker.Snapshot()
+	}
+	response := healthResponse{
+		Status:           "ok",
+		Circuit:          stats,
+		RateLimitRejects: 0,
+		Throttle:         throttleStats,
+		Timestamp:        now,
+	}
+
+	statusCode := http.StatusOK
+	if breaker.IsOpen() {
+		response.Status = "degraded"
+		statusCode = http.StatusServiceUnavailable
+	}
+	if rateLimiter != nil {
+		response.RateLimitRejects = rateLimiter.Stats()
+	}
+
+	return response, statusCode
+}
+
+func writeHealthResponse(
+	w http.ResponseWriter,
+	breaker *CircuitBreakerManager,
+	rateLimiter *RateLimiterManager,
+	throttleTracker *ThrottleTracker,
+	now time.Time,
+) {
+	response, statusCode := buildHealthResponse(breaker, rateLimiter, throttleTracker, now)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 func main() {
@@ -299,48 +368,7 @@ func main() {
 
 	log.Printf("JSON gateway listening on %s → gRPC %s (env=%s cors=%s backend=%s)", *httpListen, *grpcEndpoint, cfg.environment, cfg.corsSummary(), cfg.backendSecuritySummary())
 
-	// Create root handler
-	root := http.NewServeMux()
-
-	// Add CORS and proxy control middleware to API
-	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(breaker, rateLimiter, throttleTracker, mux)))
-
-	// Add health check endpoint with diagnostic payload
-	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		stats := breaker.Stats()
-		throttleStats := ThrottleSnapshot{}
-		if throttleTracker != nil {
-			throttleStats = throttleTracker.Snapshot()
-		}
-		response := struct {
-			Status           string              `json:"status"`
-			Circuit          CircuitBreakerStats `json:"circuit"`
-			RateLimitRejects int64               `json:"rateLimitRejects"`
-			Throttle         ThrottleSnapshot    `json:"throttle"`
-			Timestamp        time.Time           `json:"timestamp"`
-		}{
-			Status:           "ok",
-			Circuit:          stats,
-			RateLimitRejects: 0,
-			Throttle:         throttleStats,
-			Timestamp:        time.Now().UTC(),
-		}
-
-		statusCode := http.StatusOK
-		if breaker.IsOpen() {
-			response.Status = "degraded"
-			statusCode = http.StatusServiceUnavailable
-		}
-		if rateLimiter != nil {
-			response.RateLimitRejects = rateLimiter.Stats()
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(statusCode)
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("failed to encode health response: %v", err)
-		}
-	})
+	root := newProxyRootHandler(cfg, breaker, rateLimiter, throttleTracker, mux)
 
 	// Start HTTP server
 	log.Fatal(http.ListenAndServe(*httpListen, root))
