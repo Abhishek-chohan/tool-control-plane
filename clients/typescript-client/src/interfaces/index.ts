@@ -97,6 +97,15 @@ export interface Request {
 }
 
 /**
+ * Optional TLS settings for the maintained direct gRPC client.
+ */
+export interface GRPCTLSConfig {
+  enabled?: boolean;
+  caCertPath?: string;
+  serverName?: string;
+}
+
+/**
  * Client configuration options
  */
 export interface ClientConfig {
@@ -106,6 +115,7 @@ export interface ClientConfig {
   sessionId: string;
   userId: string;
   apiKey?: string;
+  tls?: GRPCTLSConfig;
   timeout?: number;
   retryAttempts?: number;
   retryDelay?: number;

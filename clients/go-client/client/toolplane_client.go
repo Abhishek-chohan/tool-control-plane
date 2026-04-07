@@ -11,7 +11,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	pb "toolplane-go-client/proto"
@@ -40,6 +40,7 @@ type ToolplaneClient struct {
 	machineID  string
 	userID     string
 	apiKey     string
+	tlsConfig   GRPCTLSConfig
 
 	// gRPC client fields
 	grpcConn       *grpc.ClientConn
@@ -51,7 +52,7 @@ type ToolplaneClient struct {
 }
 
 // NewToolplaneClient creates a new Toolplane client
-func NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort int, sessionID, userID, apiKey string) (*ToolplaneClient, error) {
+func NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort int, sessionID, userID, apiKey string, opts ...ClientOption) (*ToolplaneClient, error) {
 	client := &ToolplaneClient{
 		protocol:   protocol,
 		serverHost: serverHost,
@@ -63,6 +64,12 @@ func NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort i
 
 	if protocol != ProtocolGRPC {
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
+	}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(client)
+		}
 	}
 
 	return client, nil
@@ -123,7 +130,12 @@ func (c *ToolplaneClient) connectGRPC() error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGRPCConnectTimeout)
 	defer cancel()
 
-	conn, err := dialGRPC(ctx, address)
+	transportCredentials, err := c.transportCredentials()
+	if err != nil {
+		return fmt.Errorf("failed to configure gRPC transport: %w", err)
+	}
+
+	conn, err := dialGRPCWithCredentials(ctx, address, transportCredentials)
 	if err != nil {
 		return fmt.Errorf("failed to dial gRPC server: %w", err)
 	}
@@ -150,14 +162,22 @@ func (c *ToolplaneClient) connectGRPC() error {
 		return fmt.Errorf("gRPC health check failed: %w", err)
 	}
 
-	log.Printf("gRPC connection established to %s (status=%s)", address, response.Status)
+	log.Printf("gRPC connection established to %s (status=%s, transport=%s)", address, response.Status, transportCredentials.Info().SecurityProtocol)
 	return nil
 }
 
 func dialGRPC(ctx context.Context, address string) (*grpc.ClientConn, error) {
+	transportCredentials, err := (&ToolplaneClient{}).transportCredentials()
+	if err != nil {
+		return nil, err
+	}
+	return dialGRPCWithCredentials(ctx, address, transportCredentials)
+}
+
+func dialGRPCWithCredentials(ctx context.Context, address string, transportCredentials credentials.TransportCredentials) (*grpc.ClientConn, error) {
 	conn, err := grpc.NewClient(
 		address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(transportCredentials),
 	)
 	if err != nil {
 		return nil, err

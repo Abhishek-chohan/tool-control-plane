@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime
+.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -119,3 +119,6 @@ release-gate-runtime:
 	go test ./cmd/server -run 'TestLoadServerConfigRejectsProductionInMemoryStorage|TestLoadServerConfigAllowsProductionPostgresStorage' -count=1
 	go test ./pkg/service -run 'TestSessionsServiceRecordsAuditEvents|TestTasksServiceCancelTaskCancelsUnderlyingRequest|TestTasksServiceTimeoutCancelsUnderlyingRequest' -count=1
 	go test ./pkg/service -run 'TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest|TestRequestsServicePersistentRecoveryRequeuesExpiredRequest|TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork|TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt|TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired' -count=1
+
+reference-deployment-integration:
+	bash ./scripts/reference_deployment_integration.sh

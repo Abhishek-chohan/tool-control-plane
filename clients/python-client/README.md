@@ -1,6 +1,12 @@
 # Toolplane Python Client
 
-The Python package is the primary maintained SDK for Toolplane. Toolplane is a distributed tool-execution control plane with a canonical gRPC contract in `server/proto/service.proto` and a maintained HTTP gateway compatibility surface. Python is the richest current client surface and the baseline for end-to-end platform capability.
+The Python package is the primary maintained SDK for Toolplane's durable remote tool-execution control plane. Toolplane is built for remote tools that need explicit provider ownership, request lifecycle control, retained-window recovery, and deploy-safe drain over the canonical contract in `server/proto/service.proto`. Python is the richest current client surface and the baseline for end-to-end platform capability.
+
+## When To Start Here
+
+- You want the clearest first-touch path for Toolplane's full provider-consumer lifecycle.
+- You need the richest maintained provider runtime plus the maintained HTTP gateway compatibility surface.
+- You want the repo's baseline surface before comparing narrower Go or TypeScript projections in `SDK_MAP.md`.
 
 ## Support Status
 
@@ -191,8 +197,10 @@ from toolplane import Toolplane
 client = Toolplane(
     # Server connection settings
     server_host="localhost",
-    server_port=50051,
+    server_port=9001,
     use_tls=False,
+    tls_ca_cert_path="../../server/deploy/reference/certs/ca.crt",
+    tls_server_name="localhost",
     
     # Authentication
     api_key="your-api-key",
@@ -503,8 +511,10 @@ stream_result = client.stream(
 grpc_client = Toolplane(
     # Server Connection Settings
     server_host="localhost",           # Server hostname
-    server_port=50051,                 # Server port
+    server_port=9001,                  # Server port
     use_tls=False,                     # Enable TLS encryption
+    tls_ca_cert_path=None,             # Optional CA bundle for direct gRPC TLS
+    tls_server_name=None,              # Optional server name override (use localhost for the reference stack)
     
     # Authentication Settings
     api_key="your-api-key",            # Authentication key
@@ -1094,7 +1104,7 @@ except Exception as e:
 ### Error Code Reference
 
 | Error Code | Description | Resolution |
-|------------|-------------|------------|
+| ------------ | ------------- | ------------ |
 | **ConnectionError** | Network connection failure | Check server availability, network connectivity, and firewall rules |
 | **ToolError** | Tool execution failure | Validate tool parameters, check tool implementation, and verify tool existence |
 | **SessionError** | Session management issues | Verify session ID validity, check user permissions, and validate session state |
@@ -1111,12 +1121,14 @@ We welcome contributions to the toolplane Python client! Follow these guidelines
 ### Development Setup
 
 1. **Clone the repository:**
+
 ```bash
 git clone https://github.com/your-org/tool-control-plane.git
 cd toolplane/clients/python
 ```
 
-2. **Install development dependencies:**
+1. **Install development dependencies:**
+
 ```bash
 pip install -e ".[dev]"
 ```
@@ -1247,6 +1259,7 @@ print(f"Optimal worker count: {worker_count}")
 #### Toolplane Client Class
 
 **Methods:**
+
 - `__init__(**kwargs)` - Initialize client with configuration
 - `connect()` - Establish connection to server
 - `disconnect()` - Close connection to server
@@ -1263,6 +1276,7 @@ print(f"Optimal worker count: {worker_count}")
 - `start()` / `stop()` - Backward-compatible aliases over the explicit provider runtime
 
 **Properties:**
+
 - `running` - Client running status
 - `session_ids` - List of managed session IDs
 - `config` - Client configuration object
@@ -1270,6 +1284,7 @@ print(f"Optimal worker count: {worker_count}")
 #### ToolplaneHTTP Client Class
 
 **Methods:**
+
 - `__init__(**kwargs)` - Initialize HTTP client with configuration
 - `connect()` - Establish HTTP connection to server
 - `disconnect()` - Close HTTP connection to server
@@ -1288,6 +1303,7 @@ print(f"Optimal worker count: {worker_count}")
 #### ProviderRuntime Class
 
 **Methods:**
+
 - `create_session(**kwargs)` - Create a provider-owned session and attach a machine when needed
 - `attach_session(session_id, register_machine=True)` - Attach the provider runtime to an existing session
 - `tool(session_id, name, description, stream, tags)` - Register a machine-backed tool on the provider runtime
@@ -1298,6 +1314,7 @@ print(f"Optimal worker count: {worker_count}")
 #### Session Management Methods (Admin Scope — Python-Only)
 
 **Session Operations:**
+
 - `list_user_sessions(user_id, page_size, page_token, filter)` - List user sessions with pagination
 - `bulk_delete_sessions(user_id, session_ids, filter)` - Bulk delete user sessions
 - `get_session_stats(user_id)` - Get session statistics for user
@@ -1307,6 +1324,7 @@ print(f"Optimal worker count: {worker_count}")
 #### Tool Management Methods
 
 **Tool Operations:**
+
 - `get_available_tools(session_id)` - Get available tools for session
 - `get_tool_stats(session_id)` - Get tool statistics for session
 - `validate_tool_params(session_id, tool_name, params)` - Validate tool parameters
@@ -1316,10 +1334,14 @@ print(f"Optimal worker count: {worker_count}")
 #### Toolplane Configuration
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `server_host` | str | "localhost" | Server hostname |
-| `server_port` | int | 50051 | Server port |
+| `server_port` | int | 9001 | Server port |
 | `use_tls` | bool | False | Enable TLS encryption |
+| `tls_cert_path` | str | None | Optional client TLS certificate for mutual TLS |
+| `tls_key_path` | str | None | Optional client TLS private key for mutual TLS |
+| `tls_ca_cert_path` | str | None | Optional CA bundle for direct gRPC TLS |
+| `tls_server_name` | str | None | Optional TLS server name override |
 | `api_key` | str | None | Authentication API key |
 | `user_id` | str | None | User identifier |
 | `session_name` | str | None | Session name |
@@ -1338,7 +1360,7 @@ print(f"Optimal worker count: {worker_count}")
 #### ToolplaneHTTP Configuration
 
 | Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
+| ----------- | ------ | --------- | ------------- |
 | `server_host` | str | "localhost" | Server hostname |
 | `server_port` | int | 8080 | Server port |
 | `use_tls` | bool | False | Enable TLS encryption |

@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# Convenience combined-container bootstrap.
+# The maintained production topology is the split server-plus-gateway path in
+# server/docs/reference-deployment.md.
+
 : "${TOOLPLANE_METRICS_LISTEN:=:9102}"
 
 # Start the gRPC server in the background

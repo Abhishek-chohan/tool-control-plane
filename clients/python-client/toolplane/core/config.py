@@ -17,6 +17,7 @@ class ClientConfig(BaseConfig):
     tls_cert_path: Optional[str] = None
     tls_key_path: Optional[str] = None
     tls_ca_cert_path: Optional[str] = None
+    tls_server_name: Optional[str] = None
     # Retry configuration parameters
     max_retries: int = 3
     retry_base_delay: float = 1.0
@@ -60,6 +61,7 @@ class ClientConfig(BaseConfig):
             "tls_cert_path": self.tls_cert_path,
             "tls_key_path": self.tls_key_path,
             "tls_ca_cert_path": self.tls_ca_cert_path,
+            "tls_server_name": self.tls_server_name,
         }
 
     def get_metadata(self) -> List[tuple]:
@@ -95,6 +97,7 @@ class ClientConfig(BaseConfig):
                 "tls_cert_path": self.tls_cert_path,
                 "tls_key_path": self.tls_key_path,
                 "tls_ca_cert_path": self.tls_ca_cert_path,
+                "tls_server_name": self.tls_server_name,
                 "max_retries": self.max_retries,
                 "retry_base_delay": self.retry_base_delay,
                 "retry_max_delay": self.retry_max_delay,
