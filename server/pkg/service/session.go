@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -522,6 +523,15 @@ func (s *SessionsService) ListUserSessions(userID string, pageSize, pageToken in
 		}
 	}
 	s.sessionsMutex.RUnlock()
+
+	sort.SliceStable(filteredSessions, func(i, j int) bool {
+		left := filteredSessions[i]
+		right := filteredSessions[j]
+		if left.CreatedAt.Equal(right.CreatedAt) {
+			return left.ID > right.ID
+		}
+		return left.CreatedAt.After(right.CreatedAt)
+	})
 
 	// Calculate total count
 	totalCount := len(filteredSessions)
