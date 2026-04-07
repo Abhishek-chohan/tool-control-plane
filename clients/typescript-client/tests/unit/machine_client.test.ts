@@ -40,8 +40,11 @@ function createMachine(overrides: Partial<{
   return machine;
 }
 
-function unaryResponse<T>(response: T) {
-  return (_request: unknown, _metadata: unknown, _options: unknown, callback: (error: null, response: T) => void) => {
+function unaryResponse<T>(responseOrFactory: T | ((request: unknown) => T)) {
+  return (request: unknown, _metadata: unknown, _options: unknown, callback: (error: null, response: T) => void) => {
+    const response = typeof responseOrFactory === 'function'
+      ? (responseOrFactory as (input: unknown) => T)(request)
+      : responseOrFactory;
     callback(null, response);
     return {};
   };
@@ -102,6 +105,23 @@ test('getMachine returns a normalized machine payload', async () => {
   assert.equal(result.id, 'machine-42');
   assert.equal(result.sdkVersion, '2.0.0');
   assert.equal(result.sessionId, 'session-1');
+});
+
+test('updateMachinePing uses the registered machine by default and returns a normalized machine payload', async () => {
+  const client = createConnectedClient(
+    {
+      updateMachinePing: unaryResponse((request: { getMachineId(): string }) => {
+        assert.equal(request.getMachineId(), 'machine-1');
+        return createMachine({ id: 'machine-1', lastPingAt: '2025-01-01T00:02:00Z' });
+      }),
+    },
+    'machine-1',
+  );
+
+  const result = await client.updateMachinePing();
+
+  assert.equal(result.id, 'machine-1');
+  assert.equal(result.lastPingAt, '2025-01-01T00:02:00Z');
 });
 
 test('drainMachine uses the registered machine by default and clears cached machine state', async () => {

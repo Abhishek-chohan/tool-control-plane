@@ -8,12 +8,18 @@ import {
   ConnectionStatus,
   CreateSessionRequest,
   Machine,
+  ProviderRuntimeOptions,
+  RegisterToolOptions,
+  RequestListOptions,
   Request as RequestModel,
+  RequestUpdate,
   Task,
   RegisterToolRequest,
   Session,
   Tool,
 } from '../interfaces';
+
+import { ProviderRuntime } from '../provider_runtime';
 
 import {
   ConnectionError,
@@ -24,8 +30,11 @@ import {
 
 import {
   ApiKey as ProtoApiKey,
+  AppendRequestChunksRequest as AppendRequestChunksMessage,
+  AppendRequestChunksResponse as AppendRequestChunksResponseMessage,
   CancelRequestRequest as CancelRequestMessage,
   CancelRequestResponse as CancelRequestResponseMessage,
+  ClaimRequestRequest as ClaimRequestMessage,
   CancelTaskRequest as CancelTaskMessage,
   CancelTaskResponse as CancelTaskResponseMessage,
   CreateApiKeyRequest as CreateApiKeyMessage,
@@ -68,8 +77,12 @@ import {
   RegisterToolResponse as RegisterToolResponseMessage,
   Request as ProtoRequest,
   Session as ProtoSession,
+  SubmitRequestResultRequest as SubmitRequestResultMessage,
+  SubmitRequestResultResponse as SubmitRequestResultResponseMessage,
   Task as ProtoTask,
   Tool as ProtoTool,
+  UpdateMachinePingRequest as UpdateMachinePingMessage,
+  UpdateRequestRequest as UpdateRequestMessage,
   UpdateSessionRequest as UpdateSessionMessage,
   UnregisterMachineRequest as UnregisterMachineMessage,
   UnregisterMachineResponse as UnregisterMachineResponseMessage,
@@ -245,12 +258,15 @@ export class ToolplaneClient {
     schema: string,
     config: Record<string, string> = {},
     tags: string[] = [],
+    options: RegisterToolOptions = {},
   ): Promise<Tool> {
     this.ensureGRPCConnected('tool registration');
 
+    const sessionId = options.sessionId?.trim() || this.getRequiredSessionId('tool registration');
+    const machineId = options.machineId?.trim() || this.getRequiredMachineId('tool registration');
     const request = new RegisterToolMessage();
-    request.setSessionId(this.getRequiredSessionId('tool registration'));
-    request.setMachineId(this.getRequiredMachineId('tool registration'));
+    request.setSessionId(sessionId);
+    request.setMachineId(machineId);
     request.setName(name);
     request.setDescription(description);
     request.setSchema(schema);
@@ -326,10 +342,15 @@ export class ToolplaneClient {
     return response.getSuccess();
   }
 
-  async createSession(name: string, description: string, namespace: string = 'default'): Promise<Session> {
+  async createSession(
+    name: string,
+    description: string,
+    namespace: string = 'default',
+    requestedSessionId: string = '',
+  ): Promise<Session> {
     this.ensureGRPCConnected('session creation');
 
-    const sessionId = this.config.sessionId || uuidv4();
+    const sessionId = requestedSessionId || this.config.sessionId || uuidv4();
     const request: CreateSessionRequest = {
       userId: this.config.userId,
       name,
@@ -516,6 +537,22 @@ export class ToolplaneClient {
     return this.normalizeMachine(response);
   }
 
+  async updateMachinePing(machineId: string = ''): Promise<Machine> {
+    this.ensureGRPCConnected('machine heartbeat');
+
+    const resolvedMachineId = machineId || this.getRequiredMachineId('machine heartbeat');
+    const request = new UpdateMachinePingMessage();
+    request.setSessionId(this.getRequiredSessionId('machine heartbeat'));
+    request.setMachineId(resolvedMachineId);
+
+    const response = await this.invokeGRPCUnary<ProtoMachine>(
+      (metadata, options, callback) => this.machineClient!.updateMachinePing(request, metadata, options, callback),
+      `failed to update heartbeat for machine ${resolvedMachineId}`,
+    );
+
+    return this.normalizeMachine(response);
+  }
+
   async unregisterMachine(machineId: string = ''): Promise<boolean> {
     this.ensureGRPCConnected('machine unregistration');
 
@@ -670,6 +707,87 @@ export class ToolplaneClient {
     return response.getRequestsList().map((item) => this.normalizeRequest(item));
   }
 
+  async updateRequest(requestId: string, update: RequestUpdate): Promise<RequestModel> {
+    this.ensureGRPCConnected('request update');
+
+    const request = new UpdateRequestMessage();
+    request.setSessionId(this.getRequiredSessionId('request update'));
+    request.setRequestId(requestId);
+    request.setStatus(update.status ?? '');
+    request.setResult(update.result ?? '');
+    request.setResultType(update.resultType ?? '');
+
+    const response = await this.invokeGRPCUnary<ProtoRequest>(
+      (metadata, options, callback) => this.requestsClient!.updateRequest(request, metadata, options, callback),
+      `failed to update request ${requestId}`,
+    );
+
+    return this.normalizeRequest(response);
+  }
+
+  async claimRequest(requestId: string, machineId: string = ''): Promise<RequestModel> {
+    this.ensureGRPCConnected('request claim');
+
+    const resolvedMachineId = machineId || this.getRequiredMachineId('request claim');
+    const request = new ClaimRequestMessage();
+    request.setSessionId(this.getRequiredSessionId('request claim'));
+    request.setRequestId(requestId);
+    request.setMachineId(resolvedMachineId);
+
+    const response = await this.invokeGRPCUnary<ProtoRequest>(
+      (metadata, options, callback) => this.requestsClient!.claimRequest(request, metadata, options, callback),
+      `failed to claim request ${requestId}`,
+    );
+
+    return this.normalizeRequest(response);
+  }
+
+  async appendRequestChunks(
+    requestId: string,
+    chunks: unknown[],
+    resultType: string = 'streaming',
+  ): Promise<boolean> {
+    this.ensureGRPCConnected('request chunk append');
+
+    const request = new AppendRequestChunksMessage();
+    request.setSessionId(this.getRequiredSessionId('request chunk append'));
+    request.setRequestId(requestId);
+    request.setChunksList(chunks.map((chunk) => this.serializePayload(chunk)));
+    request.setResultType(resultType);
+
+    const response = await this.invokeGRPCUnary<AppendRequestChunksResponseMessage>(
+      (metadata, options, callback) => this.requestsClient!.appendRequestChunks(request, metadata, options, callback),
+      `failed to append chunks for request ${requestId}`,
+    );
+
+    return response.getSuccess();
+  }
+
+  async submitRequestResult(
+    requestId: string,
+    result: unknown,
+    resultType: string = 'resolution',
+    meta: Record<string, string> = {},
+  ): Promise<boolean> {
+    this.ensureGRPCConnected('request result submission');
+
+    const request = new SubmitRequestResultMessage();
+    request.setSessionId(this.getRequiredSessionId('request result submission'));
+    request.setRequestId(requestId);
+    request.setResult(this.serializePayload(result));
+    request.setResultType(resultType);
+    for (const [key, value] of Object.entries(meta)) {
+      request.getMetaMap().set(key, value);
+    }
+
+    const response = await this.invokeGRPCUnary<SubmitRequestResultResponseMessage>(
+      (metadata, options, callback) => this.requestsClient!.submitRequestResult(request, metadata, options, callback),
+      `failed to submit result for request ${requestId}`,
+    );
+
+    return response.getSuccess();
+  }
+
   async cancelRequest(requestId: string): Promise<boolean> {
     this.ensureGRPCConnected('request cancellation');
 
@@ -683,6 +801,17 @@ export class ToolplaneClient {
     );
 
     return response.getSuccess();
+  }
+
+  providerRuntime(options: ProviderRuntimeOptions = {}): ProviderRuntime {
+    return new ProviderRuntime(this, options);
+  }
+
+  forkSession(sessionId: string): ToolplaneClient {
+    return new ToolplaneClient({
+      ...this.config,
+      sessionId,
+    });
   }
 
   static createGRPCClient(
@@ -899,6 +1028,14 @@ export class ToolplaneClient {
     }
 
     throw new ProtocolError(`gRPC ${operation} did not return a numeric result`);
+  }
+
+  private serializePayload(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    return JSON.stringify(value ?? null);
   }
 
   private normalizeTool(tool: ProtoTool | undefined): Tool {

@@ -128,7 +128,7 @@ async function runGRPCFeatures(client: ToolplaneClient): Promise<void> {
       console.log(`   ${index + 1}. ${tool.name} - ${tool.description}`);
     });
 
-    console.log('ℹ️  Live tool execution requires a provider loop to claim requests. See the conformance and integration flows for a runnable end-to-end example.');
+    console.log('ℹ️  Live tool execution now has a maintained TypeScript provider runtime. See src/examples/provider_runtime_example.ts for the end-to-end provider loop.');
 
     const sessionInfo = await client.getSession();
     console.log('📄 Session details:');

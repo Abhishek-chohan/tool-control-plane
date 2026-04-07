@@ -10,6 +10,7 @@
     "start": "node dist/client.js",
     "dev": "ts-node src/client.ts",
     "example": "ts-node src/examples/basic_example.ts",
+    "provider": "ts-node src/examples/provider_runtime_example.ts",
     "advanced": "ts-node src/examples/advanced_example.ts",
     "generate:proto": "grpc_tools_node_protoc --js_out=import_style=commonjs,binary:./src/proto --grpc_out=grpc_js:./src/proto --ts_out=grpc_js:./src/proto -I . proto/service.proto google/api/annotations.proto google/api/http.proto",
     "test": "npm run test:unit",
