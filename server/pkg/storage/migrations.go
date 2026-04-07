@@ -138,10 +138,10 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 60`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dead_letter BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_error TEXT`,
-        `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`,
-        `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
-        `ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
-        `ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
+		`ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

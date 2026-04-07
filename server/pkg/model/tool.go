@@ -102,17 +102,17 @@ func NewSession(name, description, createdBy, apiKey, namespace string) *Session
 
 // ApiKey represents an API key for authentication
 type ApiKey struct {
-	ID                string             `json:"id"`
-	Name              string             `json:"name"`
-	Key               string             `json:"key,omitempty"`
-	KeyHash           string             `json:"-"`
-	KeyPreview        string             `json:"keyPreview,omitempty"`
-	SessionID         string             `json:"sessionId"`
-	CreatedAt         time.Time          `json:"createdAt"`
-	CreatedBy         string             `json:"createdBy"`
-	Capabilities      []APIKeyCapability `json:"capabilities,omitempty"`
-	RevokedAt         *time.Time         `json:"revokedAt,omitempty"`
-	PlaintextPersisted bool              `json:"-"`
+	ID                 string             `json:"id"`
+	Name               string             `json:"name"`
+	Key                string             `json:"key,omitempty"`
+	KeyHash            string             `json:"-"`
+	KeyPreview         string             `json:"keyPreview,omitempty"`
+	SessionID          string             `json:"sessionId"`
+	CreatedAt          time.Time          `json:"createdAt"`
+	CreatedBy          string             `json:"createdBy"`
+	Capabilities       []APIKeyCapability `json:"capabilities,omitempty"`
+	RevokedAt          *time.Time         `json:"revokedAt,omitempty"`
+	PlaintextPersisted bool               `json:"-"`
 }
 
 // NewApiKey creates a new API key with generated ID, key, and timestamp
