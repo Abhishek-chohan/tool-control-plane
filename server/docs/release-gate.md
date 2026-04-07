@@ -6,6 +6,24 @@ This document defines the authoritative release signal for the maintained Toolpl
 
 The release signal is intentionally split into three categories so the repo can state what is proven directly, what is proven by focused runtime tests, and what remains a documented limit.
 
+## Observability Coverage
+
+Observability is now part of the maintained runtime contract, but not every observability surface is proven by the end-to-end release gate itself.
+
+### Proven By Focused Tests
+
+- stable `requestId` and `taskId` trace correlation fields are asserted in `server/pkg/service/request_runtime_test.go` and `server/pkg/service/task_test.go`
+- the supported runtime metrics names and values are asserted in `server/pkg/observability/runtime_metrics_test.go`
+- proxy `/health`, throttle counter accounting, redacted throttle logs, and `Retry-After` behavior are asserted in `server/cmd/proxy/observability_test.go`
+
+### Documented Operator Contract
+
+- `server/docs/observability.md` is the maintained summary of server traces, runtime metrics, proxy `/health`, proxy throttle logs, correlation keys, redaction rules, and the operator playbook
+
+### Current Limit
+
+- `make release-gate` does not yet scrape the live `/metrics` endpoint or the proxy `/health` endpoint end to end; those observability surfaces are covered by focused tests instead of by the narrow release scenario
+
 ### Proven Directly By `make release-gate`
 
 The shared-fixture conformance leg proves one canonical provider-backed flow and the portable recovery behavior that goes with it:

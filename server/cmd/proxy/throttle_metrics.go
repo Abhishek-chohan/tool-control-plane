@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -68,11 +71,11 @@ func (t *ThrottleTracker) Record(reason ThrottleReason, retryAfter time.Duration
 	}
 	t.total.Add(1)
 
-	log.Printf("throttle reason=%s retry_after=%s api_key_present=%t client_ip=%s detail=%s",
+	log.Printf("throttle reason=%s retry_after=%s api_key_present=%t client_fingerprint=%s detail=%s",
 		reason,
 		retryAfter.String(),
 		apiKey != "",
-		clientIP,
+		redactClientFingerprint(clientIP),
 		detail,
 	)
 }
@@ -102,4 +105,13 @@ func applyRetryAfterHeader(w http.ResponseWriter, wait time.Duration) time.Durat
 	}
 	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	return time.Duration(seconds) * time.Second
+}
+
+func redactClientFingerprint(clientIP string) string {
+	normalized := strings.TrimSpace(clientIP)
+	if normalized == "" {
+		return "unknown"
+	}
+	sum := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(sum[:6])
 }

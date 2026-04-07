@@ -76,6 +76,17 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 			t.Fatalf("expected trace event %q to be recorded", eventType)
 		}
 	}
+
+	startedEvent, ok := tracer.event(trace.EventTaskExecutionStarted)
+	if !ok {
+		t.Fatal("expected task execution started event")
+	}
+	if startedEvent.TaskID != task.ID {
+		t.Fatalf("task execution event task id = %q, want %q", startedEvent.TaskID, task.ID)
+	}
+	if startedEvent.RequestID != requestID {
+		t.Fatalf("task execution event request id = %q, want %q", startedEvent.RequestID, requestID)
+	}
 }
 
 func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
