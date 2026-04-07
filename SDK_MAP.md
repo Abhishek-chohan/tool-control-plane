@@ -44,7 +44,7 @@ These categories are the maintained platform boundary: consumer flows invoke and
 
 ### `/rpc` Reference Note
 
-The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during the documented removal path to `v2.0.0`. It sits outside the maintained parity story, stays out of required CI, and should not be used as the basis for new SDK development. Use `server/docs/rpc-retirement.md` for the removal path and `.plans/roadmap-latest/tier-0-rpc-inventory.md` for the historical inventory.
+The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during the documented removal path to `v2.0.0`. It sits outside the maintained parity story, stays out of required CI, and should not be used as the basis for new SDK development. Use `server/docs/rpc-retirement.md` for the removal path.
 
 ## SDK Reality Snapshot
 

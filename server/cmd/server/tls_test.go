@@ -8,8 +8,14 @@ func TestValidateGRPCTLSSettingsRejectsPartialTLSConfiguration(t *testing.T) {
 	}
 }
 
-func TestValidateGRPCTLSSettingsAllowsPlaintextWhenBothTLSFieldsAreEmpty(t *testing.T) {
-	if err := validateGRPCTLSSettings("production", "", ""); err != nil {
-		t.Fatalf("expected empty TLS configuration to allow plaintext: %v", err)
+func TestValidateGRPCTLSSettingsAllowsPlaintextOutsideProduction(t *testing.T) {
+	if err := validateGRPCTLSSettings("development", "", ""); err != nil {
+		t.Fatalf("expected empty TLS configuration to allow plaintext outside production: %v", err)
+	}
+}
+
+func TestValidateGRPCTLSSettingsRejectsPlaintextInProduction(t *testing.T) {
+	if err := validateGRPCTLSSettings("production", "", ""); err == nil {
+		t.Fatal("expected empty TLS configuration to fail in production")
 	}
 }

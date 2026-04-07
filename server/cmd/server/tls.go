@@ -9,12 +9,15 @@ import (
 )
 
 func validateGRPCTLSSettings(environment, certFile, keyFile string) error {
-	_ = environment
+	environment = strings.TrimSpace(strings.ToLower(environment))
 	certFile = strings.TrimSpace(certFile)
 	keyFile = strings.TrimSpace(keyFile)
 
 	switch {
 	case certFile == "" && keyFile == "":
+		if environment == "production" {
+			return fmt.Errorf("gRPC TLS certificate and key files are required when TOOLPLANE_ENV_MODE=production")
+		}
 		return nil
 	case certFile == "" || keyFile == "":
 		return fmt.Errorf("gRPC TLS requires both certificate and key files")

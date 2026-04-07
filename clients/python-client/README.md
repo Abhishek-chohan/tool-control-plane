@@ -198,7 +198,7 @@ client = Toolplane(
     # Server connection settings
     server_host="localhost",
     server_port=9001,
-    use_tls=False,
+    use_tls=True,
     tls_ca_cert_path="../../server/deploy/reference/certs/ca.crt",
     tls_server_name="localhost",
     

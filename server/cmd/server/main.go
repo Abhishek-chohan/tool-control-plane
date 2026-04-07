@@ -38,8 +38,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid server configuration: %v", err)
 	}
-	if err := validateGRPCTLSSettings(cfg.environment, *tlsCertFile, *tlsKeyFile); err != nil {
-		log.Fatalf("invalid gRPC TLS configuration: %v", err)
+	// migrate-only does not start the gRPC server, so transport settings are not required.
+	if !*migrateOnly {
+		if err := validateGRPCTLSSettings(cfg.environment, *tlsCertFile, *tlsKeyFile); err != nil {
+			log.Fatalf("invalid gRPC TLS configuration: %v", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

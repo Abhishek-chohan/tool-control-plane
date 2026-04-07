@@ -46,11 +46,11 @@ Run these commands from `server/deploy/reference`.
 cp .env.example .env
 ```
 
-2. Place `ca.crt`, `server.crt`, and `server.key` under `server/deploy/reference/certs/`.
+1. Place `ca.crt`, `server.crt`, and `server.key` under `server/deploy/reference/certs/`.
 
 The reference certificate flow is documented in `server/deploy/reference/certs/README.md`.
 
-3. Build the image, start Postgres, and run the one-shot migrate job.
+1. Build the image, start Postgres, and run the one-shot migrate job.
 
 ```bash
 docker compose build
@@ -58,7 +58,7 @@ docker compose up -d postgres
 docker compose run --rm migrate
 ```
 
-4. Start the one-time bootstrap profile, mint the first Postgres-backed admin key, and record the returned secret immediately.
+1. Start the one-time bootstrap profile, mint the first Postgres-backed admin key, and record the returned secret immediately.
 
 ```bash
 docker compose --profile bootstrap up -d bootstrap-server bootstrap-gateway
@@ -83,20 +83,20 @@ printf '%s\n' "$ADMIN_KEY_JSON"
 
 `CreateApiKey` is the only supported place that returns the secret. `ListApiKeys` will not return it later.
 
-5. Stop and remove the bootstrap services after the admin key is captured.
+1. Stop and remove the bootstrap services after the admin key is captured.
 
 ```bash
 docker compose stop bootstrap-server bootstrap-gateway
 docker compose rm -f bootstrap-server bootstrap-gateway
 ```
 
-6. Start the production server and gateway.
+1. Start the production server and gateway.
 
 ```bash
 docker compose up -d server gateway
 ```
 
-7. Validate the production stack.
+1. Validate the production stack.
 
 ```bash
 curl -sS "http://127.0.0.1:${TOOLPLANE_HTTP_PUBLISHED_PORT:-8080}/health" | python3 -m json.tool

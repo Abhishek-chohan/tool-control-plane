@@ -40,7 +40,7 @@ type ToolplaneClient struct {
 	machineID  string
 	userID     string
 	apiKey     string
-	tlsConfig   GRPCTLSConfig
+	tlsConfig  GRPCTLSConfig
 
 	// gRPC client fields
 	grpcConn       *grpc.ClientConn
