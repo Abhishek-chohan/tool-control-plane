@@ -16,6 +16,8 @@
     "test": "npm run test:unit",
     "test:unit": "node scripts/run-tests.mjs tests/unit",
     "test:conformance": "npm run build && node scripts/run-tests.mjs tests/conformance",
+    "test:conformance:direct": "node scripts/run-conformance-direct.mjs",
+    "test:conformance:aggregate": "node scripts/run-conformance-direct.mjs --aggregate --label full-suite",
     "test:all": "npm run test:unit && npm run test:conformance",
     "test:demo": "npm run build && node dist/client.js"
   },
