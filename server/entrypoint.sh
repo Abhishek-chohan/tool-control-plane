@@ -1,8 +1,10 @@
 #!/bin/sh
 
+: "${TOOLPLANE_METRICS_LISTEN:=:9102}"
+
 # Start the gRPC server in the background
-echo "Starting gRPC server on :9001..."
-/app/server --trace-sessions &
+echo "Starting gRPC server on :9001 with metrics on ${TOOLPLANE_METRICS_LISTEN}..."
+/app/server --trace-sessions --metrics-listen "${TOOLPLANE_METRICS_LISTEN}" &
 
 # Start the gateway proxy in the foreground
 # It will connect to the gRPC server started above

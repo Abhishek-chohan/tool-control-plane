@@ -284,6 +284,7 @@ Provider behavior is now observable through server-owned trace events instead of
 - Request lifecycle tracing emits `request_created`, `request_claimed`, `request_execution_started`, `request_execution_completed`, `request_execution_failed`, `request_cancelled`, `request_chunks_appended`, `request_lease_expired`, `request_requeued`, and `request_dead_lettered`.
 - Task lifecycle tracing emits `task_created`, `task_execution_started`, `task_retry_scheduled`, `task_execution_completed`, `task_execution_failed`, `task_cancelled`, and `task_dead_lettered`.
 - `toolplane-server --metrics-listen` now exposes a Prometheus-style `/metrics` endpoint for queue depth, in-flight load, retry totals, dead-letter totals, active machines, and drain progress.
+- The supported bootstrap paths pin that metrics listener to a stable scrape address: `127.0.0.1:9102` for `server/run.sh` and `:9102` for the container entrypoint. The binary default remains `127.0.0.1:0` for ad hoc starts.
 - The HTTP gateway keeps `/health` for circuit-breaker and throttle state and emits structured throttle logs with redacted `client_fingerprint` instead of raw client IPs.
 
 These signals live in `server/pkg/trace/tracer.go`, `server/pkg/observability/runtime_metrics.go`, and the service-owned session, machine, request, task, and tool code paths. When the server starts with `--trace-sessions`, trace events are written as structured JSON log lines prefixed with `session_trace`.

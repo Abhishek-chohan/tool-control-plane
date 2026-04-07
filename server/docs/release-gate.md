@@ -8,7 +8,12 @@ The release signal is intentionally split into three categories so the repo can 
 
 ## Observability Coverage
 
-Observability is now part of the maintained runtime contract, but not every observability surface is proven by the end-to-end release gate itself.
+Observability is now part of the maintained runtime contract, and the release gate now includes one live scrape leg in addition to the focused tests.
+
+### Live Endpoint Scrape
+
+- `server/scripts/release_gate_observability.sh` starts a live server with an explicit metrics listener, starts a live proxy, scrapes `/metrics`, and scrapes `/health`
+- that leg asserts the maintained runtime metric names plus the maintained top-level `/health` payload fields and nested circuit and throttle structures
 
 ### Proven By Focused Tests
 
@@ -19,10 +24,6 @@ Observability is now part of the maintained runtime contract, but not every obse
 ### Documented Operator Contract
 
 - `server/docs/observability.md` is the maintained summary of server traces, runtime metrics, proxy `/health`, proxy throttle logs, correlation keys, redaction rules, and the operator playbook
-
-### Current Limit
-
-- `make release-gate` does not yet scrape the live `/metrics` endpoint or the proxy `/health` endpoint end to end; those observability surfaces are covered by focused tests instead of by the narrow release scenario
 
 ### Proven Directly By `make release-gate`
 
@@ -78,13 +79,13 @@ From the repository root:
 cd server && TOOLPLANE_DATABASE_URL=postgres://postgres:postgres@localhost:5432/toolplane?sslmode=disable make release-gate
 ```
 
-This target always runs the Python shared-fixture conformance suite, which exercises the first seven steps above through the auto-boot harness in `clients/python-client/tests/conformance/conftest.py`. When `TOOLPLANE_DATABASE_URL` is set, the Makefile infers `TOOLPLANE_STORAGE_MODE=postgres` so the full conformance leg runs on Postgres rather than falling back to in-memory storage. The maintained provider path in that suite now runs through the explicit Python `ProviderRuntime` surface rather than ad hoc polling threads embedded in the adapters.
+This target always runs the Python shared-fixture conformance suite, then the live observability scrape leg in `server/scripts/release_gate_observability.sh`, and finally the focused runtime slice. The conformance portion exercises the first seven steps above through the auto-boot harness in `clients/python-client/tests/conformance/conftest.py`. When `TOOLPLANE_DATABASE_URL` is set, the Makefile infers `TOOLPLANE_STORAGE_MODE=postgres` so the full conformance leg runs on Postgres rather than falling back to in-memory storage. The maintained provider path in that suite now runs through the explicit Python `ProviderRuntime` surface rather than ad hoc polling threads embedded in the adapters.
 
 If `TOOLPLANE_DATABASE_URL` points at a reachable Postgres instance, the same target also runs focused Go tests that validate the production storage guardrail, lease-expiry requeue behavior, bounded replay semantics, drain waiting behavior, and persisted request recovery path. If the variable is unset, the conformance leg falls back to in-memory storage and the persisted recovery test is skipped for local convenience.
 
 ## CI
 
-The `.github/workflows/release-gate.yml` workflow runs the same `make release-gate` command on every push to `main` and on pull requests. CI now provisions a Postgres service for that job and sets `TOOLPLANE_STORAGE_MODE=postgres`, so both the canonical Python conformance leg and the focused persistence-backed recovery slice execute against the same database-backed runtime. It remains the repo's authoritative release signal, distinct from the broader SDK Conformance & Verification workflow which covers all three maintained SDKs.
+The `.github/workflows/release-gate.yml` workflow runs the same `make release-gate` command on every push to `main` and on pull requests. CI now provisions a Postgres service for that job and sets `TOOLPLANE_STORAGE_MODE=postgres`, so the canonical Python conformance leg, the live observability scrape leg, and the focused persistence-backed recovery slice execute against the same database-backed runtime. It remains the repo's authoritative release signal, distinct from the broader SDK Conformance & Verification workflow which covers all three maintained SDKs.
 
 ## Relationship To Other Workflows
 

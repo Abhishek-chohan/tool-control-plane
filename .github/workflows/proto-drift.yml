@@ -10,6 +10,7 @@ on:
       - 'clients/go-client/proto/**'
       - 'clients/go-client/google/api/**'
       - 'clients/python-client/toolplane/proto/**'
+      - 'clients/python-client/pyproject.toml'
       - 'clients/python-client/requirements.txt'
       - 'clients/typescript-client/proto/**'
       - 'clients/typescript-client/google/api/**'
@@ -28,6 +29,7 @@ on:
       - 'clients/go-client/proto/**'
       - 'clients/go-client/google/api/**'
       - 'clients/python-client/toolplane/proto/**'
+      - 'clients/python-client/pyproject.toml'
       - 'clients/python-client/requirements.txt'
       - 'clients/typescript-client/proto/**'
       - 'clients/typescript-client/google/api/**'
@@ -78,7 +80,7 @@ jobs:
       - name: Install Python protobuf tooling
         run: |
           python -m pip install --upgrade pip
-            python -m pip install grpcio==1.78.0 grpcio-tools==1.78.0 protobuf==6.31.1
+          python -m pip install grpcio==1.80.0 grpcio-tools==1.80.0 protobuf==6.31.1
 
       - name: Install TypeScript proto tooling
         working-directory: clients/typescript-client

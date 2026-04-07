@@ -50,7 +50,7 @@ Source of truth:
 
 The server now exposes a Prometheus-style text endpoint at `/metrics` on the listener configured by `toolplane-server --metrics-listen`.
 
-The default listener is `127.0.0.1:0`, which binds a free local port and logs the chosen address. Operators should set an explicit address such as `:9102` in environments where the endpoint will be scraped.
+The binary default listener is `127.0.0.1:0`, which binds a free local port and logs the chosen address for ad hoc starts. The supported local bootstrap in `server/run.sh` overrides that to `127.0.0.1:9102`, and the container entrypoint in `server/entrypoint.sh` uses `:9102` so deployment manifests can scrape a stable port without patching the image.
 
 The supported metrics are:
 
@@ -147,6 +147,7 @@ These are part of the maintained contract, not incidental implementation detail.
 
 The maintained validation coverage for this contract is:
 
+- live `/metrics` and `/health` scraping: `server/scripts/release_gate_observability.sh` via `make release-gate`
 - request and task trace identifiers: focused assertions in `server/pkg/service/request_runtime_test.go` and `server/pkg/service/task_test.go`
 - runtime metrics rendering: `server/pkg/observability/runtime_metrics_test.go`
 - proxy health payload, throttle accounting, and `Retry-After`: `server/cmd/proxy/observability_test.go`

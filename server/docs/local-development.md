@@ -15,6 +15,7 @@ The supported local path uses:
 - `TOOLPLANE_AUTH_FIXED_API_KEY=toolplane-conformance-fixture-key`
 - `TOOLPLANE_STORAGE_MODE=memory`
 - `TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=1`
+- `TOOLPLANE_METRICS_LISTEN=127.0.0.1:9102`
 
 The fixed API key above is an intentionally non-secret local fixture value. It is suitable for local development and CI only.
 
@@ -32,6 +33,8 @@ set +a
 
 That path builds the server and gateway, exports the explicit development settings, and starts the local stack through `start.sh`.
 
+The supported local bootstrap keeps metrics on loopback at `127.0.0.1:9102` so Prometheus-style scraping uses a stable address without exposing the endpoint beyond the host.
+
 ## Production-Like Startup
 
 For production-oriented testing, replace the development auth and storage settings explicitly.
@@ -43,6 +46,7 @@ export TOOLPLANE_ENV_MODE=production
 export TOOLPLANE_AUTH_MODE=postgres
 export TOOLPLANE_STORAGE_MODE=postgres
 export TOOLPLANE_DATABASE_URL=postgres://username:password@localhost:5432/toolplane?sslmode=disable
+export TOOLPLANE_METRICS_LISTEN=:9102
 export TOOLPLANE_PROXY_ALLOWED_ORIGINS=https://your-app.example.com
 export TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=0
 ```
@@ -58,6 +62,8 @@ For production-oriented proxy policy controls, start the gateway with explicit r
 ```
 
 The gateway's `/health` endpoint reports circuit-breaker and throttle counters so operators can confirm those controls are active without reproducing failures locally.
+
+The supported container bootstrap in `server/entrypoint.sh` also defaults `TOOLPLANE_METRICS_LISTEN` to `:9102`, and the server image exposes port `9102`, so deployment manifests can publish or scrape that endpoint directly.
 
 ## Notes
 
