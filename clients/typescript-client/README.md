@@ -6,15 +6,16 @@ This package is the maintained JavaScript-family SDK for Toolplane's remote tool
 
 - Supported secondary SDK and the maintained JavaScript-family path.
 - The maintained control-plane story is the gRPC surface for session, tool, machine, request, and task lifecycle helpers.
-- This SDK does not ship a maintained provider runtime harness that claims requests, renews heartbeats, and submits results. Use Python's explicit `ProviderRuntime` for the maintained provider-mode story.
+- This SDK now ships a maintained explicit `ProviderRuntime` for the gRPC provider lifecycle: session create or attach, machine registration, request claim, heartbeat, chunk append, result submission, and drain-aware shutdown.
 - Repository-internal HTTP adapters still exist under `tests/conformance/` so the shared fixture runner can exercise the maintained HTTP gateway. They are not part of the public SDK surface.
 
 ## Features
 
 - Live grpc-js wrappers for the maintained public helpers.
+- Explicit `ProviderRuntime` lifecycle management for machine-backed providers.
 - Public `executeTool()` plus numeric convenience helpers `add()`, `subtract()`, `multiply()`, and `divide()`.
 - Tool discovery helpers `listTools()`, `getToolById()`, `getToolByName()`, and `deleteTool()`.
-- Session, API-key, machine, request, and task lifecycle helpers.
+- Session, API-key, machine, request, and task lifecycle helpers, including provider-owned request claim and result submission.
 - Promise-based connection management with `connect()`, `disconnect()`, `isConnected()`, and `getConnectionStatus()`.
 - Shared-fixture conformance coverage in `tests/conformance/`.
 
@@ -27,7 +28,7 @@ npm run build
 
 ## Canonical Flow
 
-The canonical end-to-end path for Toolplane is: register a provider, create a session, execute a request, stream or recover results, and drain the machine. The Python SDK has the richest working examples of this flow. The TypeScript examples below follow the same maintained gRPC path at a narrower scope.
+The canonical end-to-end path for Toolplane is: register a provider, create or attach a session, execute a request, stream or recover results, and drain the machine. The TypeScript SDK now ships that provider loop directly through the explicit `ProviderRuntime` over the maintained gRPC path.
 
 ## Quick Start
 
@@ -75,6 +76,53 @@ await client.disconnect();
 
 Tool registration is machine-aware, so register a machine first or embed tool definitions in `registerMachine(...)`.
 
+### Explicit Provider Runtime
+
+```typescript
+import { ToolplaneClient } from './src';
+
+const client = ToolplaneClient.createGRPCClient(
+  'localhost',
+  9001,
+  '',
+  'provider-user',
+  process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key',
+);
+
+await client.connect();
+
+const provider = client.providerRuntime({
+  pollIntervalMs: 250,
+  heartbeatIntervalMs: 30_000,
+});
+
+const session = await provider.createSession({
+  name: 'TypeScript Provider Session',
+  description: 'Maintained provider runtime example',
+  namespace: 'examples',
+});
+
+await provider.tool(
+  {
+    sessionId: session.id,
+    name: 'echo_tool',
+    description: 'Echo the caller message',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+      },
+      required: ['message'],
+    },
+  },
+  async (input) => ({ echo: input.message }),
+);
+
+await provider.startInBackground();
+```
+
+See `src/examples/provider_runtime_example.ts` for a maintained end-to-end provider loop with graceful drain.
+
 ## Public API Snapshot
 
 ### Lifecycle
@@ -84,6 +132,7 @@ connect(): Promise<void>
 disconnect(): Promise<void>
 isConnected(): boolean
 getConnectionStatus(): ConnectionStatus
+providerRuntime(options?: ProviderRuntimeOptions): ProviderRuntime
 ```
 
 ### Execution
@@ -106,9 +155,17 @@ The client exposes public wrappers for:
 - Sessions: `createSession`, `getSession`, `listSessions`, `updateSession`
 - API keys: `createApiKey`, `listApiKeys`, `revokeApiKey`
 - Tools: `registerTool`, `listTools`, `getToolById`, `getToolByName`, `deleteTool`
-- Machines: `registerMachine`, `listMachines`, `getMachine`, `unregisterMachine`, `drainMachine`
-- Requests: `createRequest`, `getRequest`, `listRequests`, `cancelRequest`
+- Machines: `registerMachine`, `listMachines`, `getMachine`, `updateMachinePing`, `unregisterMachine`, `drainMachine`
+- Requests: `createRequest`, `getRequest`, `listRequests`, `updateRequest`, `claimRequest`, `appendRequestChunks`, `submitRequestResult`, `cancelRequest`
 - Tasks: `createTask`, `getTask`, `listTasks`, `cancelTask`
+
+### Provider Runtime
+
+The explicit `ProviderRuntime` exposes:
+
+- Session ownership: `createSession()`, `attachSession()`, `managedSessionIds()`
+- Tool registration: `registerTool()`, `tool()`
+- Runtime control: `pollOnce()`, `startInBackground()`, `runForever()`, `stop()`, `drain()`, `close()`
 
 ## Error Handling
 
@@ -139,6 +196,7 @@ try {
 npm start
 npm run dev
 npm run example
+npm run provider
 npm run advanced
 npm test
 npm run test:conformance
@@ -150,6 +208,7 @@ npm run test:all
 - The shared fixture runner lives under `tests/conformance/` and loads repository-wide cases from `../../conformance/cases/`.
 - The public SDK remains gRPC-only.
 - The repository-internal conformance runner uses both gRPC and HTTP adapters so fixture behavior is validated across the maintained server transports.
+- The gRPC provider-runtime cases are now backed by the public `ProviderRuntime` surface rather than a test-only request-processing loop.
 
 ## Compatibility
 

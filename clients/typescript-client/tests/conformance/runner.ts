@@ -5,9 +5,12 @@ import { GrpcConformanceAdapter } from './adapters/grpc_adapter';
 import { HttpConformanceAdapter } from './adapters/http_adapter';
 import {
   assertApiKeyFieldEquals,
+  assertApiKeyCapabilitiesEqual,
   assertApiKeyIdNonEmpty,
   assertApiKeyListContains,
   assertApiKeyListExcludes,
+  assertApiKeyPreviewNonEmpty,
+  assertApiKeyValueEmpty,
   assertApiKeyValueNonEmpty,
   assertChunkWindowEdge,
   assertChunkWindowFieldEquals,
@@ -430,24 +433,52 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
     }
 
     if (feature === 'api_key_lifecycle') {
-      const apiKey = await adapter.createApiKey(sessionId, String(request.api_key_name ?? 'conformance-key'));
+    const requestedCapabilities = Array.isArray(request.api_key_capabilities)
+      ? request.api_key_capabilities.map((value) => String(value))
+      : undefined;
+    const apiKey = await adapter.createApiKey(
+      sessionId,
+      String(request.api_key_name ?? 'conformance-key'),
+      requestedCapabilities,
+    );
       if (expected.api_key_id_non_empty === true) {
         assertApiKeyIdNonEmpty(apiKey, caseId, transport);
       }
       if (expected.api_key_value_non_empty === true) {
         assertApiKeyValueNonEmpty(apiKey, caseId, transport);
       }
+    if (expected.key_preview_non_empty === true) {
+      assertApiKeyPreviewNonEmpty(apiKey, caseId, transport);
+    }
       if (expected.session_id_matches_created === true) {
         assertApiKeyFieldEquals(apiKey, 'session_id', sessionId, caseId, transport);
       }
       if ('name_equals' in expected) {
         assertApiKeyFieldEquals(apiKey, 'name', expected.name_equals, caseId, transport);
       }
+    if (Array.isArray(expected.capabilities_equal)) {
+      assertApiKeyCapabilitiesEqual(apiKey, expected.capabilities_equal.map((value) => String(value)), caseId, transport);
+    }
 
       const listedApiKeys = await adapter.listApiKeys(sessionId);
       if (expected.listed_after_create === true) {
         assertApiKeyListContains(listedApiKeys, String(apiKey.id ?? ''), caseId, transport);
       }
+    const listedApiKey = listedApiKeys.find((entry) => entry.id === apiKey.id);
+    if (expected.listed_key_value_empty === true && listedApiKey) {
+      assertApiKeyValueEmpty(listedApiKey, caseId, transport);
+    }
+    if (expected.listed_key_preview_non_empty === true && listedApiKey) {
+      assertApiKeyPreviewNonEmpty(listedApiKey, caseId, transport);
+    }
+    if (Array.isArray(expected.listed_capabilities_equal) && listedApiKey) {
+      assertApiKeyCapabilitiesEqual(
+        listedApiKey,
+        expected.listed_capabilities_equal.map((value) => String(value)),
+        caseId,
+        transport,
+      );
+    }
 
       const revokeSuccess = await adapter.revokeApiKey(sessionId, String(apiKey.id ?? ''));
       if (expected.revoke_success === true) {

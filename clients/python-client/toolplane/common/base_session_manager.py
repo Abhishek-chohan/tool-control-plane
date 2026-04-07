@@ -82,7 +82,7 @@ class BaseSessionManager(ABC):
                     "name": name,
                     "description": description,
                     "namespace": namespace,
-                    "api_key": api_key,
+                    "api_key": "",
                     "created_at": threading.current_thread().ident,  # Basic tracking
                 }
                 self._owned_sessions.add(created_session_id)

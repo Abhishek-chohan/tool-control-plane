@@ -32,6 +32,8 @@ cd server && make release-gate
 
 See `server/docs/local-development.md` for the development env contract and `.github/workflows/release-gate.yml` for the CI workflow.
 
+The maintained operator-facing observability contract is summarized separately in `server/docs/observability.md` so signals, identifiers, redaction rules, and playbooks can be reviewed without reading the runtime implementation files directly.
+
 ## Production Baseline
 
 Production mode is now an explicit runtime contract, not an implied deployment preference.
@@ -59,6 +61,40 @@ The current recovery behavior is:
 
 Some maintenance paths still log persistence failures instead of surfacing them directly to clients. Operators should treat those log lines as durability degradation and use the release gate plus the runtime diagnostics below to catch them before release.
 
+## Durable Execution Contract
+
+This section is the canonical summary of the durability guarantees supported by the repo today. It answers four questions directly: what a request lease means, what survives disconnect or restart, what stream resume guarantees, and what machine drain guarantees.
+
+### Supported Guarantees
+
+- **Request leases are explicit and time-bounded.** A request moves into `claimed` or `running` with a machine-owned lease. If that lease expires, the server emits `request_lease_expired`, releases any reserved machine slot, and either requeues the request with linear backoff or dead-letters it after `MaxAttempts`.
+- **Postgres-backed restart recovery reuses persisted lease state.** When a `storage.Store` is attached, request lease metadata survives restart-like reloads. Expired persisted leases are scanned after startup and follow the same requeue-or-dead-letter path as in-memory leases.
+- **Consumer disconnect does not cancel work.** A broken `StreamExecuteTool()` or `ResumeStream()` client connection leaves the request record intact. Callers can inspect final request state later and may resume from the retained chunk window if the missing sequence range is still retained.
+- **Resume is retained-window replay, not durable full-history replay.** `GetRequestChunks()` and `ResumeStream()` expose only the retained chunk window. Resuming from within that window replays ordered remaining chunks plus the terminal marker. Resuming before the retained window fails with `OUT_OF_RANGE` rather than silently skipping missing data.
+- **Machine drain blocks new work immediately and lets in-flight work resolve normally.** `DrainMachine()` removes tool ownership and marks the machine draining before unregister. New request creation and new claims stop targeting that machine immediately. Claimed or running requests already assigned to the machine may finish or age out through the normal lease-expiry path. The machine unregisters only after no active `claimed` or `running` requests remain.
+- **Pending requests are not migrated automatically during drain.** If a request was never claimed, it remains pending until another machine registers the same tool or some other control path resolves it.
+
+### Proof Matrix
+
+| Guarantee | Automated proof | Current limit |
+| --- | --- | --- |
+| Lease expiry requeues or dead-letters claimed/running work and frees machine load | `server/pkg/service/request_runtime_test.go`, `server/pkg/service/request_persistence_test.go`, `server/pkg/service/machine_test.go` | Retries stop after `MaxAttempts`; in-memory mode still has no restart guarantee |
+| Consumer reconnect can inspect state and replay the retained chunk window deterministically | `server/pkg/service/request_stream_test.go`, `conformance/cases/request_recovery_chunk_window.json`, `conformance/cases/request_recovery_resume.json`, `conformance/cases/request_recovery_resume_trimmed_window.json`, `conformance/cases/request_recovery_expired_window.json` | The retained window is capped at 100 chunks; there is no durable full-history replay API |
+| Graceful drain stops new routing immediately and lets in-flight work finish or age out before unregister | `server/pkg/service/machine_test.go`, `conformance/cases/machine_lifecycle_drain_under_load.json`, `conformance/cases/provider_runtime_drain_under_load.json` | Pending requests are not automatically reassigned during drain |
+| The authoritative release signal covers the maintained durability slice | `cd server && make release-gate`, plus `release-gate-runtime` focused Go tests | The gate remains intentionally narrow and does not directly prove live Postgres-backed auth or every deployment topology |
+
+### Failure-Mode Matrix
+
+| Failure mode | What happens now | Signals and proof | Important limit |
+| --- | --- | --- | --- |
+| Consumer disconnect during `StreamExecuteTool()` or `ResumeStream()` | The request continues. The caller can inspect request state later and may resume from the retained chunk window. | `request_chunks_appended`, `request_execution_completed` / `request_execution_failed`; `server/pkg/service/request_stream_test.go`; `conformance/cases/request_recovery_resume.json` | Replay is limited to the retained window only |
+| Provider disconnect or crash after a request is claimed or running | When the lease expires, the server releases machine capacity and either requeues the request with linear backoff or dead-letters it after retry exhaustion. | `request_lease_expired`, `request_requeued`, `request_dead_lettered`; `server/pkg/service/request_runtime_test.go`; `server/pkg/service/machine_test.go` | Tool ownership may still exist until drain or inactive-machine cleanup completes |
+| Server restart with Postgres-backed storage | Persisted request state reloads on startup, and expired persisted leases are requeued or dead-lettered by the same expiry path. | `server/pkg/service/request_persistence_test.go`; `cd server && make release-gate` | `TOOLPLANE_STORAGE_MODE=memory` does not carry this guarantee |
+| Machine drain with claimed or running work | New routing and new claims stop immediately. In-flight work either completes normally or ages out through lease expiry. The machine unregisters after the active request count reaches zero. | `machine_drain_started`, `machine_drain_completed`, request lifecycle trace events; `server/pkg/service/machine_test.go`; drain-under-load conformance cases | Pending requests remain pending until another machine exists |
+| Retained-window overflow before a caller resumes | `GetRequestChunks()` exposes the current `start_seq` / `next_seq` window. Resume from inside that window replays the retained tail plus the final marker. Resume from before `start_seq` fails with `OUT_OF_RANGE`. | `server/pkg/service/request_stream_test.go`; `conformance/cases/request_recovery_resume_trimmed_window.json`; `conformance/cases/request_recovery_expired_window.json` | The runtime does not promise durable replay of every chunk ever emitted |
+
+The detailed lifecycle sections below expand these guarantees. If a future behavior change is not reflected here and in the tests or fixtures named above, it should not be treated as part of the maintained durability contract.
+
 ## Tenant And Policy Boundary
 
 The maintained isolation boundary is session-scoped.
@@ -66,6 +102,8 @@ The maintained isolation boundary is session-scoped.
 - Session ownership is keyed by `CreatedBy` plus the persisted user-to-session mapping.
 - Machines, tools, requests, and tasks are all scoped to a single session ID.
 - API keys are session-scoped credentials, not global tenancy credentials.
+- Session-owned API keys carry explicit `read`, `execute`, or `admin` capabilities, and server authorization binds them to the owning session or user scope per RPC.
+- API-key secrets are returned only from `CreateApiKey`; `ListApiKeys` is metadata-only and exposes `key_preview` plus `capabilities` instead of replaying the secret.
 - Python-only admin helpers such as bulk delete, stats, token refresh, and invalidation remain explicitly labeled `admin` scope in `SDK_MAP.md`; they are not implied portable SDK guarantees.
 - Proxy throttling provides the current platform guardrails for request volume by API key and client IP. Per-machine load protection remains enforced by the server runtime's machine-capacity tracking.
 
@@ -239,29 +277,32 @@ The server currently has two different expiration paths depending on whether a p
 
 Provider behavior is now observable through server-owned trace events instead of only through SDK-local logs.
 
+- Server traces now expose stable top-level correlation fields: `sessionId`, `machineId`, `toolId`, `requestId`, `taskId`, `event`, and `timestamp`.
 - Session and API-key audit tracing emits `session_created`, `session_updated`, `session_deleted`, `api_key_created`, and `api_key_revoked`.
+- Auth tracing emits `auth_validated`, `auth_rejected`, and `auth_policy_denied` so operators can distinguish invalid tokens from scope or capability failures.
 - Drain emits `machine_drain_started` and `machine_drain_completed`.
 - Request lifecycle tracing emits `request_created`, `request_claimed`, `request_execution_started`, `request_execution_completed`, `request_execution_failed`, `request_cancelled`, `request_chunks_appended`, `request_lease_expired`, `request_requeued`, and `request_dead_lettered`.
 - Task lifecycle tracing emits `task_created`, `task_execution_started`, `task_retry_scheduled`, `task_execution_completed`, `task_execution_failed`, `task_cancelled`, and `task_dead_lettered`.
+- `toolplane-server --metrics-listen` now exposes a Prometheus-style `/metrics` endpoint for queue depth, in-flight load, retry totals, dead-letter totals, active machines, and drain progress.
+- The supported bootstrap paths pin that metrics listener to a stable scrape address: `127.0.0.1:9102` for `server/run.sh` and `:9102` for the container entrypoint. The binary default remains `127.0.0.1:0` for ad hoc starts.
+- The HTTP gateway keeps `/health` for circuit-breaker and throttle state and emits structured throttle logs with redacted `client_fingerprint` instead of raw client IPs.
 
-These signals live in `server/pkg/trace/tracer.go` and are emitted from the service-owned session, machine, request, task, and tool code paths. When the server starts with `--trace-sessions`, they are written as structured JSON log lines prefixed with `session_trace`.
+These signals live in `server/pkg/trace/tracer.go`, `server/pkg/observability/runtime_metrics.go`, and the service-owned session, machine, request, task, and tool code paths. When the server starts with `--trace-sessions`, trace events are written as structured JSON log lines prefixed with `session_trace`.
 
-The HTTP gateway adds two more operator-facing diagnostics:
-
-- `/health` returns circuit-breaker state, aggregate rate-limit rejections, and per-reason throttle counters.
-- Throttled requests emit structured proxy log lines that include the throttle reason, `Retry-After` delay, API-key presence, and client IP.
+The compact operator contract, supported metric names, throttle reasons, and redaction rules are documented in `server/docs/observability.md`.
 
 ## Operator Diagnostics
 
-The intended first checks for common operational failures are now:
+The maintained first-debug path now starts from the supported observability contract in `server/docs/observability.md`.
 
-- Startup rejected in production mode: inspect auth and storage env validation first. Production now requires Postgres-backed API-key auth, Postgres storage, explicit origins, and a secure backend path.
-- Repeated `request_lease_expired`, `request_requeued`, or `request_dead_lettered` events: inspect provider health, request timeout sizing, and machine drain or disconnect behavior.
-- Stuck drains: look for `machine_drain_started` without `machine_drain_completed`, then inspect active requests for the target machine.
-- Repeated `task_retry_scheduled` or `task_dead_lettered` events: inspect the underlying request failures and the owning machine capacity for that tool.
-- Rising `/health` throttle counters or proxy `throttle` log lines: inspect configured rate limits, client burst behavior, and whether the circuit breaker is open.
+The shortest version is:
 
-These signals live in `server/pkg/trace/tracer.go` and are emitted from the service-owned request and machine code paths.
+- Startup rejected in production mode: inspect env validation first. Production requires Postgres-backed auth and storage, explicit proxy origins, and a secure backend path.
+- Queue or dispatch stall: inspect `toolplane_request_queue_depth`, `toolplane_machine_active`, then `request_created` and `request_claimed` traces.
+- Repeated lease expiry or retries: inspect `toolplane_request_requeues_total` and correlate `request_lease_expired` plus `request_requeued` by `requestId`.
+- Dead-letter churn: inspect `toolplane_request_dead_letters_total` or `toolplane_task_dead_letters_total`, then follow the matching `requestId` or `taskId` traces.
+- Stuck drains: inspect `toolplane_machine_draining`, then look for `machine_drain_started` without `machine_drain_completed` and the in-flight `requestId` values for that machine.
+- Proxy throttling or circuit-open symptoms: inspect `/health`, `Retry-After`, and proxy throttle logs keyed by stable throttle `reason` and redacted `client_fingerprint`.
 
 ### Streaming, Chunk Retrieval, And ResumeStream
 

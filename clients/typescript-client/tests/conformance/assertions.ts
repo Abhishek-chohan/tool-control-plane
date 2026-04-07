@@ -225,6 +225,31 @@ export function assertApiKeyValueNonEmpty(apiKey: Record<string, unknown>, caseI
   assertNonEmptyString(apiKey.key, 'api_key.key', caseId, transport);
 }
 
+export function assertApiKeyValueEmpty(apiKey: Record<string, unknown>, caseId: string, transport: string): void {
+  const value = apiKey.key;
+  if (typeof value !== 'string' || value !== '') {
+    throw new Error(`[${transport}] ${caseId}: expected api_key.key to be empty in metadata-only responses`);
+  }
+}
+
+export function assertApiKeyPreviewNonEmpty(apiKey: Record<string, unknown>, caseId: string, transport: string): void {
+  assertNonEmptyString(apiKey.key_preview, 'api_key.key_preview', caseId, transport);
+}
+
+export function assertApiKeyCapabilitiesEqual(
+  apiKey: Record<string, unknown>,
+  expected: string[],
+  caseId: string,
+  transport: string,
+): void {
+  const actual = Array.isArray(apiKey.capabilities) ? apiKey.capabilities : [];
+  if (actual.length !== expected.length || actual.some((value, index) => value !== expected[index])) {
+    throw new Error(
+      `[${transport}] ${caseId}: api_key.capabilities mismatch. expected=${JSON.stringify(expected)}, actual=${JSON.stringify(actual)}`,
+    );
+  }
+}
+
 export function assertApiKeyFieldEquals(
   apiKey: Record<string, unknown>,
   field: string,

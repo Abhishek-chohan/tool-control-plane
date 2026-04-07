@@ -14,7 +14,7 @@ This file is the fastest contract-to-wrapper map from `server/proto/service.prot
 RPCs fall into three scope categories that explain why some wrappers are Python-only or internal:
 
 - **consumer**: remote invocation, session or machine or task lifecycle, and tool discovery. These RPCs are portable across maintained SDKs.
-- **provider**: tool registration, request claiming, heartbeat, and result submission. These RPCs are exercised through the explicit Python `ProviderRuntime`; other SDKs expose selected direct registration wrappers but do not ship a maintained provider runtime harness.
+- **provider**: tool registration, request claiming, heartbeat, and result submission. These RPCs are exercised through the explicit maintained provider runtimes in Python and TypeScript. Go exposes selected direct registration wrappers but does not ship a maintained provider runtime harness.
 - **admin**: session administration helpers such as bulk delete, stats, token refresh, and invalidation. These RPCs are currently exposed only in the Python SDK.
 
 ## Important Caveats
@@ -31,7 +31,7 @@ RPCs fall into three scope categories that explain why some wrappers are Python-
 
 - Python: maintained provider mode exists through the explicit `ProviderRuntime` surface and is the canonical provider harness for claim, heartbeat, result submission, and drain behavior.
 - Go: direct `RegisterMachine`, `RegisterTool`, and `DrainMachine` wrappers exist, but there is no maintained provider runtime loop that claims requests and submits results. Treat provider mode as unsupported as a named runtime surface.
-- TypeScript: direct machine and tool wrappers exist, but there is no maintained provider runtime loop that claims requests and submits results. Treat provider mode as unsupported as a named runtime surface.
+- TypeScript: maintained provider mode exists through the explicit `ProviderRuntime` surface plus direct gRPC lifecycle wrappers for claim, heartbeat, chunk append, and result submission.
 
 ## Support Tiers
 
@@ -49,7 +49,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | --- | --- | --- | --- |
 | Python | `clients/python-client/toolplane/__init__.py` | gRPC + HTTP | Primary maintained SDK and current completeness baseline; the explicit `ProviderRuntime` is the maintained provider harness |
 | Go | `clients/go-client/client/toolplane_client.go` | live gRPC | Supported secondary SDK with maintained gRPC lifecycle helpers and no provider runtime harness |
-| TypeScript | `clients/typescript-client/src/index.ts` | live gRPC | Supported secondary SDK and maintained JavaScript-family path; repository-internal HTTP adapters under `tests/conformance/` are not part of the public SDK surface |
+| TypeScript | `clients/typescript-client/src/index.ts` | live gRPC | Supported secondary SDK and maintained JavaScript-family path; includes an explicit gRPC `ProviderRuntime`, while repository-internal HTTP adapters under `tests/conformance/` are not part of the public SDK surface |
 
 ## Ecosystem Adapter Snapshot
 
@@ -61,7 +61,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | RPC | Python | Go | TypeScript | Notes / conformance |
 | --- | --- | --- | --- | --- |
-| `RegisterTool` | `partial`: provider registration via explicit `ProviderRuntime` | `full`: `RegisterTool()` | `full`: `registerTool()` | Go and TypeScript require a registered machine before direct tool registration and still do not ship a maintained provider runtime harness |
+| `RegisterTool` | `partial`: provider registration via explicit `ProviderRuntime` | `full`: `RegisterTool()` | `full`: `registerTool()` plus `ProviderRuntime.registerTool()` / `ProviderRuntime.tool()` | Direct TypeScript registration still requires a machine; the explicit runtime now owns the maintained provider path |
 | `ListTools` | `full`: `get_available_tools()` / `list_tools()` | `full`: `ListTools()` | `full`: `listTools()` | Covered by `conformance/cases/tool_discovery.json` |
 | `GetToolById` | `full`: `get_tool_by_id()` | `full`: `GetToolByID()` | `full`: `getToolById()` | Covered by `conformance/cases/tool_discovery.json` |
 | `GetToolByName` | `full`: `get_tool_by_name()` | `full`: `GetToolByName()` | `full`: `getToolByName()` | Covered by `conformance/cases/tool_discovery.json` |
@@ -94,10 +94,10 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | RPC | Python | Go | TypeScript | Notes / conformance |
 | --- | --- | --- | --- | --- |
-| `RegisterMachine` | `partial`: provider lifecycle via explicit `ProviderRuntime` | `full`: `RegisterMachine()` | `full`: `registerMachine()` | Python registration is owned by the explicit provider runtime; Go and TypeScript expose direct wrappers without a maintained worker harness |
+| `RegisterMachine` | `partial`: provider lifecycle via explicit `ProviderRuntime` | `full`: `RegisterMachine()` | `full`: `registerMachine()` plus `ProviderRuntime.createSession()` / `ProviderRuntime.attachSession()` | Python and TypeScript both own provider registration through explicit runtime surfaces; direct TypeScript machine wrappers remain public |
 | `ListMachines` | `full`: `list_machines()` | `full`: `ListMachines()` | `full`: `listMachines()` | Covered by `conformance/cases/machine_lifecycle.json` |
 | `GetMachine` | `full`: `get_machine()` | `full`: `GetMachine()` | `full`: `getMachine()` | Covered by `conformance/cases/machine_lifecycle.json` |
-| `UpdateMachinePing` | `partial`: explicit provider heartbeat thread | `unsupported` | `unsupported` | Python heartbeat keeps provider registrations alive (provider scope) |
+| `UpdateMachinePing` | `partial`: explicit provider heartbeat thread | `unsupported` | `full`: `updateMachinePing()` plus `ProviderRuntime` heartbeat loop | TypeScript now exposes the provider heartbeat RPC directly and uses it in the maintained runtime |
 | `UnregisterMachine` | `full`: `unregister_machine()` | `full`: `UnregisterMachine()` | `full`: `unregisterMachine()` | Explicit machine cleanup is public in Python, Go, and TypeScript |
 | `DrainMachine` | `full`: `drain_machine()` | `full`: `DrainMachine()` | `full`: `drainMachine()` | Covered by the shared machine lifecycle fixtures, including drain-under-load |
 
@@ -108,11 +108,11 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `CreateRequest` | `full`: `create_request()` | `full`: `CreateRequest()` | `full`: `createRequest()` | Covered by `conformance/cases/request_create.json` |
 | `GetRequest` | `full`: `get_request_status()` | `full`: `GetRequest()` | `full`: `getRequest()` | Python keeps the `get_request_status()` name, while Go and TypeScript expose direct request lookup wrappers |
 | `ListRequests` | `full`: `list_requests()` | `full`: `ListRequests()` | `full`: `listRequests()` | Public across Python, Go, and TypeScript |
-| `UpdateRequest` | `partial`: internal result-status updates | `unsupported` | `unsupported` | Python updates execution state internally (provider scope) |
-| `ClaimRequest` | `partial`: explicit provider poll loop | `unsupported` | `unsupported` | Python `ProviderRuntime` claims queued work (provider scope) |
+| `UpdateRequest` | `partial`: internal result-status updates | `unsupported` | `full`: `updateRequest()` | TypeScript exposes the provider-running/status transition helper used by the maintained runtime |
+| `ClaimRequest` | `partial`: explicit provider poll loop | `unsupported` | `full`: `claimRequest()` plus `ProviderRuntime` | Python and TypeScript provider runtimes claim queued work; Go still lacks a maintained runtime loop |
 | `CancelRequest` | `full`: `cancel_request()` | `full`: `CancelRequest()` | `full`: `cancelRequest()` | Public across Python, Go, and TypeScript |
-| `SubmitRequestResult` | `partial`: explicit provider result submission | `unsupported` | `unsupported` | Python `ProviderRuntime` sends final results back to the server (provider scope) |
-| `AppendRequestChunks` | `partial`: explicit streaming result submission | `unsupported` | `unsupported` | Python `ProviderRuntime` appends streaming chunks during execution (provider scope) |
+| `SubmitRequestResult` | `partial`: explicit provider result submission | `unsupported` | `full`: `submitRequestResult()` plus `ProviderRuntime` | TypeScript now exposes the final provider result RPC directly and uses it in the maintained runtime |
+| `AppendRequestChunks` | `partial`: explicit streaming result submission | `unsupported` | `full`: `appendRequestChunks()` plus `ProviderRuntime` | TypeScript now exposes streaming chunk submission directly and uses it in the maintained runtime |
 | `GetRequestChunks` | `unsupported` | `unsupported` | `unsupported` | No current wrapper; the server returns retained chunks plus `start_seq` / `next_seq` metadata for the bounded replay window |
 
 ## TasksService
@@ -137,9 +137,9 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `machine_lifecycle` | `MachinesService.RegisterMachine`, `MachinesService.ListMachines`, `MachinesService.GetMachine`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `list_machines()`, `get_machine()`, `drain_machine()`, and `invoke()`, plus the matching Go and TypeScript machine wrappers |
 | `invoke_unary` | `ToolService.RegisterTool`, `ToolService.ExecuteTool` | Python `tool()` + `invoke()`, Go `ExecuteTool()`, TypeScript `executeTool()` |
 | `invoke_stream` | `ToolService.RegisterTool`, `ToolService.StreamExecuteTool` | Python `tool()` + `stream()` / `astream()`, Go `StreamExecuteTool()` |
-| `provider_runtime_unary_claim_submit` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()` |
-| `provider_runtime_stream_append_chunks` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.AppendRequestChunks`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()` |
-| `provider_runtime_drain_under_load` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `ProviderRuntime`, `create_request()`, and `drain_machine()` |
+| `provider_runtime_unary_claim_submit` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |
+| `provider_runtime_stream_append_chunks` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.AppendRequestChunks`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |
+| `provider_runtime_drain_under_load` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `ProviderRuntime`, `create_request()`, and `drain_machine()`, plus TypeScript `ProviderRuntime`, `createRequest()`, and `drainMachine()` |
 
 ## Navigation Order For Contract Work
 

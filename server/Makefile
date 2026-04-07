@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-runtime
+.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -35,6 +35,15 @@ TOOLPLANE_CONFORMANCE_API_KEY ?= $(TOOLPLANE_AUTH_FIXED_API_KEY)
 TOOLPLANE_STORAGE_MODE ?= $(if $(strip $(TOOLPLANE_DATABASE_URL)),postgres,memory)
 TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND ?= 1
 
+RELEASE_GATE_ENV = \
+	TOOLPLANE_ENV_MODE=$(TOOLPLANE_ENV_MODE) \
+	TOOLPLANE_AUTH_MODE=$(TOOLPLANE_AUTH_MODE) \
+	TOOLPLANE_AUTH_FIXED_API_KEY=$(TOOLPLANE_AUTH_FIXED_API_KEY) \
+	TOOLPLANE_CONFORMANCE_API_KEY=$(TOOLPLANE_CONFORMANCE_API_KEY) \
+	TOOLPLANE_STORAGE_MODE=$(TOOLPLANE_STORAGE_MODE) \
+	TOOLPLANE_DATABASE_URL=$(TOOLPLANE_DATABASE_URL) \
+	TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=$(TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND)
+
 # Go server commands
 build:
 	go build -o bin/toolplane-server ./cmd/server
@@ -54,7 +63,7 @@ docker-build:
 	docker build -t toolplane-server:latest .
 
 docker-run:
-	docker run -p 50051:50051 -p 9090:9090 toolplane-server:latest
+	docker run -p 9001:9001 -p 8080:8080 -p 9102:9102 toolplane-server:latest
 
 # Generate protobuf files
 gen-proto:
@@ -99,15 +108,14 @@ conformance-python-http:
 # Authoritative release gate: proves the maintained architecture end to end.
 # See server/docs/release-gate.md for the scenario description.
 release-gate:
-	TOOLPLANE_ENV_MODE=$(TOOLPLANE_ENV_MODE) \
-	TOOLPLANE_AUTH_MODE=$(TOOLPLANE_AUTH_MODE) \
-	TOOLPLANE_AUTH_FIXED_API_KEY=$(TOOLPLANE_AUTH_FIXED_API_KEY) \
-	TOOLPLANE_CONFORMANCE_API_KEY=$(TOOLPLANE_CONFORMANCE_API_KEY) \
-	TOOLPLANE_STORAGE_MODE=$(TOOLPLANE_STORAGE_MODE) \
-	TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=$(TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND) \
-	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -q
+	$(RELEASE_GATE_ENV) python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -q
+	$(RELEASE_GATE_ENV) $(MAKE) release-gate-observability
 	$(MAKE) release-gate-runtime
+
+release-gate-observability:
+	bash ./scripts/release_gate_observability.sh
 
 release-gate-runtime:
 	go test ./cmd/server -run 'TestLoadServerConfigRejectsProductionInMemoryStorage|TestLoadServerConfigAllowsProductionPostgresStorage' -count=1
-	go test ./pkg/service -run 'TestSessionsServiceRecordsAuditEvents|TestTasksServiceCancelTaskCancelsUnderlyingRequest|TestTasksServiceTimeoutCancelsUnderlyingRequest|TestRequestsServicePersistentRecoveryRequeuesExpiredRequest' -count=1
+	go test ./pkg/service -run 'TestSessionsServiceRecordsAuditEvents|TestTasksServiceCancelTaskCancelsUnderlyingRequest|TestTasksServiceTimeoutCancelsUnderlyingRequest' -count=1
+	go test ./pkg/service -run 'TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest|TestRequestsServicePersistentRecoveryRequeuesExpiredRequest|TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork|TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt|TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired' -count=1

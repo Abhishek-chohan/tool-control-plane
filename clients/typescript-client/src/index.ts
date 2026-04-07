@@ -7,6 +7,7 @@
 
 // Core client
 export { ToolplaneClient } from './core/toolplane_client';
+export { ProviderRuntime } from './provider_runtime';
 
 // Interfaces and types
 export * from './interfaces';

@@ -4,10 +4,12 @@ import test from 'node:test';
 import { ToolplaneClient } from '../../src/core/toolplane_client';
 import { ClientProtocol } from '../../src/interfaces';
 import {
+  AppendRequestChunksResponse,
   CancelRequestResponse,
   ExecuteToolResponse,
   ListRequestsResponse,
   Request as ProtoRequest,
+  SubmitRequestResultResponse,
 } from '../../src/proto/proto/service_pb';
 
 type MutableClientState = {
@@ -165,6 +167,93 @@ test('listRequests passes filters and normalizes responses', async () => {
 
   assert.deepEqual(requests.map((request) => request.id), ['request-1', 'request-2']);
   assert.deepEqual(requests[1].result, { ok: true });
+});
+
+test('claimRequest uses the registered machine by default and returns a normalized request payload', async () => {
+  const client = createConnectedClient({
+    claimRequest: unaryResponse((request: { getRequestId(): string; getMachineId(): string }) => {
+      assert.equal(request.getRequestId(), 'request-claim');
+      assert.equal(request.getMachineId(), 'machine-9');
+      return createRequest({
+        id: 'request-claim',
+        status: 'claimed',
+        executingMachineId: 'machine-9',
+      });
+    }),
+  });
+
+  (client as unknown as MutableClientState).machineId = 'machine-9';
+
+  const result = await client.claimRequest('request-claim');
+
+  assert.equal(result.id, 'request-claim');
+  assert.equal(result.executingMachineId, 'machine-9');
+});
+
+test('updateRequest forwards running status and result type', async () => {
+  const client = createConnectedClient({
+    updateRequest: unaryResponse((request: {
+      getRequestId(): string;
+      getStatus(): string;
+      getResultType(): string;
+    }) => {
+      assert.equal(request.getRequestId(), 'request-1');
+      assert.equal(request.getStatus(), 'running');
+      assert.equal(request.getResultType(), 'streaming');
+      return createRequest({ id: 'request-1', status: 'running', resultType: 'streaming' });
+    }),
+  });
+
+  const result = await client.updateRequest('request-1', { status: 'running', resultType: 'streaming' });
+
+  assert.equal(result.status, 'running');
+  assert.equal(result.resultType, 'streaming');
+});
+
+test('appendRequestChunks serializes chunk payloads and returns success', async () => {
+  const response = new AppendRequestChunksResponse();
+  response.setSuccess(true);
+
+  const client = createConnectedClient({
+    appendRequestChunks: unaryResponse((request: { getChunksList(): string[]; getRequestId(): string }) => {
+      assert.equal(request.getRequestId(), 'request-append');
+      assert.deepEqual(request.getChunksList(), ['{"value":1}', 'plain']);
+      return response;
+    }),
+  });
+
+  const success = await client.appendRequestChunks('request-append', [{ value: 1 }, 'plain']);
+
+  assert.equal(success, true);
+});
+
+test('submitRequestResult serializes objects and returns the server success flag', async () => {
+  const response = new SubmitRequestResultResponse();
+  response.setSuccess(true);
+
+  const client = createConnectedClient({
+    submitRequestResult: unaryResponse((request: {
+      getRequestId(): string;
+      getResult(): string;
+      getResultType(): string;
+      getMetaMap(): Map<string, string>;
+    }) => {
+      assert.equal(request.getRequestId(), 'request-1');
+      assert.equal(request.getResult(), '{"echo":"hello"}');
+      assert.equal(request.getResultType(), 'resolution');
+      assert.equal(request.getMetaMap().get('handled_by'), 'unit-test');
+      return response;
+    }),
+  });
+
+  const success = await client.submitRequestResult(
+    'request-1',
+    { echo: 'hello' },
+    'resolution',
+    { handled_by: 'unit-test' },
+  );
+
+  assert.equal(success, true);
 });
 
 test('cancelRequest returns the server success flag', async () => {

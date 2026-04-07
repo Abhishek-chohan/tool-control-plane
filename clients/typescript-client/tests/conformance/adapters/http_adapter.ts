@@ -515,10 +515,11 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       .map((entry) => this.normalizeRequest(entry));
   }
 
-  async createApiKey(sessionId: string, name: string): Promise<Record<string, unknown>> {
+  async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
     const response = await this.post<Record<string, unknown>>('api/CreateApiKey', {
       sessionId,
       name,
+		capabilities,
     });
     return this.normalizeApiKey(this.unwrapObject(response.apiKey ?? response));
   }
@@ -881,9 +882,11 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       id: apiKey.id ?? '',
       name: apiKey.name ?? '',
       key: apiKey.key ?? '',
+		key_preview: apiKey.keyPreview ?? apiKey.key_preview ?? '',
       session_id: apiKey.sessionId ?? apiKey.session_id ?? '',
       created_at: apiKey.createdAt ?? apiKey.created_at ?? '',
       created_by: apiKey.createdBy ?? apiKey.created_by ?? '',
+		capabilities: Array.isArray(apiKey.capabilities) ? apiKey.capabilities.map((value) => String(value)) : [],
       revoked_at: apiKey.revokedAt ?? apiKey.revoked_at ?? '',
     };
   }

@@ -40,9 +40,11 @@ export interface ApiKey {
   id: string;
   name: string;
   key: string;
+  keyPreview?: string;
   sessionId: string;
   createdAt: string;
   createdBy: string;
+  capabilities: string[];
   revokedAt?: string;
 }
 
@@ -144,6 +146,14 @@ export interface RegisterToolRequest {
 }
 
 /**
+ * Optional overrides for direct tool registration.
+ */
+export interface RegisterToolOptions {
+  sessionId?: string;
+  machineId?: string;
+}
+
+/**
  * Tool execution request
  */
 export interface ExecuteToolRequest {
@@ -170,9 +180,13 @@ export interface CreateSessionRequest {
   userId: string;
   name: string;
   description: string;
-  apiKey: string;
   sessionId: string;
   namespace: string;
+}
+
+export interface CreateApiKeyOptions {
+  name: string;
+  capabilities?: string[];
 }
 
 /**
@@ -192,4 +206,132 @@ export interface RegisterMachineRequest {
 export interface HealthCheckResponse {
   status: string;
   version: string;
+}
+
+/**
+ * Request list filter options.
+ */
+export interface RequestListOptions {
+  status?: string;
+  toolName?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Request update payload used by provider runtimes.
+ */
+export interface RequestUpdate {
+  status?: string;
+  result?: string;
+  resultType?: string;
+}
+
+/**
+ * Provider runtime configuration.
+ */
+export interface ProviderRuntimeOptions {
+  pollIntervalMs?: number;
+  heartbeatIntervalMs?: number;
+  sdkVersion?: string;
+}
+
+/**
+ * Provider session creation options.
+ */
+export interface ProviderSessionCreateOptions {
+  sessionId?: string;
+  name: string;
+  description: string;
+  namespace?: string;
+  registerMachine?: boolean;
+  machineId?: string;
+  sdkVersion?: string;
+}
+
+/**
+ * Provider session attach options.
+ */
+export interface ProviderSessionAttachOptions {
+  registerMachine?: boolean;
+  machineId?: string;
+  sdkVersion?: string;
+}
+
+/**
+ * Context passed to provider tool handlers.
+ */
+export interface ProviderToolContext {
+  sessionId: string;
+  requestId: string;
+  toolName: string;
+  machineId: string;
+  input: Record<string, unknown>;
+  appendChunk(chunk: unknown): Promise<void>;
+  heartbeat(): Promise<Machine>;
+}
+
+export type ProviderToolResult =
+  | unknown
+  | Iterable<unknown>
+  | AsyncIterable<unknown>
+  | Promise<unknown | Iterable<unknown> | AsyncIterable<unknown>>;
+
+export type ProviderToolHandler = (
+  input: Record<string, unknown>,
+  context: ProviderToolContext,
+) => ProviderToolResult;
+
+/**
+ * Public provider tool registration.
+ */
+export interface ProviderToolRegistration {
+  sessionId: string;
+  name: string;
+  description: string;
+  handler: ProviderToolHandler;
+  schema?: string | Record<string, unknown>;
+  config?: Record<string, string>;
+  tags?: string[];
+  stream?: boolean;
+}
+
+/**
+ * Session-scoped client surface required by the provider runtime.
+ */
+export interface ProviderRuntimeSessionClient {
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  isConnected(): boolean;
+  createSession(name: string, description: string, namespace?: string, requestedSessionId?: string): Promise<Session>;
+  getSession(): Promise<Session>;
+  registerMachine(machineId?: string, sdkVersion?: string, tools?: RegisterToolRequest[]): Promise<Machine>;
+  registerTool(
+    name: string,
+    description: string,
+    schema: string,
+    config?: Record<string, string>,
+    tags?: string[],
+    options?: RegisterToolOptions,
+  ): Promise<Tool>;
+  listRequests(options?: RequestListOptions): Promise<Request[]>;
+  claimRequest(requestId: string, machineId?: string): Promise<Request>;
+  updateRequest(requestId: string, update: RequestUpdate): Promise<Request>;
+  appendRequestChunks(requestId: string, chunks: unknown[], resultType?: string): Promise<boolean>;
+  submitRequestResult(
+    requestId: string,
+    result: unknown,
+    resultType?: string,
+    meta?: Record<string, string>,
+  ): Promise<boolean>;
+  updateMachinePing(machineId?: string): Promise<Machine>;
+  unregisterMachine(machineId?: string): Promise<boolean>;
+  drainMachine(machineId?: string): Promise<boolean>;
+}
+
+/**
+ * Root client surface required by the provider runtime.
+ */
+export interface ProviderRuntimeClient extends ProviderRuntimeSessionClient {
+  forkSession(sessionId: string): ProviderRuntimeSessionClient;
 }

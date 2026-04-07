@@ -26,6 +26,7 @@ type toolServiceClientStub struct {
 }
 
 type sessionsServiceClientStub struct {
+	createSessionFunc func(ctx context.Context, in *pb.CreateSessionRequest, opts ...grpc.CallOption) (*pb.CreateSessionResponse, error)
 	listSessionsFunc  func(ctx context.Context, in *pb.ListSessionsRequest, opts ...grpc.CallOption) (*pb.ListSessionsResponse, error)
 	updateSessionFunc func(ctx context.Context, in *pb.UpdateSessionRequest, opts ...grpc.CallOption) (*pb.Session, error)
 	createAPIKeyFunc  func(ctx context.Context, in *pb.CreateApiKeyRequest, opts ...grpc.CallOption) (*pb.ApiKey, error)
@@ -146,6 +147,9 @@ func (s *toolServiceClientStub) HealthCheck(ctx context.Context, in *pb.HealthCh
 }
 
 func (s *sessionsServiceClientStub) CreateSession(ctx context.Context, in *pb.CreateSessionRequest, opts ...grpc.CallOption) (*pb.CreateSessionResponse, error) {
+	if s.createSessionFunc != nil {
+		return s.createSessionFunc(ctx, in, opts...)
+	}
 	return nil, unexpectedSessionCall("CreateSession")
 }
 
@@ -650,7 +654,33 @@ func TestUpdateSessionUsesCurrentSession(t *testing.T) {
 	}
 }
 
-func TestCreateAPIKeyUsesSessionID(t *testing.T) {
+func TestCreateSessionOmitsLegacyAPIKey(t *testing.T) {
+	client := newConnectedSessionClient(&sessionsServiceClientStub{
+		createSessionFunc: func(ctx context.Context, in *pb.CreateSessionRequest, opts ...grpc.CallOption) (*pb.CreateSessionResponse, error) {
+			if in.UserId != "user-1" {
+				t.Fatalf("CreateSession UserId = %q, want user-1", in.UserId)
+			}
+			if in.Name != "created" || in.Description != "desc" || in.Namespace != "ns" {
+				t.Fatalf("CreateSession request = %#v, want created session fields", in)
+			}
+			if in.ApiKey != "" {
+				t.Fatalf("CreateSession ApiKey = %q, want empty legacy field", in.ApiKey)
+			}
+			return &pb.CreateSessionResponse{Session: &pb.Session{Id: in.SessionId, Name: in.Name, Description: in.Description, Namespace: in.Namespace}}, nil
+		},
+	})
+	client.apiKey = "transport-auth-token"
+
+	session, err := client.CreateSession("created", "desc", "ns")
+	if err != nil {
+		t.Fatalf("CreateSession returned unexpected error: %v", err)
+	}
+	if session.Id != "session-1" || session.Name != "created" || client.sessionID != "session-1" {
+		t.Fatalf("CreateSession returned %#v and client session %q, want session-1/created", session, client.sessionID)
+	}
+}
+
+func TestCreateAPIKeyUsesSessionIDAndCapabilities(t *testing.T) {
 	client := newConnectedSessionClient(&sessionsServiceClientStub{
 		createAPIKeyFunc: func(ctx context.Context, in *pb.CreateApiKeyRequest, opts ...grpc.CallOption) (*pb.ApiKey, error) {
 			if in.SessionId != "session-1" {
@@ -659,16 +689,22 @@ func TestCreateAPIKeyUsesSessionID(t *testing.T) {
 			if in.Name != "cli" {
 				t.Fatalf("CreateApiKey Name = %q, want cli", in.Name)
 			}
-			return &pb.ApiKey{Id: "key-1", Name: in.Name, SessionId: in.SessionId}, nil
+			if len(in.Capabilities) != 2 || in.Capabilities[0] != "read" || in.Capabilities[1] != "execute" {
+				t.Fatalf("CreateApiKey Capabilities = %v, want [read execute]", in.Capabilities)
+			}
+			return &pb.ApiKey{Id: "key-1", Name: in.Name, SessionId: in.SessionId, Capabilities: in.Capabilities, KeyPreview: "toolplane_1234"}, nil
 		},
 	})
 
-	apiKey, err := client.CreateAPIKey("cli")
+	apiKey, err := client.CreateAPIKey("cli", "read", "execute")
 	if err != nil {
 		t.Fatalf("CreateAPIKey returned unexpected error: %v", err)
 	}
-	if apiKey.Id != "key-1" || apiKey.Name != "cli" {
-		t.Fatalf("CreateAPIKey returned %#v, want key-1/cli", apiKey)
+	if apiKey.Id != "key-1" || apiKey.Name != "cli" || apiKey.KeyPreview != "toolplane_1234" {
+		t.Fatalf("CreateAPIKey returned %#v, want key-1/cli/toolplane_1234", apiKey)
+	}
+	if len(apiKey.Capabilities) != 2 || apiKey.Capabilities[0] != "read" || apiKey.Capabilities[1] != "execute" {
+		t.Fatalf("CreateAPIKey capabilities = %v, want [read execute]", apiKey.Capabilities)
 	}
 }
 
@@ -678,7 +714,10 @@ func TestListAPIKeysUsesSessionID(t *testing.T) {
 			if in.SessionId != "session-1" {
 				t.Fatalf("ListApiKeys SessionId = %q, want session-1", in.SessionId)
 			}
-			return &pb.ListApiKeysResponse{ApiKeys: []*pb.ApiKey{{Id: "key-1"}, {Id: "key-2"}}}, nil
+			return &pb.ListApiKeysResponse{ApiKeys: []*pb.ApiKey{
+				{Id: "key-1", Key: "", KeyPreview: "toolplane_1234", Capabilities: []string{"execute"}},
+				{Id: "key-2", Key: "", KeyPreview: "toolplane_5678", Capabilities: []string{"read", "admin"}},
+			}}, nil
 		},
 	})
 
@@ -688,6 +727,12 @@ func TestListAPIKeysUsesSessionID(t *testing.T) {
 	}
 	if len(apiKeys) != 2 || apiKeys[0].Id != "key-1" || apiKeys[1].Id != "key-2" {
 		t.Fatalf("ListAPIKeys returned %#v, want two API key IDs", apiKeys)
+	}
+	if apiKeys[0].Key != "" || apiKeys[0].KeyPreview != "toolplane_1234" {
+		t.Fatalf("ListAPIKeys[0] returned %#v, want redacted key with preview", apiKeys[0])
+	}
+	if len(apiKeys[1].Capabilities) != 2 || apiKeys[1].Capabilities[0] != "read" || apiKeys[1].Capabilities[1] != "admin" {
+		t.Fatalf("ListAPIKeys[1] capabilities = %v, want [read admin]", apiKeys[1].Capabilities)
 	}
 }
 

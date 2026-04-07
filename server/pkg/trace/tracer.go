@@ -15,6 +15,9 @@ const (
 	EventSessionDeleted            SessionEventType = "session_deleted"
 	EventAPIKeyCreated             SessionEventType = "api_key_created"
 	EventAPIKeyRevoked             SessionEventType = "api_key_revoked"
+	EventAuthValidated             SessionEventType = "auth_validated"
+	EventAuthRejected              SessionEventType = "auth_rejected"
+	EventAuthPolicyDenied          SessionEventType = "auth_policy_denied"
 	EventToolRegistered            SessionEventType = "tool_registered"
 	EventToolRefreshed             SessionEventType = "tool_refreshed"
 	EventToolDeleted               SessionEventType = "tool_deleted"
@@ -49,6 +52,8 @@ type SessionEvent struct {
 	SessionID string           `json:"sessionId"`
 	MachineID string           `json:"machineId"`
 	ToolID    string           `json:"toolId"`
+	RequestID string           `json:"requestId,omitempty"`
+	TaskID    string           `json:"taskId,omitempty"`
 	Event     SessionEventType `json:"event"`
 	Timestamp time.Time        `json:"timestamp"`
 	Metadata  map[string]any   `json:"metadata,omitempty"`
@@ -80,6 +85,37 @@ func NewLoggingTracer(logger *log.Logger) SessionTracer {
 		logger = log.Default()
 	}
 	return &LoggingTracer{logger: logger}
+}
+
+type multiTracer struct {
+	tracers []SessionTracer
+}
+
+// NewMultiTracer fans out events to each provided tracer in order.
+func NewMultiTracer(tracers ...SessionTracer) SessionTracer {
+	filtered := make([]SessionTracer, 0, len(tracers))
+	for _, tracer := range tracers {
+		if tracer != nil {
+			filtered = append(filtered, tracer)
+		}
+	}
+	if len(filtered) == 0 {
+		return NopTracer()
+	}
+	if len(filtered) == 1 {
+		return filtered[0]
+	}
+	return &multiTracer{tracers: filtered}
+}
+
+// Record implements SessionTracer.
+func (t *multiTracer) Record(event SessionEvent) {
+	if t == nil {
+		return
+	}
+	for _, tracer := range t.tracers {
+		tracer.Record(event)
+	}
 }
 
 // Record implements SessionTracer.

@@ -32,6 +32,17 @@ func (t *recordingTracer) hasEvent(eventType trace.SessionEventType) bool {
 	return false
 }
 
+func (t *recordingTracer) event(eventType trace.SessionEventType) (trace.SessionEvent, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, event := range t.events {
+		if event.Event == eventType {
+			return event, true
+		}
+	}
+	return trace.SessionEvent{}, false
+}
+
 func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) {
 	tracer := trace.NopTracer()
 	toolService := NewToolService(tracer, nil)
@@ -137,5 +148,19 @@ func TestRequestsServiceRecordsProviderLifecycleEvents(t *testing.T) {
 		if !tracer.hasEvent(eventType) {
 			t.Fatalf("expected trace event %q to be recorded", eventType)
 		}
+	}
+
+	claimedEvent, ok := tracer.event(trace.EventRequestClaimed)
+	if !ok {
+		t.Fatal("expected request claimed event")
+	}
+	if claimedEvent.RequestID != request.ID {
+		t.Fatalf("claimed event request id = %q, want %q", claimedEvent.RequestID, request.ID)
+	}
+	if claimedEvent.SessionID != sessionID {
+		t.Fatalf("claimed event session id = %q, want %q", claimedEvent.SessionID, sessionID)
+	}
+	if claimedEvent.MachineID != machineID {
+		t.Fatalf("claimed event machine id = %q, want %q", claimedEvent.MachineID, machineID)
 	}
 }

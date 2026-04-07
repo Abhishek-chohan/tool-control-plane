@@ -303,8 +303,13 @@ class HttpConformanceAdapter:
     def drain_machine(self, session_id: str, machine_id: str) -> bool:
         return self.client.drain_machine(session_id, machine_id)
 
-    def create_api_key(self, session_id: str, name: str) -> Dict[str, Any]:
-        return self.client.create_api_key(session_id, name)
+    def create_api_key(
+        self,
+        session_id: str,
+        name: str,
+        capabilities: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        return self.client.create_api_key(session_id, name, capabilities)
 
     def list_api_keys(self, session_id: str) -> List[Dict[str, Any]]:
         return self.client.list_api_keys(session_id)

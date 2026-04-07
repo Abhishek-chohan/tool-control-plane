@@ -184,7 +184,6 @@ class Toolplane:
                 name=self.config.session_name,
                 description=self.config.session_description,
                 namespace=self.config.session_namespace,
-                api_key=self.config.api_key,
             )
 
         context = SessionContext(
@@ -236,7 +235,6 @@ class Toolplane:
                 name=name or self.config.session_name,
                 description=description or self.config.session_description,
                 namespace=namespace or self.config.session_namespace,
-                api_key=self.config.api_key,
             )
 
             print(f"Created new session: {created_session_id}")
@@ -418,12 +416,17 @@ class Toolplane:
                 raise ConnectionError("Failed to connect to server")
         return self.machine_manager.drain_machine(session_id, machine_id)
 
-    def create_api_key(self, session_id: str, name: str) -> Dict[str, Any]:
+    def create_api_key(
+        self,
+        session_id: str,
+        name: str,
+        capabilities: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Create a new API key for a session."""
         if not self.connection_manager.connected:
             if not self.connect():
                 raise ConnectionError("Failed to connect to server")
-        return self.session_manager.create_api_key(session_id, name)
+        return self.session_manager.create_api_key(session_id, name, capabilities)
 
     def list_api_keys(self, session_id: str) -> List[Dict[str, Any]]:
         """List active API keys for a session."""

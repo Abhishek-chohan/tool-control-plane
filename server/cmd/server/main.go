@@ -7,11 +7,16 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
+	"toolplane/pkg/model"
+	"toolplane/pkg/observability"
 	"toolplane/pkg/service"
 	"toolplane/pkg/storage"
 	"toolplane/pkg/trace"
@@ -23,6 +28,7 @@ import (
 func main() {
 	port := flag.Int("port", 9001, "Port for gRPC server")
 	enableTrace := flag.Bool("trace-sessions", false, "Log session lifecycle tracing events")
+	metricsListen := flag.String("metrics-listen", "127.0.0.1:0", "HTTP listen address for Prometheus metrics; empty disables the endpoint")
 	flag.Parse()
 
 	cfg, err := loadServerConfig()
@@ -33,11 +39,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var tracer trace.SessionTracer
+	metricsCollector := observability.NewRuntimeMetricsCollector()
+	tracer := trace.SessionTracer(metricsCollector)
 	if *enableTrace {
-		tracer = trace.NewLoggingTracer(log.Default())
-	} else {
-		tracer = trace.NopTracer()
+		tracer = trace.NewMultiTracer(metricsCollector, trace.NewLoggingTracer(log.Default()))
 	}
 
 	store, err := storage.OpenFromEnv(ctx, log.Default())
@@ -65,13 +70,13 @@ func main() {
 	machineSvc := service.NewMachinesService(toolSvc, tracer, store)
 	requestSvc := service.NewRequestsService(toolSvc, machineSvc, tracer, store)
 	tasksSvc := service.NewTasksService(ctx, toolSvc, machineSvc, requestSvc, tracer, store)
+	metricsCollector.Bind(requestSvc, machineSvc, tasksSvc)
 
-	postgresValidator := func(_ context.Context, token string) bool {
-		_, err := sessionSvc.ValidateApiKey(token)
-		return err == nil
+	postgresAuthenticator := func(_ context.Context, token string) (*model.AuthPrincipal, error) {
+		return sessionSvc.AuthenticateAPIKey(token)
 	}
 
-	validateAPIKey, authSummary, err := cfg.buildValidator(postgresValidator)
+	authenticateAPIKey, authSummary, err := cfg.buildAuthenticator(postgresAuthenticator)
 	if err != nil {
 		log.Fatalf("failed to configure auth: %v", err)
 	}
@@ -82,13 +87,15 @@ func main() {
 	}
 
 	serverOptions := make([]grpc.ServerOption, 0, 2)
-	if validateAPIKey != nil {
+	if authenticateAPIKey != nil {
+		authorizer := auth.NewAPIKeyAuthorizer(authenticateAPIKey, tracer)
 		serverOptions = append(serverOptions,
-			grpc.UnaryInterceptor(auth.UnaryAPIKeyInterceptor(validateAPIKey)),
-			grpc.StreamInterceptor(auth.StreamAPIKeyInterceptor(validateAPIKey)),
+			grpc.UnaryInterceptor(authorizer.UnaryInterceptor()),
+			grpc.StreamInterceptor(authorizer.StreamInterceptor()),
 		)
 	}
 	server := grpc.NewServer(serverOptions...)
+	startMetricsServer(ctx, *metricsListen, metricsCollector)
 
 	// graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -115,4 +122,32 @@ func main() {
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("gRPC serve error: %v", err)
 	}
+}
+
+func startMetricsServer(ctx context.Context, listenAddr string, collector *observability.RuntimeMetricsCollector) {
+	if collector == nil || strings.TrimSpace(listenAddr) == "" {
+		return
+	}
+
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		log.Fatalf("failed to listen for metrics: %v", err)
+	}
+
+	server := &http.Server{Handler: collector.Handler()}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("metrics server shutdown error: %v", err)
+		}
+	}()
+
+	go func() {
+		log.Printf("metrics server listening at %v", listener.Addr())
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("metrics serve error: %v", err)
+		}
+	}()
 }

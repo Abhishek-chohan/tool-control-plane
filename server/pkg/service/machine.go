@@ -757,3 +757,28 @@ func (s *MachinesService) MachineLoadInfo(sessionID, machineID string) (int, int
 	}
 	return load, cap
 }
+
+// MachineMetricsSnapshot returns current machine counts for observability scrapes.
+func (s *MachinesService) MachineMetricsSnapshot() (active, draining, inflight int) {
+	s.machinesMutex.RLock()
+	for _, machines := range s.machines {
+		active += len(machines)
+	}
+	s.machinesMutex.RUnlock()
+
+	s.drainMutex.RLock()
+	for _, machineDrains := range s.drainingMachines {
+		draining += len(machineDrains)
+	}
+	s.drainMutex.RUnlock()
+
+	s.capacityMutex.RLock()
+	for _, loads := range s.machineInFlight {
+		for _, load := range loads {
+			inflight += load
+		}
+	}
+	s.capacityMutex.RUnlock()
+
+	return active, draining, inflight
+}

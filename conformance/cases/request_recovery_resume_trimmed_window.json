@@ -1,0 +1,35 @@
+{
+  "id": "request_recovery_resume_trimmed_window",
+  "feature": "request_recovery",
+  "description": "Create a long streaming request, let the retained window trim older chunks, then resume from inside the retained tail and verify ordered replay plus the final marker.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-request-recovery-trimmed-resume-session",
+    "description": "session for request recovery trimmed-window resume fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_recovery_trimmed_resume",
+    "tool_description": "conformance request recovery trimmed-window stream tool",
+    "params": {
+      "prefix": "trimmed",
+      "count": 105
+    },
+    "resume_from_seq": 100
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "final_status_equals": "done",
+    "chunk_count_equals": 100,
+    "start_seq_equals": 6,
+    "next_seq_equals": 106,
+    "resume_ordered_chunks": [
+      "trimmed-101",
+      "trimmed-102",
+      "trimmed-103",
+      "trimmed-104",
+      "trimmed-105"
+    ],
+    "final_marker": true,
+    "final_seq_equals": 106
+  },
+  "tags": ["core", "request", "recovery", "resume", "window"]
+}

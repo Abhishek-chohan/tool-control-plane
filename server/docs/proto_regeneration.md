@@ -51,8 +51,8 @@ The drift workflow installs the following toolchain family so CI and local regen
 - `protoc-gen-go` v1.36.6
 - `protoc-gen-go-grpc` v1.5.1
 - `protoc-gen-grpc-gateway` v2.26.3
-- `grpcio` v1.78.0
-- `grpcio-tools` v1.78.0
+- `grpcio` v1.80.0
+- `grpcio-tools` v1.80.0
 - `protobuf` v6.31.1
 - Node dependencies from `clients/typescript-client/package-lock.json`, including `grpc-tools` and `grpc_tools_node_protoc_ts`
 

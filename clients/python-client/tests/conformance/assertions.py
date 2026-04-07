@@ -247,6 +247,33 @@ def assert_api_key_value_non_empty(
     _assert_non_empty_string(api_key.get("key"), "api_key.key", case_id, transport)
 
 
+def assert_api_key_value_empty(
+    api_key: Dict[str, Any], case_id: str, transport: str
+) -> None:
+    if api_key.get("key", "") != "":
+        raise AssertionError(
+            f"[{transport}] {case_id}: api_key.key must be empty in listed api keys"
+        )
+
+
+def assert_api_key_preview_non_empty(
+    api_key: Dict[str, Any], case_id: str, transport: str
+) -> None:
+    _assert_non_empty_string(
+        api_key.get("key_preview"), "api_key.key_preview", case_id, transport
+    )
+
+
+def assert_api_key_capabilities_equal(
+    api_key: Dict[str, Any], expected: List[str], case_id: str, transport: str
+) -> None:
+    actual = api_key.get("capabilities")
+    if actual != expected:
+        raise AssertionError(
+            f"[{transport}] {case_id}: api_key.capabilities mismatch. expected={expected}, actual={actual}"
+        )
+
+
 def assert_api_key_field_equals(
     api_key: Dict[str, Any],
     field: str,

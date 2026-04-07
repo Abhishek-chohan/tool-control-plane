@@ -128,13 +128,15 @@ These methods use the live request lifecycle on the Go server. They require a re
 The client exposes public wrappers for:
 
 - Sessions: `CreateSession`, `GetSession`, `ListSessions`, `UpdateSession`
-- API keys: `CreateAPIKey`, `ListAPIKeys`, `RevokeAPIKey`
+- API keys: `CreateAPIKey(name string, capabilities ...string)`, `ListAPIKeys`, `RevokeAPIKey`
 - Tools: `RegisterTool`, `ListTools`, `GetToolByID`, `GetToolByName`, `DeleteTool`
 - Machines: `RegisterMachine`, `ListMachines`, `GetMachine`, `UnregisterMachine`, `DrainMachine`
 - Requests: `CreateRequest`, `GetRequest`, `ListRequests`, `CancelRequest`
 - Tasks: `CreateTask`, `GetTask`, `ListTasks`, `CancelTask`
 
 `RegisterTool` binds tools to the current machine ID when one is registered. For brand-new sessions, either register a machine first or embed tool definitions directly in `RegisterMachine(...)`.
+
+`CreateSession` uses the configured transport auth metadata and does not forward the legacy `CreateSession.api_key` request field. `CreateAPIKey` is the only maintained helper that returns secret material. `ListAPIKeys` returns redacted metadata with `Key == ""`, plus `KeyPreview` and `Capabilities`.
 
 ## Examples
 

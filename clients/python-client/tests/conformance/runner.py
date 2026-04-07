@@ -19,10 +19,13 @@ _ensure_python_client_on_path()
 from .adapters.grpc_adapter import GrpcConformanceAdapter
 from .adapters.http_adapter import HttpConformanceAdapter
 from .assertions import (
+    assert_api_key_capabilities_equal,
     assert_api_key_field_equals,
     assert_api_key_id_non_empty,
     assert_api_key_list_contains,
     assert_api_key_list_excludes,
+    assert_api_key_preview_non_empty,
+    assert_api_key_value_empty,
     assert_api_key_value_non_empty,
     assert_chunk_window_edge,
     assert_chunk_window_field_equals,
@@ -468,12 +471,16 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
 
         if feature == "api_key_lifecycle":
             api_key = adapter.create_api_key(
-                session_id, request.get("api_key_name", "conformance-key")
+                session_id,
+                request.get("api_key_name", "conformance-key"),
+                request.get("api_key_capabilities"),
             )
             if expected.get("api_key_id_non_empty", False):
                 assert_api_key_id_non_empty(api_key, case_id, transport)
             if expected.get("api_key_value_non_empty", False):
                 assert_api_key_value_non_empty(api_key, case_id, transport)
+            if expected.get("key_preview_non_empty", False):
+                assert_api_key_preview_non_empty(api_key, case_id, transport)
             if expected.get("session_id_matches_created", False):
                 assert_api_key_field_equals(
                     api_key, "session_id", session_id, case_id, transport
@@ -482,11 +489,37 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                 assert_api_key_field_equals(
                     api_key, "name", expected["name_equals"], case_id, transport
                 )
+            if isinstance(expected.get("capabilities_equal"), list):
+                assert_api_key_capabilities_equal(
+                    api_key,
+                    [str(value) for value in expected["capabilities_equal"]],
+                    case_id,
+                    transport,
+                )
 
             listed_api_keys = adapter.list_api_keys(session_id)
             if expected.get("listed_after_create", False):
                 assert_api_key_list_contains(
                     listed_api_keys, api_key["id"], case_id, transport
+                )
+            listed_api_key = next(
+                (
+                    entry
+                    for entry in listed_api_keys
+                    if isinstance(entry, dict) and entry.get("id") == api_key.get("id")
+                ),
+                None,
+            )
+            if expected.get("listed_key_value_empty", False) and listed_api_key:
+                assert_api_key_value_empty(listed_api_key, case_id, transport)
+            if expected.get("listed_key_preview_non_empty", False) and listed_api_key:
+                assert_api_key_preview_non_empty(listed_api_key, case_id, transport)
+            if isinstance(expected.get("listed_capabilities_equal"), list) and listed_api_key:
+                assert_api_key_capabilities_equal(
+                    listed_api_key,
+                    [str(value) for value in expected["listed_capabilities_equal"]],
+                    case_id,
+                    transport,
                 )
 
             revoke_success = adapter.revoke_api_key(session_id, api_key["id"])

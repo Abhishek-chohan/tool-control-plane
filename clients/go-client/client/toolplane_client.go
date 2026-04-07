@@ -614,7 +614,6 @@ func (c *ToolplaneClient) CreateSession(name, description, namespace string) (*p
 		UserId:      c.userID,
 		Name:        name,
 		Description: description,
-		ApiKey:      c.apiKey,
 		SessionId:   sessionID,
 		Namespace:   namespace,
 	}
@@ -702,7 +701,8 @@ func (c *ToolplaneClient) UpdateSession(name, description, namespace string) (*p
 }
 
 // CreateAPIKey creates an API key for the current session (gRPC only).
-func (c *ToolplaneClient) CreateAPIKey(name string) (*pb.ApiKey, error) {
+// The returned secret is only populated on creation; ListAPIKeys returns metadata.
+func (c *ToolplaneClient) CreateAPIKey(name string, capabilities ...string) (*pb.ApiKey, error) {
 	if c.protocol != ProtocolGRPC {
 		return nil, fmt.Errorf("api key creation only supported with gRPC protocol")
 	}
@@ -716,8 +716,9 @@ func (c *ToolplaneClient) CreateAPIKey(name string) (*pb.ApiKey, error) {
 	}
 
 	request := &pb.CreateApiKeyRequest{
-		SessionId: sessionID,
-		Name:      name,
+		SessionId:    sessionID,
+		Name:         name,
+		Capabilities: append([]string(nil), capabilities...),
 	}
 
 	ctx, cancel := c.grpcContext(context.Background(), defaultGRPCCallTimeout)

@@ -16,6 +16,7 @@ cd "$(dirname "$0")"
 : "${TOOLPLANE_PROXY_ALLOWED_ORIGINS:=http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080}"
 : "${TOOLPLANE_GRPC_PORT:=9001}"
 : "${ToolplaneHTTP_PORT:=8080}"
+: "${TOOLPLANE_METRICS_LISTEN:=127.0.0.1:9102}"
 
 export TOOLPLANE_ENV_MODE
 export TOOLPLANE_AUTH_MODE
@@ -25,6 +26,7 @@ export TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND
 export TOOLPLANE_PROXY_ALLOWED_ORIGINS
 export TOOLPLANE_GRPC_PORT
 export ToolplaneHTTP_PORT
+export TOOLPLANE_METRICS_LISTEN
 
 echo "Building server and gateway..."
 mkdir -p bin
@@ -39,6 +41,7 @@ echo "  TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND=${TOOLPLANE_PROXY_ALLOW_INSECURE_
 echo "  TOOLPLANE_PROXY_ALLOWED_ORIGINS=${TOOLPLANE_PROXY_ALLOWED_ORIGINS}"
 echo "  TOOLPLANE_GRPC_PORT=${TOOLPLANE_GRPC_PORT}"
 echo "  ToolplaneHTTP_PORT=${ToolplaneHTTP_PORT}"
+echo "  TOOLPLANE_METRICS_LISTEN=${TOOLPLANE_METRICS_LISTEN}"
 echo
 echo "Use server/.env.example and server/docs/local-development.md to customize this bootstrap."
 

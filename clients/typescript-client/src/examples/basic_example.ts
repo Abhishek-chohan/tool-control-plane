@@ -80,7 +80,7 @@ async function basicExample() {
     console.log(`   Namespace: ${sessionDetails.namespace}`);
     console.log(`   Created: ${sessionDetails.createdAt}\n`);
 
-    console.log('Live execution still requires a provider loop to claim requests. See the conformance and integration flows for a runnable end-to-end example.');
+    console.log('Live execution can now be backed by the maintained TypeScript provider runtime. See src/examples/provider_runtime_example.ts for the end-to-end provider flow.');
 
   } catch (error) {
     console.error('❌ Error:', error);

@@ -486,10 +486,56 @@ func (s *TasksService) recordTaskEvent(task *model.Task, event trace.SessionEven
 	}
 	s.tracer.Record(trace.SessionEvent{
 		SessionID: task.SessionID,
+		RequestID: requestIDFromMetadata(metadata),
+		TaskID:    task.ID,
 		Event:     event,
 		Timestamp: timestamp,
 		Metadata:  eventMetadata,
 	})
+}
+
+// TaskMetricsSnapshot returns current task counts for observability scrapes.
+func (s *TasksService) TaskMetricsSnapshot() (pending, running, completed, failed, cancelled, deadLetter int) {
+	s.tasksMutex.RLock()
+	defer s.tasksMutex.RUnlock()
+
+	for _, task := range s.tasks {
+		if task == nil {
+			continue
+		}
+		switch task.Status {
+		case model.StatusPending:
+			pending++
+		case model.StatusRunning:
+			running++
+		case model.StatusCompleted:
+			completed++
+		case model.StatusFailed:
+			failed++
+		case model.StatusCancelled:
+			cancelled++
+		}
+		if task.DeadLetter {
+			deadLetter++
+		}
+	}
+
+	return pending, running, completed, failed, cancelled, deadLetter
+}
+
+func requestIDFromMetadata(metadata map[string]any) string {
+	if len(metadata) == 0 {
+		return ""
+	}
+	value, ok := metadata["requestID"]
+	if !ok {
+		return ""
+	}
+	requestID, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return requestID
 }
 
 // CleanupOldTasks removes tasks older than a certain age
