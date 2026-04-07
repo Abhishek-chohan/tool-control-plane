@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"toolplane-go-client/client"
 	clientpb "toolplane-go-client/proto"
@@ -14,7 +15,7 @@ func main() {
 	fmt.Println("Maintained path: gRPC control-plane helpers")
 
 	serverHost := getEnv("TOOLPLANE_SERVER_HOST", "localhost")
-	serverPort := 9001
+	serverPort := getEnvInt("TOOLPLANE_SERVER_PORT", 9001)
 	sessionID := getEnv("TOOLPLANE_SESSION_ID", "go-client-session")
 	userID := getEnv("TOOLPLANE_USER_ID", "go-client-user")
 	apiKey := getEnv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key")
@@ -26,6 +27,7 @@ func main() {
 		sessionID,
 		userID,
 		apiKey,
+		buildClientOptions()...,
 	)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -144,4 +146,30 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
+
+func buildClientOptions() []client.ClientOption {
+	if getEnv("TOOLPLANE_USE_TLS", "") == "" {
+		return nil
+	}
+	if getEnv("TOOLPLANE_USE_TLS", "false") != "true" {
+		return nil
+	}
+
+	return []client.ClientOption{
+		client.WithGRPCTLS(
+			getEnv("TOOLPLANE_TLS_CA_CERT_PATH", ""),
+			getEnv("TOOLPLANE_TLS_SERVER_NAME", ""),
+		),
+	}
 }

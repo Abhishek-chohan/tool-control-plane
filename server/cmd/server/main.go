@@ -29,11 +29,20 @@ func main() {
 	port := flag.Int("port", 9001, "Port for gRPC server")
 	enableTrace := flag.Bool("trace-sessions", false, "Log session lifecycle tracing events")
 	metricsListen := flag.String("metrics-listen", "127.0.0.1:0", "HTTP listen address for Prometheus metrics; empty disables the endpoint")
+	migrateOnly := flag.Bool("migrate-only", false, "Validate config, initialize storage, run migrations, then exit")
+	tlsCertFile := flag.String("tls-cert-file", strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_CERT_FILE")), "Path to a PEM-encoded gRPC TLS certificate; empty disables TLS outside production")
+	tlsKeyFile := flag.String("tls-key-file", strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_KEY_FILE")), "Path to a PEM-encoded gRPC TLS private key; empty disables TLS outside production")
 	flag.Parse()
 
 	cfg, err := loadServerConfig()
 	if err != nil {
 		log.Fatalf("invalid server configuration: %v", err)
+	}
+	// migrate-only does not start the gRPC server, so transport settings are not required.
+	if !*migrateOnly {
+		if err := validateGRPCTLSSettings(cfg.environment, *tlsCertFile, *tlsKeyFile); err != nil {
+			log.Fatalf("invalid gRPC TLS configuration: %v", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -63,6 +72,13 @@ func main() {
 			}
 		}()
 	}
+	if *migrateOnly {
+		if store == nil {
+			log.Fatalf("migrate-only requires Postgres-backed storage")
+		}
+		log.Printf("database schema ready (env=%s storage=postgres)", cfg.environment)
+		return
+	}
 
 	// initialize your services
 	sessionSvc := service.NewSessionsService(tracer, store)
@@ -86,7 +102,10 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	serverOptions := make([]grpc.ServerOption, 0, 2)
+	serverOptions, transportSummary, err := grpcServerTransport(*tlsCertFile, *tlsKeyFile)
+	if err != nil {
+		log.Fatalf("failed to configure gRPC transport: %v", err)
+	}
 	if authenticateAPIKey != nil {
 		authorizer := auth.NewAPIKeyAuthorizer(authenticateAPIKey, tracer)
 		serverOptions = append(serverOptions,
@@ -118,7 +137,7 @@ func main() {
 	proto.RegisterRequestsServiceServer(server, adapter)
 	proto.RegisterTasksServiceServer(server, adapter)
 
-	log.Printf("gRPC server listening at %v (env=%s auth=%s)", lis.Addr(), cfg.environment, authSummary)
+	log.Printf("gRPC server listening at %v (env=%s auth=%s transport=%s)", lis.Addr(), cfg.environment, authSummary, transportSummary)
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("gRPC serve error: %v", err)
 	}

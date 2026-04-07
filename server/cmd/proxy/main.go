@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"log"
@@ -15,8 +14,6 @@ import (
 	"github.com/sony/gobreaker"
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
@@ -285,12 +282,9 @@ func main() {
 	rateLimiter := NewRateLimiterManager(ctx, rate.Limit(*apiRate), *apiBurst, rate.Limit(*ipRate), *ipBurst)
 	throttleTracker := NewThrottleTracker()
 
-	transportCredentials := credentials.TransportCredentials(insecure.NewCredentials())
-	if !cfg.allowInsecureBackend {
-		transportCredentials = credentials.NewTLS(&tls.Config{
-			MinVersion: tls.VersionTLS12,
-			ServerName: cfg.backendTLSServerName,
-		})
+	transportCredentials, err := backendTransportCredentials(cfg)
+	if err != nil {
+		log.Fatalf("invalid backend TLS configuration: %v", err)
 	}
 
 	// Setup gRPC connection options with backpressure controls

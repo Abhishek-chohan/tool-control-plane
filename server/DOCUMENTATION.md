@@ -9,18 +9,26 @@ This document explains the current server behavior that is implemented in code t
 - Runtime behavior lives in the service-owned files under `server/pkg/service/`.
 - Request and task runtime state is richer than the public proto messages; this document calls out both the public contract and the internal behavior.
 
+Toolplane earns its control-plane overhead when remote tools need more than a thin transport wrapper: explicit provider ownership, request recovery, bounded stream replay, and deploy-safe drain. The maintained wedge in this repo is the proof-backed runtime behavior described below, not generic RPC reachability.
+
 ## Boundary
 
 What this is:
 
-- The runtime documentation for Toolplane's distributed tool-execution control plane.
+- The runtime documentation for Toolplane's durable remote tool-execution control plane.
 - The place to understand session lifecycle, provider registration, request execution, streaming or recovery, machine drain, and task orchestration.
 
 What this is not:
 
 - Not a generic RPC tutorial server.
+- Not a thin model-SDK wrapper around local tool calls.
 - Not the place to infer equal support across every SDK; use `SDK_MAP.md` for that.
-- Not an MCP protocol specification. MCP is a comparison point and possible adapter target, not the core protocol documented here.
+- Not an MCP protocol specification or a one-for-one MCP replacement. MCP is a comparison point and possible adapter target, not the core protocol documented here.
+
+## Adoption Threshold
+
+- Reach for Toolplane when remote tool work is queue-backed, streaming, restart-sensitive, or deploy-sensitive.
+- Direct tool calling is simpler when the tool and the caller share one short-lived process and failure domain.
 
 ## Release Gate
 
@@ -31,6 +39,8 @@ cd server && make release-gate
 ```
 
 See `server/docs/local-development.md` for the development env contract and `.github/workflows/release-gate.yml` for the CI workflow.
+
+The maintained production topology, bootstrap flow, migration order, drain sequence, rollback contract, and validation trail live separately in `server/docs/reference-deployment.md`.
 
 The maintained operator-facing observability contract is summarized separately in `server/docs/observability.md` so signals, identifiers, redaction rules, and playbooks can be reviewed without reading the runtime implementation files directly.
 
@@ -132,7 +142,7 @@ The maintained provider lifecycle is now an explicit runtime surface rather than
 7. Honor cancellation, lease-expiry, and drain semantics owned by the server runtime.
 8. Stop the provider runtime so heartbeats and polling terminate cleanly.
 
-Consumer-facing `connect()` and `create_session()` calls do not imply these provider responsibilities. Python currently ships the only maintained provider runtime harness. Go and TypeScript expose narrower direct wrappers for session, tool, machine, request, and task operations, but they do not yet ship a maintained claim-and-submit worker loop.
+Consumer-facing `connect()` and `create_session()` calls do not imply these provider responsibilities. Python and TypeScript now ship maintained provider runtime surfaces. Python remains the richest provider path across gRPC and the maintained HTTP gateway, TypeScript ships the maintained gRPC provider loop, and Go remains a narrower lifecycle client without a maintained claim-and-submit worker loop.
 
 ## Runtime Map
 

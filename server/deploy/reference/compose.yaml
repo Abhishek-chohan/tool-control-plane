@@ -1,0 +1,159 @@
+name: toolplane-reference
+
+x-toolplane-image: &toolplane-image
+  build:
+    context: ../../
+    dockerfile: Dockerfile
+  image: ${TOOLPLANE_IMAGE:-toolplane-reference:latest}
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-toolplane}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toolplane}
+  POSTGRES_DB: ${POSTGRES_DB:-toolplane}
+
+x-toolplane-db-env: &toolplane-db-env
+  TOOLPLANE_STORAGE_MODE: "postgres"
+  TOOLPLANE_DATABASE_URL: ${TOOLPLANE_DATABASE_URL:-postgres://toolplane:toolplane@postgres:5432/toolplane?sslmode=disable}
+
+services:
+  postgres:
+    image: postgres:16
+    environment: *postgres-env
+    ports:
+      - "${TOOLPLANE_POSTGRES_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - toolplane-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-toolplane} -d ${POSTGRES_DB:-toolplane}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *toolplane-image
+    command: ["/app/server", "--migrate-only"]
+    restart: "no"
+    environment:
+      <<: *toolplane-db-env
+      TOOLPLANE_ENV_MODE: "production"
+      TOOLPLANE_AUTH_MODE: "postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  server:
+    <<: *toolplane-image
+    command:
+      [
+        "/app/server",
+        "--port",
+        "9001",
+        "--metrics-listen",
+        ":9102",
+        "--tls-cert-file",
+        "/certs/server.crt",
+        "--tls-key-file",
+        "/certs/server.key",
+      ]
+    restart: unless-stopped
+    environment:
+      <<: *toolplane-db-env
+      TOOLPLANE_ENV_MODE: "production"
+      TOOLPLANE_AUTH_MODE: "postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${TOOLPLANE_GRPC_PUBLISHED_PORT:-9001}:9001"
+      - "${TOOLPLANE_METRICS_PUBLISHED_PORT:-9102}:9102"
+    volumes:
+      - ${TOOLPLANE_SERVER_TLS_CERT_PATH:-./certs/server.crt}:/certs/server.crt:ro
+      - ${TOOLPLANE_SERVER_TLS_KEY_PATH:-./certs/server.key}:/certs/server.key:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9102/metrics >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  gateway:
+    <<: *toolplane-image
+    command:
+      [
+        "/app/toolplane-gateway",
+        "--listen",
+        ":8080",
+        "--backend",
+        "server:9001",
+        "--api-rate",
+        "${TOOLPLANE_PROXY_API_RATE:-25}",
+        "--api-burst",
+        "${TOOLPLANE_PROXY_API_BURST:-50}",
+        "--ip-rate",
+        "${TOOLPLANE_PROXY_IP_RATE:-100}",
+        "--ip-burst",
+        "${TOOLPLANE_PROXY_IP_BURST:-200}",
+      ]
+    restart: unless-stopped
+    environment:
+      TOOLPLANE_ENV_MODE: "production"
+      TOOLPLANE_PROXY_ALLOWED_ORIGINS: ${TOOLPLANE_PROXY_ALLOWED_ORIGINS:-https://app.example.com}
+      TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "0"
+      TOOLPLANE_PROXY_BACKEND_TLS_SERVER_NAME: ${TOOLPLANE_PROXY_BACKEND_TLS_SERVER_NAME:-server}
+      TOOLPLANE_PROXY_BACKEND_TLS_CA_FILE: "/certs/ca.crt"
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "${TOOLPLANE_HTTP_PUBLISHED_PORT:-8080}:8080"
+    volumes:
+      - ${TOOLPLANE_PROXY_BACKEND_TLS_CA_PATH:-./certs/ca.crt}:/certs/ca.crt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  bootstrap-server:
+    <<: *toolplane-image
+    profiles: ["bootstrap"]
+    command: ["/app/server", "--port", "9001", "--metrics-listen", ":9102"]
+    restart: "no"
+    environment:
+      <<: *toolplane-db-env
+      TOOLPLANE_ENV_MODE: "development"
+      TOOLPLANE_AUTH_MODE: "fixed"
+      TOOLPLANE_AUTH_FIXED_API_KEY: ${TOOLPLANE_BOOTSTRAP_FIXED_API_KEY:-replace-this-one-time-bootstrap-token}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9102/metrics >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  bootstrap-gateway:
+    <<: *toolplane-image
+    profiles: ["bootstrap"]
+    command: ["/app/toolplane-gateway", "--listen", ":8080", "--backend", "bootstrap-server:9001"]
+    restart: "no"
+    environment:
+      TOOLPLANE_ENV_MODE: "development"
+      TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+    depends_on:
+      bootstrap-server:
+        condition: service_healthy
+    ports:
+      - "${TOOLPLANE_BOOTSTRAP_HTTP_PUBLISHED_PORT:-18080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  toolplane-postgres:

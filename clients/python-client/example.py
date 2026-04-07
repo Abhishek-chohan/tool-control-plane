@@ -18,6 +18,9 @@ from toolplane.toolkits.swe.swe_toolkit import get_swe_toolkit
 config = {
     "server_host": os.getenv("TOOLPLANE_SERVER_HOST", "localhost"),
     "server_port": int(os.getenv("TOOLPLANE_SERVER_PORT", "9001")),
+    "use_tls": os.getenv("TOOLPLANE_USE_TLS", "false").lower() == "true",
+    "tls_ca_cert_path": os.getenv("TOOLPLANE_TLS_CA_CERT_PATH") or None,
+    "tls_server_name": os.getenv("TOOLPLANE_TLS_SERVER_NAME") or None,
     "user_id": os.getenv("TOOLPLANE_USER_ID", "toolkit-integration-user"),
     "api_key": os.getenv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key"),
     "session_id": os.getenv("TOOLPLANE_SESSION_ID", ""),
@@ -42,6 +45,9 @@ if not config["session_id"]:
 client = Toolplane(
     server_host=config["server_host"],
     server_port=config["server_port"],
+    use_tls=config["use_tls"],
+    tls_ca_cert_path=config["tls_ca_cert_path"],
+    tls_server_name=config["tls_server_name"],
     user_id=config["user_id"],
     api_key=config["api_key"],
     session_ids=[config["session_id"]],

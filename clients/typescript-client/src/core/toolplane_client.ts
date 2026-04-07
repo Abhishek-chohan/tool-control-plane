@@ -1,4 +1,5 @@
 import * as grpc from '@grpc/grpc-js';
+import * as fs from 'node:fs';
 import { v4 as uuidv4 } from 'uuid';
 
 import {
@@ -7,6 +8,7 @@ import {
   ClientProtocol,
   ConnectionStatus,
   CreateSessionRequest,
+  GRPCTLSConfig,
   Machine,
   ProviderRuntimeOptions,
   RegisterToolOptions,
@@ -145,12 +147,52 @@ export class ToolplaneClient {
     }
 
     this.grpcAddress = `${this.config.serverHost}:${this.config.serverPort}`;
-    const credentials = grpc.credentials.createInsecure();
-    this.toolClient = new ToolServiceClient(this.grpcAddress, credentials);
-    this.sessionClient = new SessionsServiceClient(this.grpcAddress, credentials);
-    this.machineClient = new MachinesServiceClient(this.grpcAddress, credentials);
-    this.requestsClient = new RequestsServiceClient(this.grpcAddress, credentials);
-    this.tasksClient = new TasksServiceClient(this.grpcAddress, credentials);
+    const credentials = this.createChannelCredentials();
+    const channelOptions = this.channelOptions();
+    this.toolClient = new ToolServiceClient(this.grpcAddress, credentials, channelOptions);
+    this.sessionClient = new SessionsServiceClient(this.grpcAddress, credentials, channelOptions);
+    this.machineClient = new MachinesServiceClient(this.grpcAddress, credentials, channelOptions);
+    this.requestsClient = new RequestsServiceClient(this.grpcAddress, credentials, channelOptions);
+    this.tasksClient = new TasksServiceClient(this.grpcAddress, credentials, channelOptions);
+  }
+
+  private isTLSEnabled(): boolean {
+    const tlsConfig = this.config.tls;
+    if (!tlsConfig) {
+      return false;
+    }
+
+    return Boolean(
+      tlsConfig.enabled
+      || tlsConfig.caCertPath?.trim()
+      || tlsConfig.serverName?.trim(),
+    );
+  }
+
+  private createChannelCredentials(): grpc.ChannelCredentials {
+    if (!this.isTLSEnabled()) {
+      return grpc.credentials.createInsecure();
+    }
+
+    const caCertPath = this.config.tls?.caCertPath?.trim();
+    const caCert = caCertPath ? fs.readFileSync(caCertPath) : undefined;
+    return grpc.credentials.createSsl(caCert);
+  }
+
+  private channelOptions(): grpc.ChannelOptions {
+    if (!this.isTLSEnabled()) {
+      return {};
+    }
+
+    const serverName = this.config.tls?.serverName?.trim();
+    if (!serverName) {
+      return {};
+    }
+
+    return {
+      'grpc.ssl_target_name_override': serverName,
+      'grpc.default_authority': serverName,
+    };
   }
 
   async connect(): Promise<void> {
@@ -819,6 +861,7 @@ export class ToolplaneClient {
     sessionId: string,
     userId: string,
     apiKey?: string,
+    tls?: GRPCTLSConfig,
   ): ToolplaneClient {
     return new ToolplaneClient({
       protocol: ClientProtocol.GRPC,
@@ -827,6 +870,7 @@ export class ToolplaneClient {
       sessionId,
       userId,
       apiKey,
+      tls,
     });
   }
 

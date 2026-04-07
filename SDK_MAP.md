@@ -1,6 +1,6 @@
 # SDK Map
 
-This file is the fastest contract-to-wrapper map from `server/proto/service.proto` to the current Python, Go, and TypeScript SDK surfaces. Use it to trace maintained wrappers, support labels, and validation scope.
+This file maps `server/proto/service.proto` to the maintained Python, Go, and TypeScript SDK surfaces. Toolplane is worth adopting for durable remote tools, not as a thin wrapper catalog, so use this map to see which SDKs actually own the consumer, provider, and admin flows that make request recovery, provider drain, and session-scoped policy legible.
 
 ## Support Labels
 
@@ -17,6 +17,8 @@ RPCs fall into three scope categories that explain why some wrappers are Python-
 - **provider**: tool registration, request claiming, heartbeat, and result submission. These RPCs are exercised through the explicit maintained provider runtimes in Python and TypeScript. Go exposes selected direct registration wrappers but does not ship a maintained provider runtime harness.
 - **admin**: session administration helpers such as bulk delete, stats, token refresh, and invalidation. These RPCs are currently exposed only in the Python SDK.
 
+These categories are the maintained platform boundary: consumer flows invoke and inspect remote work, provider flows own machine-backed execution and drain behavior, and admin flows manage session-scoped trust and lifecycle policy.
+
 ## Important Caveats
 
 - `server/proto/service.proto` is the canonical contract.
@@ -26,6 +28,7 @@ RPCs fall into three scope categories that explain why some wrappers are Python-
 - `clients/typescript-client/` is the maintained JavaScript-family parity surface. Its HTTP adapter under `tests/conformance/` exists only to exercise the maintained HTTP gateway against shared fixtures; it is not a public HTTP SDK surface.
 - `/rpc` remains a server-side removal-path surface documented in `server/docs/rpc-retirement.md`; it stays outside maintained SDK support and parity.
 - `clients/typescript-mcp-adapter/` is an optional stdio adapter for one Toolplane session. Keep it outside the SDK parity tables.
+- Treat this map as a guide to the maintained durable-remote-tool surface, not as a generic wrapper inventory.
 
 ## Provider Mode Support Decision
 
@@ -41,7 +44,7 @@ RPCs fall into three scope categories that explain why some wrappers are Python-
 
 ### `/rpc` Reference Note
 
-The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during the documented removal path to `v2.0.0`. It sits outside the maintained parity story, stays out of required CI, and should not be used as the basis for new SDK development. Use `server/docs/rpc-retirement.md` for the removal path and `.plans/roadmap-latest/tier-0-rpc-inventory.md` for the historical inventory.
+The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during the documented removal path to `v2.0.0`. It sits outside the maintained parity story, stays out of required CI, and should not be used as the basis for new SDK development. Use `server/docs/rpc-retirement.md` for the removal path.
 
 ## SDK Reality Snapshot
 

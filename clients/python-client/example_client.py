@@ -20,6 +20,9 @@ USER_ID = os.getenv("TOOLPLANE_USER_ID", "example-provider")
 API_KEY = os.getenv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key")
 SERVER_HOST = os.getenv("TOOLPLANE_SERVER_HOST", "localhost")
 SERVER_PORT = int(os.getenv("TOOLPLANE_SERVER_PORT", "9001"))
+USE_TLS = os.getenv("TOOLPLANE_USE_TLS", "false").lower() == "true"
+TLS_CA_CERT_PATH = os.getenv("TOOLPLANE_TLS_CA_CERT_PATH") or None
+TLS_SERVER_NAME = os.getenv("TOOLPLANE_TLS_SERVER_NAME") or None
 SESSION_NAME = os.getenv("TOOLPLANE_SESSION_NAME", "Python Control Plane Example")
 SESSION_DESCRIPTION = os.getenv(
     "TOOLPLANE_SESSION_DESCRIPTION",
@@ -40,6 +43,9 @@ def main():
     client = Toolplane(
         server_host=SERVER_HOST,
         server_port=SERVER_PORT,
+        use_tls=USE_TLS,
+        tls_ca_cert_path=TLS_CA_CERT_PATH,
+        tls_server_name=TLS_SERVER_NAME,
         api_key=API_KEY,
         user_id=USER_ID,
         session_name=SESSION_NAME,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,13 +28,15 @@ func main() {
 
 func testConcurrentSessionReads() {
 	serverHost := getEnv("TOOLPLANE_SERVER_HOST", "localhost")
+	serverPort := getEnvInt("TOOLPLANE_SERVER_PORT", 9001)
 	toolplaneClient, err := client.NewToolplaneClient(
 		client.ProtocolGRPC,
 		serverHost,
-		9001,
+		serverPort,
 		"",
 		"concurrency-test-user",
 		getEnv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key"),
+		buildClientOptions()...,
 	)
 	if err != nil {
 		log.Printf("Failed to create gRPC client: %v", err)
@@ -85,13 +88,15 @@ func testConcurrentSessionReads() {
 
 func testSessionManagement() {
 	serverHost := getEnv("TOOLPLANE_SERVER_HOST", "localhost")
+	serverPort := getEnvInt("TOOLPLANE_SERVER_PORT", 9001)
 	toolplaneClient, err := client.NewToolplaneClient(
 		client.ProtocolGRPC,
 		serverHost,
-		9001,
+		serverPort,
 		"",
 		"session-test-user",
 		getEnv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key"),
+		buildClientOptions()...,
 	)
 	if err != nil {
 		log.Printf("Failed to create gRPC client: %v", err)
@@ -167,6 +172,7 @@ func testBoundaryErrors() {
 		"",
 		"error-test-user",
 		getEnv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key"),
+		buildClientOptions()...,
 	)
 	if err != nil {
 		log.Printf("Failed to create invalid-host client: %v", err)
@@ -189,4 +195,30 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return defaultValue
+}
+
+func buildClientOptions() []client.ClientOption {
+	if getEnv("TOOLPLANE_USE_TLS", "") == "" {
+		return nil
+	}
+	if getEnv("TOOLPLANE_USE_TLS", "false") != "true" {
+		return nil
+	}
+
+	return []client.ClientOption{
+		client.WithGRPCTLS(
+			getEnv("TOOLPLANE_TLS_CA_CERT_PATH", ""),
+			getEnv("TOOLPLANE_TLS_SERVER_NAME", ""),
+		),
+	}
 }

@@ -1,16 +1,31 @@
 import { ToolplaneClient } from '../core/toolplane_client';
 
+function readTlsConfigFromEnv() {
+  const useTLS = (process.env.TOOLPLANE_USE_TLS || '').toLowerCase() === 'true';
+  if (!useTLS) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    caCertPath: process.env.TOOLPLANE_TLS_CA_CERT_PATH || undefined,
+    serverName: process.env.TOOLPLANE_TLS_SERVER_NAME || undefined,
+  };
+}
+
 async function providerRuntimeExample() {
   const serverHost = process.env.TOOLPLANE_SERVER_HOST || 'localhost';
+  const serverPort = Number(process.env.TOOLPLANE_SERVER_PORT || 9001);
   const apiKey = process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key';
   const userId = process.env.TOOLPLANE_USER_ID || 'provider-example-user';
 
   const client = ToolplaneClient.createGRPCClient(
     serverHost,
-    9001,
+    serverPort,
     '',
     userId,
     apiKey,
+    readTlsConfigFromEnv(),
   );
 
   await client.connect();
