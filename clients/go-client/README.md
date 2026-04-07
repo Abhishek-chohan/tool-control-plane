@@ -1,6 +1,12 @@
 # Go Toolplane Client
 
-This Go package is a supported secondary SDK for Toolplane's remote tool-execution control plane. The canonical contract is `server/proto/service.proto`. The maintained Go surface is gRPC-only and centers on session, tool, machine, request, and task lifecycle helpers.
+This Go package is a supported secondary SDK for Toolplane's durable remote tool-execution control plane. Use it when Go code needs the maintained gRPC control-plane flow for session, tool, machine, request, and task lifecycle helpers, but not the full provider worker loop. The canonical contract is `server/proto/service.proto`.
+
+## When To Start Here
+
+- Your Go code needs consumer-side or operator-side access to the maintained gRPC lifecycle.
+- You want session, machine, tool, request, and task helpers in Go while keeping the server-owned runtime semantics intact.
+- You do not need a maintained claim-and-submit provider worker loop in Go; for that path, use Python or TypeScript.
 
 ## Support Status
 
@@ -26,7 +32,7 @@ go mod tidy
 
 ## Canonical Flow
 
-The canonical end-to-end path for Toolplane is: register a provider, create a session, execute a request, stream or recover results, and drain the machine. The Python SDK has the richest working examples of this flow. The Go examples below follow the same maintained gRPC path at a narrower scope.
+The canonical end-to-end path for Toolplane is: register a provider, create a session, execute a request, stream or recover results, and drain the machine. The Python and TypeScript SDKs ship the maintained provider runtimes for that flow. The Go examples below follow the same request, recovery, and drain model at a narrower consumer-side scope.
 
 ## Quick Start
 
@@ -49,6 +55,7 @@ func main() {
         "my-session",
         "my-user",
         "toolplane-conformance-fixture-key",
+        client.WithGRPCTLS("../../server/deploy/reference/certs/ca.crt", "localhost"),
     )
     if err != nil {
         log.Fatal(err)
@@ -95,12 +102,15 @@ func main() {
 ### Client Creation
 
 ```go
-NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort int, sessionID, userID, apiKey string) (*ToolplaneClient, error)
+NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort int, sessionID, userID, apiKey string, opts ...ClientOption) (*ToolplaneClient, error)
 ```
 
 - `protocol` must be `client.ProtocolGRPC`; any other value returns an error.
 - `serverHost` and `serverPort` identify the gRPC endpoint.
 - `sessionID`, `userID`, and `apiKey` seed the client context used by outgoing RPCs.
+- `opts` lets callers enable TLS without breaking existing plaintext callers. Use `client.WithGRPCTLS(caCertPath, serverName)` for the reference deployment's TLS endpoint.
+
+For the reference deployment, set `TOOLPLANE_SERVER_PORT=9001`, `TOOLPLANE_USE_TLS=true`, `TOOLPLANE_TLS_CA_CERT_PATH=/path/to/ca.crt`, and `TOOLPLANE_TLS_SERVER_NAME=localhost` before running the maintained examples.
 
 ### Connectivity
 

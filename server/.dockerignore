@@ -1,0 +1,14 @@
+.proto-venv/
+.pytest_cache/
+bin/
+client_protos/
+deploy/
+docs/
+proto/googleapis/
+ARCHITECTURE.md
+DOCUMENTATION.md
+.env.example
+generate_client_protos.sh
+run.sh
+scripts/
+start.sh

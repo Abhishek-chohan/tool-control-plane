@@ -29,6 +29,14 @@ go.work.sum
 !**/.env.*.example
 *.local
 
+# Local TLS and certificate materials
+*.crt
+*.csr
+*.ext
+*.key
+*.srl
+server/deploy/reference/certs/toolplane-reference-it-*/
+
 # Node.js dependencies
 node_modules/
 .npm/

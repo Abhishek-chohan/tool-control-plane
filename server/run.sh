@@ -5,6 +5,7 @@ set -euo pipefail
 # Builds the server/gateway binaries and launches the stack with explicit
 # env-driven defaults. Override any variable before running this script.
 # See server/docs/local-development.md for the full env contract.
+# The maintained production topology lives in server/docs/reference-deployment.md.
 
 cd "$(dirname "$0")"
 

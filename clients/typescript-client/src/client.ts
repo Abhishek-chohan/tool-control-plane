@@ -2,13 +2,26 @@
 
 import { ToolplaneClient } from './core/toolplane_client';
 
+function readTlsConfigFromEnv() {
+  const useTLS = (process.env.TOOLPLANE_USE_TLS || '').toLowerCase() === 'true';
+  if (!useTLS) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    caCertPath: process.env.TOOLPLANE_TLS_CA_CERT_PATH || undefined,
+    serverName: process.env.TOOLPLANE_TLS_SERVER_NAME || undefined,
+  };
+}
+
 async function main() {
   console.log('=== TypeScript Toolplane Client ===');
   console.log('Maintained path: gRPC control-plane helpers');
 
   // Get server configuration from environment or use defaults
   const serverHost = process.env.TOOLPLANE_SERVER_HOST || 'localhost';
-  const grpcPort = 9001;
+  const grpcPort = Number(process.env.TOOLPLANE_SERVER_PORT || 9001);
   const sessionId = process.env.TOOLPLANE_SESSION_ID || 'typescript-client-session';
   const userId = process.env.TOOLPLANE_USER_ID || 'typescript-client-user';
   const apiKey = process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key';
@@ -16,7 +29,7 @@ async function main() {
   const serverPort = grpcPort;
   console.log(`Using maintained gRPC control-plane protocol on port ${serverPort}`);
 
-  const client = ToolplaneClient.createGRPCClient(serverHost, serverPort, sessionId, userId, apiKey);
+  const client = ToolplaneClient.createGRPCClient(serverHost, serverPort, sessionId, userId, apiKey, readTlsConfigFromEnv());
 
   try {
     // Connect to server

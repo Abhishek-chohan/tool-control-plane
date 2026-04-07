@@ -1,21 +1,36 @@
 import { ToolplaneClient } from '../core/toolplane_client';
 
+function readTlsConfigFromEnv() {
+  const useTLS = (process.env.TOOLPLANE_USE_TLS || '').toLowerCase() === 'true';
+  if (!useTLS) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    caCertPath: process.env.TOOLPLANE_TLS_CA_CERT_PATH || undefined,
+    serverName: process.env.TOOLPLANE_TLS_SERVER_NAME || undefined,
+  };
+}
+
 /**
  * Basic example demonstrating the maintained gRPC control-plane path.
  * This is the recommended first-touch example for the TypeScript SDK.
  */
 async function basicExample() {
   const serverHost = process.env.TOOLPLANE_SERVER_HOST || 'localhost';
+  const serverPort = Number(process.env.TOOLPLANE_SERVER_PORT || 9001);
   const apiKey = process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key';
   const userId = process.env.TOOLPLANE_USER_ID || 'example-user';
   console.log('=== TypeScript Toolplane gRPC Example ===\n');
 
   const grpcClient = ToolplaneClient.createGRPCClient(
     serverHost,
-    9001,
+    serverPort,
     process.env.TOOLPLANE_SESSION_ID || 'grpc-example-session',
     userId,
     apiKey,
+    readTlsConfigFromEnv(),
   );
 
   try {

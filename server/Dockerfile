@@ -19,11 +19,10 @@ COPY . .
 # # Enable static linking for Go binaries
 ENV CGO_ENABLED=0 GOOS=linux
 
-# Run the build script
-# Note: The server execution lines are already commented out in run.sh
-COPY run.sh ./
-RUN sed -i 's/\r$//' ./run.sh && chmod +x ./run.sh
-RUN ./run.sh
+# Build the server and gateway binaries without launching the local dev stack.
+RUN mkdir -p bin \
+	&& go build -v -o bin/server ./cmd/server \
+	&& go build -v -o bin/toolplane-gateway ./cmd/proxy
 
 # Create a smaller final image
 FROM alpine:latest

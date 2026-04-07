@@ -13,6 +13,7 @@ type proxyConfig struct {
 	allowedOrigins       map[string]struct{}
 	allowInsecureBackend bool
 	backendTLSServerName string
+	backendTLSCAFile     string
 }
 
 func loadProxyConfig() (proxyConfig, error) {
@@ -32,6 +33,7 @@ func loadProxyConfig() (proxyConfig, error) {
 		allowedOrigins:       make(map[string]struct{}),
 		allowInsecureBackend: allowInsecureBackend,
 		backendTLSServerName: strings.TrimSpace(os.Getenv("TOOLPLANE_PROXY_BACKEND_TLS_SERVER_NAME")),
+		backendTLSCAFile:     strings.TrimSpace(os.Getenv("TOOLPLANE_PROXY_BACKEND_TLS_CA_FILE")),
 	}
 
 	if rawOrigins == "" {
@@ -89,8 +91,14 @@ func (cfg proxyConfig) backendSecuritySummary() string {
 	if cfg.allowInsecureBackend {
 		return "insecure gRPC backend (development or test only)"
 	}
+	if cfg.backendTLSServerName != "" && cfg.backendTLSCAFile != "" {
+		return "tls:" + cfg.backendTLSServerName + "+custom-ca"
+	}
 	if cfg.backendTLSServerName != "" {
 		return "tls:" + cfg.backendTLSServerName
+	}
+	if cfg.backendTLSCAFile != "" {
+		return "tls+custom-ca"
 	}
 	return "tls"
 }

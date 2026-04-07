@@ -1,6 +1,12 @@
 # Toolplane TypeScript Client
 
-This package is the maintained JavaScript-family SDK for Toolplane's remote tool-execution control plane. Its public surface is gRPC-only and centers on session, tool, machine, request, and task lifecycle helpers.
+This package is the maintained JavaScript-family SDK for Toolplane's durable remote tool-execution control plane. Use it when TypeScript or Node code needs explicit provider runtime ownership, request lifecycle control, and drain-safe machine management over the canonical gRPC contract. Its public surface is gRPC-only and centers on session, tool, machine, request, and task lifecycle helpers.
+
+## When To Start Here
+
+- Your JavaScript-family code needs the maintained gRPC control-plane surface plus an explicit `ProviderRuntime`.
+- You want a maintained provider or consumer path in TypeScript without treating the internal HTTP conformance adapters as public SDK surface.
+- You want the same provider, request, recovery, and drain model as the broader platform story, but on the TypeScript-maintained path.
 
 ## Support Status
 
@@ -28,7 +34,7 @@ npm run build
 
 ## Canonical Flow
 
-The canonical end-to-end path for Toolplane is: register a provider, create or attach a session, execute a request, stream or recover results, and drain the machine. The TypeScript SDK now ships that provider loop directly through the explicit `ProviderRuntime` over the maintained gRPC path.
+The canonical end-to-end path for Toolplane is: register a provider, create or attach a session, execute a request, stream or recover results, and drain the machine. The TypeScript SDK ships that provider loop directly through the explicit `ProviderRuntime` over the maintained gRPC path.
 
 ## Quick Start
 
@@ -41,6 +47,11 @@ const client = ToolplaneClient.createGRPCClient(
   'grpc-session',
   'grpc-user',
   process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key',
+  {
+    enabled: true,
+    caCertPath: '../../server/deploy/reference/certs/ca.crt',
+    serverName: 'localhost',
+  },
 );
 
 await client.connect();
@@ -87,6 +98,11 @@ const client = ToolplaneClient.createGRPCClient(
   '',
   'provider-user',
   process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key',
+  {
+    enabled: true,
+    caCertPath: '../../server/deploy/reference/certs/ca.crt',
+    serverName: 'localhost',
+  },
 );
 
 await client.connect();
@@ -166,6 +182,8 @@ The explicit `ProviderRuntime` exposes:
 - Session ownership: `createSession()`, `attachSession()`, `managedSessionIds()`
 - Tool registration: `registerTool()`, `tool()`
 - Runtime control: `pollOnce()`, `startInBackground()`, `runForever()`, `stop()`, `drain()`, `close()`
+
+For the reference deployment, set `TOOLPLANE_SERVER_PORT=9001`, `TOOLPLANE_USE_TLS=true`, `TOOLPLANE_TLS_CA_CERT_PATH=/path/to/ca.crt`, and `TOOLPLANE_TLS_SERVER_NAME=localhost` before running the maintained examples.
 
 ## Error Handling
 

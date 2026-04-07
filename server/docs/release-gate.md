@@ -2,6 +2,14 @@
 
 This document defines the authoritative release signal for the maintained Toolplane architecture. The gate now runs the canonical end-to-end scenario against Postgres in CI, then follows with a narrow runtime slice so the repo proves more than a development-only happy path.
 
+The maintained production topology itself is documented in `server/docs/reference-deployment.md` and materialized in `server/deploy/reference/compose.yaml`.
+
+The relationship is deliberate:
+
+- `reference-deployment.md` is the operator story for running, bootstrapping, upgrading, draining, and rolling back the split `Postgres + migrate + server + gateway` stack.
+- `release-gate.md` is the runtime validation story for that same stack shape and Postgres-backed contract.
+- The gate intentionally does not prove one-time TLS certificate provisioning or the bootstrap fixed-auth bridge used to mint the first Postgres-backed admin key; use `make reference-deployment-integration` for that deployment-specific rehearsal.
+
 ## Durability Proof Surface
 
 The release signal is intentionally split into three categories so the repo can state what is proven directly, what is proven by focused runtime tests, and what remains a documented limit.
@@ -79,6 +87,18 @@ From the repository root:
 cd server && TOOLPLANE_DATABASE_URL=postgres://postgres:postgres@localhost:5432/toolplane?sslmode=disable make release-gate
 ```
 
+If you want the Postgres instance to come from the maintained reference topology instead of an ad hoc local database, start it first with:
+
+```bash
+cd server/deploy/reference && docker compose up -d postgres
+```
+
+Then run the same `make release-gate` command from `server/`, but point `TOOLPLANE_DATABASE_URL` at the host-published port from `server/deploy/reference/.env.example`. With the default reference env file that is:
+
+```bash
+cd server && TOOLPLANE_DATABASE_URL=postgres://toolplane:toolplane@localhost:5432/toolplane?sslmode=disable make release-gate
+```
+
 This target always runs the Python shared-fixture conformance suite, then the live observability scrape leg in `server/scripts/release_gate_observability.sh`, and finally the focused runtime slice. The conformance portion exercises the first seven steps above through the auto-boot harness in `clients/python-client/tests/conformance/conftest.py`. When `TOOLPLANE_DATABASE_URL` is set, the Makefile infers `TOOLPLANE_STORAGE_MODE=postgres` so the full conformance leg runs on Postgres rather than falling back to in-memory storage. The maintained provider path in that suite now runs through the explicit Python `ProviderRuntime` surface rather than ad hoc polling threads embedded in the adapters.
 
 If `TOOLPLANE_DATABASE_URL` points at a reachable Postgres instance, the same target also runs focused Go tests that validate the production storage guardrail, lease-expiry requeue behavior, bounded replay semantics, drain waiting behavior, and persisted request recovery path. If the variable is unset, the conformance leg falls back to in-memory storage and the persisted recovery test is skipped for local convenience.
@@ -101,6 +121,7 @@ Provider-runtime coverage in shared conformance now explicitly includes claim-an
 ## What It Does Not Prove
 
 - Live Postgres-backed API-key validation. The gate now proves the production storage guardrail and a Postgres-backed recovery path, but it does not exercise that production auth backend directly.
+- Reference deployment TLS certificate provisioning or the proxy's custom CA bundle wiring. Use `make reference-deployment-integration` when you need that exact deployment path exercised.
 - The separate server-side `/rpc` reference path documented in `server/docs/rpc-retirement.md`.
 - Tool-discovery RPCs without shared fixture coverage (see `SDK_MAP.md` for current `partial` claims).
 - Every transport permutation (HTTP gateway behavior is covered by shared conformance, not duplicated here).

@@ -3,6 +3,7 @@
 import random
 import threading
 import time
+from pathlib import Path
 from typing import Optional
 
 import grpc
@@ -85,6 +86,64 @@ class ConnectionManager:
 
         return False
 
+    def _load_tls_bytes(self, path_value: Optional[str], label: str) -> Optional[bytes]:
+        """Load TLS material from disk when configured."""
+        if not path_value:
+            return None
+
+        try:
+            return Path(path_value).expanduser().read_bytes()
+        except OSError as exc:
+            raise ConnectionError(f"Failed to read {label}: {exc}") from exc
+
+    def _channel_options(self) -> list[tuple[str, str]]:
+        """Build gRPC channel options for TLS overrides."""
+        server_name = getattr(self.config, "tls_server_name", None)
+        if not server_name:
+            return []
+
+        return [
+            ("grpc.ssl_target_name_override", server_name),
+            ("grpc.default_authority", server_name),
+        ]
+
+    def _create_channel(self, target: str) -> grpc.Channel:
+        """Create a secure or insecure gRPC channel from client configuration."""
+        use_tls = bool(
+            getattr(self.config, "use_tls", False)
+            or getattr(self.config, "tls_ca_cert_path", None)
+            or getattr(self.config, "tls_server_name", None)
+            or getattr(self.config, "tls_cert_path", None)
+            or getattr(self.config, "tls_key_path", None)
+        )
+        options = self._channel_options()
+        if not use_tls:
+            return grpc.insecure_channel(target, options=options)
+
+        certificate_chain = self._load_tls_bytes(
+            getattr(self.config, "tls_cert_path", None),
+            "TLS client certificate",
+        )
+        private_key = self._load_tls_bytes(
+            getattr(self.config, "tls_key_path", None),
+            "TLS client key",
+        )
+        if bool(certificate_chain) != bool(private_key):
+            raise ConnectionError(
+                "TLS client authentication requires both certificate and key files"
+            )
+
+        root_certificates = self._load_tls_bytes(
+            getattr(self.config, "tls_ca_cert_path", None),
+            "TLS CA certificate",
+        )
+        credentials = grpc.ssl_channel_credentials(
+            root_certificates=root_certificates,
+            private_key=private_key,
+            certificate_chain=certificate_chain,
+        )
+        return grpc.secure_channel(target, credentials, options=options)
+
     def connect(self) -> bool:
         """Establish connection to gRPC server with retry logic."""
         with self._connect_lock:
@@ -105,7 +164,7 @@ class ConnectionManager:
 
                     self.connection_state = "connecting"
                     target = self.config.get_server_address()
-                    self.channel = grpc.insecure_channel(target)
+                    self.channel = self._create_channel(target)
 
                     # Wait until the channel reports ready or timeout occurs
                     grpc.channel_ready_future(self.channel).result(

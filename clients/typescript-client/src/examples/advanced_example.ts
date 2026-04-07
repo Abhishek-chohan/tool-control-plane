@@ -3,7 +3,21 @@ import { ClientProtocol } from '../interfaces';
 import { ToolplaneError, ConnectionError, ProtocolError } from '../errors';
 
 const serverHost = process.env.TOOLPLANE_SERVER_HOST || 'localhost';
+const serverPort = Number(process.env.TOOLPLANE_SERVER_PORT || 9001);
 const grpcApiKey = process.env.TOOLPLANE_API_KEY || 'toolplane-conformance-fixture-key';
+
+function readTlsConfigFromEnv() {
+  const useTLS = (process.env.TOOLPLANE_USE_TLS || '').toLowerCase() === 'true';
+  if (!useTLS) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    caCertPath: process.env.TOOLPLANE_TLS_CA_CERT_PATH || undefined,
+    serverName: process.env.TOOLPLANE_TLS_SERVER_NAME || undefined,
+  };
+}
 
 /**
  * Advanced example demonstrating maintained gRPC control-plane usage,
@@ -37,6 +51,7 @@ async function testBoundaryErrors() {
     sessionId: 'invalid-session',
     userId: 'invalid-user',
     apiKey: grpcApiKey,
+    tls: readTlsConfigFromEnv(),
     timeout: 10000,
   });
 
@@ -58,10 +73,11 @@ async function testBoundaryErrors() {
   const client = new ToolplaneClient({
     protocol: ClientProtocol.GRPC,
     serverHost,
-    serverPort: 9001,
+    serverPort,
     sessionId: 'boundary-grpc-session',
     userId: 'boundary-grpc-user',
     apiKey: grpcApiKey,
+    tls: readTlsConfigFromEnv(),
   });
 
   try {
@@ -94,10 +110,11 @@ async function testGRPCProtocol() {
   const client = new ToolplaneClient({
     protocol: ClientProtocol.GRPC,
     serverHost,
-    serverPort: 9001,
+    serverPort,
     sessionId: 'advanced-grpc-session',
     userId: 'advanced-grpc-user',
-    apiKey: grpcApiKey
+    apiKey: grpcApiKey,
+    tls: readTlsConfigFromEnv(),
   });
 
   try {
@@ -201,10 +218,11 @@ async function testConcurrentSessionReads() {
 
   const client = ToolplaneClient.createGRPCClient(
     serverHost,
-    9001,
+    serverPort,
     'concurrent-session',
     'concurrent-user',
     grpcApiKey,
+    readTlsConfigFromEnv(),
   );
 
   try {

@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+# Local or demo bootstrap only.
+# The maintained production topology is documented in
+# server/docs/reference-deployment.md.
+
 # Add Go bin to PATH
 export PATH=$PATH:/home/runner/go/bin
 
