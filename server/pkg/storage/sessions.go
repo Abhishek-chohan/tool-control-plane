@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -120,7 +121,7 @@ func (s *Store) AllApiKeys(ctx context.Context) ([]*model.ApiKey, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, name, key, created_at, created_by, revoked_at FROM api_keys`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at FROM api_keys`)
 	if err != nil {
 		return nil, fmt.Errorf("query api keys: %w", err)
 	}
@@ -129,14 +130,40 @@ func (s *Store) AllApiKeys(ctx context.Context) ([]*model.ApiKey, error) {
 	var keys []*model.ApiKey
 	for rows.Next() {
 		var rec model.ApiKey
+		var key sql.NullString
+		var keyHash sql.NullString
+		var keyPreview sql.NullString
+		var capabilitiesPayload []byte
 		var revokedAt sql.NullTime
-		if err := rows.Scan(&rec.ID, &rec.SessionID, &rec.Name, &rec.Key, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
+		if err := rows.Scan(&rec.ID, &rec.SessionID, &rec.Name, &key, &keyHash, &keyPreview, &capabilitiesPayload, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
 			return nil, fmt.Errorf("scan api key: %w", err)
+		}
+		if key.Valid {
+			rec.Key = key.String
+			rec.PlaintextPersisted = key.String != ""
+		}
+		if keyHash.Valid {
+			rec.KeyHash = keyHash.String
+		}
+		if keyPreview.Valid {
+			rec.KeyPreview = keyPreview.String
+		}
+		if len(capabilitiesPayload) > 0 {
+			var capabilityValues []string
+			if err := json.Unmarshal(capabilitiesPayload, &capabilityValues); err != nil {
+				return nil, fmt.Errorf("unmarshal api key capabilities: %w", err)
+			}
+			capabilities, err := model.NormalizeAPIKeyCapabilities(capabilityValues)
+			if err != nil {
+				return nil, fmt.Errorf("normalize api key capabilities: %w", err)
+			}
+			rec.Capabilities = capabilities
 		}
 		if revokedAt.Valid {
 			t := revokedAt.Time
 			rec.RevokedAt = &t
 		}
+		rec.EnsureSecurityMetadata()
 		keys = append(keys, &rec)
 	}
 
@@ -147,20 +174,32 @@ func (s *Store) SaveApiKey(ctx context.Context, key *model.ApiKey) error {
 	if s == nil || key == nil {
 		return nil
 	}
+	key.EnsureSecurityMetadata()
 	var revokedAt interface{}
 	if key.RevokedAt != nil {
 		revokedAt = *key.RevokedAt
 	}
-	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO api_keys (id, session_id, name, key, created_at, created_by, revoked_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+	capabilitiesPayload, err := json.Marshal(model.CapabilityStrings(key.Capabilities))
+	if err != nil {
+		return fmt.Errorf("marshal api key capabilities: %w", err)
+	}
+	var persistedKey interface{}
+	if key.PlaintextPersisted && key.Key != "" {
+		persistedKey = key.Key
+	}
+	_, err = s.db.ExecContext(ctx, `
+	        INSERT INTO api_keys (id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at)
+	        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             key = EXCLUDED.key,
+	            key_hash = EXCLUDED.key_hash,
+	            key_preview = EXCLUDED.key_preview,
+	            capabilities = EXCLUDED.capabilities,
             created_at = EXCLUDED.created_at,
             created_by = EXCLUDED.created_by,
             revoked_at = EXCLUDED.revoked_at
-    `, key.ID, key.SessionID, key.Name, key.Key, key.CreatedAt, key.CreatedBy, revokedAt)
+	    `, key.ID, key.SessionID, key.Name, persistedKey, nullString(key.KeyHash), nullString(key.KeyPreview), capabilitiesPayload, key.CreatedAt, key.CreatedBy, revokedAt)
 	if err != nil {
 		return fmt.Errorf("upsert api key: %w", err)
 	}

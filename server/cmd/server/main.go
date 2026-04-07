@@ -15,6 +15,7 @@ import (
 	"toolplane/pkg/service"
 	"toolplane/pkg/storage"
 	"toolplane/pkg/trace"
+	"toolplane/pkg/model"
 	proto "toolplane/proto"
 
 	"toolplane/cmd/server/auth"
@@ -66,12 +67,11 @@ func main() {
 	requestSvc := service.NewRequestsService(toolSvc, machineSvc, tracer, store)
 	tasksSvc := service.NewTasksService(ctx, toolSvc, machineSvc, requestSvc, tracer, store)
 
-	postgresValidator := func(_ context.Context, token string) bool {
-		_, err := sessionSvc.ValidateApiKey(token)
-		return err == nil
+	postgresAuthenticator := func(_ context.Context, token string) (*model.AuthPrincipal, error) {
+		return sessionSvc.AuthenticateAPIKey(token)
 	}
 
-	validateAPIKey, authSummary, err := cfg.buildValidator(postgresValidator)
+	authenticateAPIKey, authSummary, err := cfg.buildAuthenticator(postgresAuthenticator)
 	if err != nil {
 		log.Fatalf("failed to configure auth: %v", err)
 	}
@@ -82,10 +82,11 @@ func main() {
 	}
 
 	serverOptions := make([]grpc.ServerOption, 0, 2)
-	if validateAPIKey != nil {
+	if authenticateAPIKey != nil {
+		authorizer := auth.NewAPIKeyAuthorizer(authenticateAPIKey, tracer)
 		serverOptions = append(serverOptions,
-			grpc.UnaryInterceptor(auth.UnaryAPIKeyInterceptor(validateAPIKey)),
-			grpc.StreamInterceptor(auth.StreamAPIKeyInterceptor(validateAPIKey)),
+			grpc.UnaryInterceptor(authorizer.UnaryInterceptor()),
+			grpc.StreamInterceptor(authorizer.StreamInterceptor()),
 		)
 	}
 	server := grpc.NewServer(serverOptions...)

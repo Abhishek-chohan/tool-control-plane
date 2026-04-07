@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"toolplane/cmd/server/auth"
 	"toolplane/pkg/model"
 	proto "toolplane/proto"
 )
@@ -156,12 +156,12 @@ func (s *GRPCServer) CreateSession(ctx context.Context, req *proto.CreateSession
 			if getErr != nil {
 				return nil, status.Errorf(codes.Internal, "session %s exists but failed to retrieve: %v", req.SessionId, getErr)
 			}
-			return &proto.CreateSessionResponse{Session: convertModelSessionToProto(existing)}, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
+			return &proto.CreateSessionResponse{Session: convertPublicSessionToProto(existing)}, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create session: %v", err)
 	}
 
-	return &proto.CreateSessionResponse{Session: convertModelSessionToProto(session)}, nil
+	return &proto.CreateSessionResponse{Session: convertPublicSessionToProto(session)}, nil
 }
 
 // GetSession implements the gRPC GetSession method
@@ -171,25 +171,8 @@ func (s *GRPCServer) GetSession(ctx context.Context, req *proto.GetSessionReques
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "failed to get session: %v", err)
 	}
-	// Enforce api key if session is locked
-	md, _ := metadata.FromIncomingContext(ctx)
-	var key string
-	if v, ok := md["api_key"]; ok && len(v) > 0 {
-		key = v[0]
-	}
-	if key == "" {
-		if v, ok := md["authorization"]; ok && len(v) > 0 {
-			key = strings.TrimSpace(v[0])
-			if strings.HasPrefix(strings.ToLower(key), "bearer ") {
-				key = strings.TrimSpace(key[7:])
-			}
-		}
-	}
-	if session.ApiKey != "" && key != session.ApiKey {
-		return nil, status.Errorf(codes.PermissionDenied, "invalid api key for session %s", session.ID)
-	}
 
-	return convertModelSessionToProto(session), nil
+	return convertPublicSessionToProto(session), nil
 }
 
 // ListSessions implements the gRPC ListSessions method
@@ -203,7 +186,7 @@ func (s *GRPCServer) ListSessions(ctx context.Context, req *proto.ListSessionsRe
 	// Convert models to proto
 	protoSessions := make([]*proto.Session, 0, len(sessions))
 	for _, session := range sessions {
-		protoSessions = append(protoSessions, convertModelSessionToProto(session))
+		protoSessions = append(protoSessions, convertPublicSessionToProto(session))
 	}
 
 	return &proto.ListSessionsResponse{
@@ -219,7 +202,7 @@ func (s *GRPCServer) UpdateSession(ctx context.Context, req *proto.UpdateSession
 		return nil, status.Errorf(codes.NotFound, "failed to update session: %v", err)
 	}
 
-	return convertModelSessionToProto(session), nil
+	return convertPublicSessionToProto(session), nil
 }
 
 // DeleteSession implements the gRPC DeleteSession method
@@ -251,7 +234,7 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 	// Convert models to proto
 	protoSessions := make([]*proto.Session, 0, len(sessions))
 	for _, session := range sessions {
-		protoSessions = append(protoSessions, convertModelSessionToProto(session))
+		protoSessions = append(protoSessions, convertPublicSessionToProto(session))
 	}
 
 	pageSize := int(req.PageSize)
@@ -348,12 +331,12 @@ func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRe
 	}
 
 	// Create API key
-	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy)
+	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create API key: %v", err)
 	}
 
-	return convertModelApiKeyToProto(apiKey), nil
+	return convertPublicAPIKeyToProto(apiKey, true), nil
 }
 
 // ListApiKeys implements the gRPC ListApiKeys method
@@ -367,7 +350,7 @@ func (s *GRPCServer) ListApiKeys(ctx context.Context, req *proto.ListApiKeysRequ
 	// Convert models to proto
 	protoApiKeys := make([]*proto.ApiKey, 0, len(apiKeys))
 	for _, apiKey := range apiKeys {
-		protoApiKeys = append(protoApiKeys, convertModelApiKeyToProto(apiKey))
+		protoApiKeys = append(protoApiKeys, convertPublicAPIKeyToProto(apiKey, false))
 	}
 
 	return &proto.ListApiKeysResponse{
@@ -730,6 +713,10 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 
 // StreamExecuteTool implements the gRPC StreamExecuteTool method
 func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream proto.ToolService_StreamExecuteToolServer) error {
+	if err := auth.RequireSessionCapability(stream.Context(), req.SessionId, model.APIKeyCapabilityExecute); err != nil {
+		return err
+	}
+
 	// Create a request for the tool execution
 	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input)
 	if err != nil {
@@ -763,6 +750,14 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 
 // ResumeStream allows clients to resume a broken stream
 func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.ToolService_ResumeStreamServer) error {
+	request, err := s.requestService.GetRequestByIDAnySession(req.RequestId)
+	if err != nil {
+		return status.Errorf(codes.NotFound, "failed to resolve request %s: %v", req.RequestId, err)
+	}
+	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityExecute); err != nil {
+		return err
+	}
+
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	lastSeq := req.LastSeq

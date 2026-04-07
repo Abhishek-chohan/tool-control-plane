@@ -40,9 +40,11 @@ export interface ApiKey {
   id: string;
   name: string;
   key: string;
+  keyPreview?: string;
   sessionId: string;
   createdAt: string;
   createdBy: string;
+  capabilities: string[];
   revokedAt?: string;
 }
 
@@ -178,9 +180,13 @@ export interface CreateSessionRequest {
   userId: string;
   name: string;
   description: string;
-  apiKey: string;
   sessionId: string;
   namespace: string;
+}
+
+export interface CreateApiKeyOptions {
+  name: string;
+  capabilities?: string[];
 }
 
 /**

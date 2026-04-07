@@ -150,7 +150,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     message.setName(String(request.name ?? ''));
     message.setDescription(String(request.description ?? ''));
     message.setNamespace(String(request.namespace ?? ''));
-    message.setApiKey(this.apiKey);
+		message.setApiKey('');
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.sessionClient.createSession(message, metadata, options, callback),
@@ -484,10 +484,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return response.getRequestsList().map((item) => this.normalizeRequest(item));
   }
 
-  async createApiKey(sessionId: string, name: string): Promise<Record<string, unknown>> {
+  async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
     const request = new CreateApiKeyRequest();
     request.setSessionId(sessionId);
     request.setName(name);
+		request.setCapabilitiesList(capabilities);
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.sessionClient.createApiKey(request, metadata, options, callback),
@@ -725,9 +726,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       id: apiKey.getId(),
       name: apiKey.getName(),
       key: apiKey.getKey(),
+		key_preview: apiKey.getKeyPreview(),
       session_id: apiKey.getSessionId(),
       created_at: apiKey.getCreatedAt(),
       created_by: apiKey.getCreatedBy(),
+		capabilities: apiKey.getCapabilitiesList(),
       revoked_at: apiKey.getRevokedAt(),
     };
   }

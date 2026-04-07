@@ -1,8 +1,10 @@
 package service
 
 import (
+	"reflect"
 	"testing"
 
+	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
 )
 
@@ -19,7 +21,7 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 		t.Fatalf("update session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit")
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit")
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -84,5 +86,67 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 
 	if _, err := svc.ValidateApiKey("missing-key"); err == nil {
 		t.Fatal("expected unknown api key to fail validation")
+	}
+}
+
+func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	apiKey, err := svc.CreateApiKey(session.ID, "reader", "user-audit", []string{"read", "execute"})
+	if err != nil {
+		t.Fatalf("create api key: %v", err)
+	}
+	if apiKey.Key == "" || apiKey.KeyPreview == "" {
+		t.Fatalf("created api key = %#v, want returned secret and preview", apiKey)
+	}
+
+	listed, err := svc.ListApiKeys(session.ID)
+	if err != nil {
+		t.Fatalf("list api keys: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("list api keys returned %d results, want 1", len(listed))
+	}
+	if listed[0].Key != "" {
+		t.Fatalf("listed api key secret = %q, want redacted empty string", listed[0].Key)
+	}
+	if listed[0].KeyPreview == "" {
+		t.Fatalf("listed api key preview = %q, want non-empty preview", listed[0].KeyPreview)
+	}
+	if !reflect.DeepEqual(listed[0].Capabilities, []model.APIKeyCapability{model.APIKeyCapabilityRead, model.APIKeyCapabilityExecute}) {
+		t.Fatalf("listed api key capabilities = %v, want [read execute]", listed[0].Capabilities)
+	}
+	if listed[0].ID != apiKey.ID {
+		t.Fatalf("listed api key id = %q, want %q", listed[0].ID, apiKey.ID)
+	}
+}
+
+func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	apiKey, err := svc.CreateApiKey(session.ID, "runner", "user-audit", []string{"execute"})
+	if err != nil {
+		t.Fatalf("create api key: %v", err)
+	}
+
+	principal, err := svc.AuthenticateAPIKey("Bearer " + apiKey.Key)
+	if err != nil {
+		t.Fatalf("authenticate api key: %v", err)
+	}
+	if principal.SessionID != session.ID || principal.UserID != "user-audit" || principal.KeyID != apiKey.ID {
+		t.Fatalf("principal = %#v, want session=%s user=user-audit key=%s", principal, session.ID, apiKey.ID)
+	}
+	if !principal.HasCapability(model.APIKeyCapabilityExecute) {
+		t.Fatalf("principal capabilities = %v, want execute capability", principal.Capabilities)
 	}
 }

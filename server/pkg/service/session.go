@@ -62,6 +62,16 @@ func NewSessionsService(tracer trace.SessionTracer, store *storage.Store) *Sessi
 			log.Printf("api key persistence load failed: %v", err)
 		} else {
 			for _, key := range keys {
+				if key == nil {
+					continue
+				}
+				if key.EnsureSecurityMetadata() {
+					persistCtx, persistCancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+					if err := store.SaveApiKey(persistCtx, key); err != nil {
+						log.Printf("persist api key hardening migration failed: %v", err)
+					}
+					persistCancel()
+				}
 				if _, ok := svc.apiKeys[key.SessionID]; !ok {
 					svc.apiKeys[key.SessionID] = make(map[string]*model.ApiKey)
 				}
@@ -82,6 +92,14 @@ func NewSessionsService(tracer trace.SessionTracer, store *storage.Store) *Sessi
 		for _, session := range svc.sessions {
 			if session == nil {
 				continue
+			}
+			if session.ApiKey != "" {
+				session.ApiKey = ""
+				persistCtx, persistCancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+				if err := store.SaveSession(persistCtx, session); err != nil {
+					log.Printf("persist legacy session api key retirement failed: %v", err)
+				}
+				persistCancel()
 			}
 			list, ok := svc.userSessions[session.CreatedBy]
 			if !ok {
@@ -105,6 +123,7 @@ func NewSessionsService(tracer trace.SessionTracer, store *storage.Store) *Sessi
 
 // CreateSession creates a new session with an optional api key and an initial API key
 func (s *SessionsService) CreateSession(userID, name, description, apiKey, requestedID, namespace string) (*model.Session, error) {
+	_ = apiKey
 	userLock := s.userLock(userID)
 	userLock.Lock()
 	defer userLock.Unlock()
@@ -120,7 +139,7 @@ func (s *SessionsService) CreateSession(userID, name, description, apiKey, reque
 	s.sessionsMutex.RUnlock()
 
 	// Create new session (random ID) then override if requested
-	session := model.NewSession(name, description, userID, apiKey, namespace)
+	session := model.NewSession(name, description, userID, "", namespace)
 	if requestedID != "" {
 		session.ID = requestedID
 	}
@@ -304,7 +323,7 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 }
 
 // CreateApiKey creates a new API key for a session
-func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string) (*model.ApiKey, error) {
+func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabilityValues []string) (*model.ApiKey, error) {
 	// Check if session exists
 	s.sessionsMutex.RLock()
 	_, ok := s.sessions[sessionID]
@@ -314,8 +333,13 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string) (*mode
 		return nil, fmt.Errorf("session %s not found", sessionID)
 	}
 
+	capabilities, err := model.NormalizeAPIKeyCapabilities(capabilityValues)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create new API key
-	apiKey := model.NewApiKey(name, sessionID, createdBy)
+	apiKey := model.NewApiKey(name, sessionID, createdBy, capabilities)
 
 	s.apiKeysMutex.Lock()
 	defer s.apiKeysMutex.Unlock()
@@ -337,9 +361,12 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string) (*mode
 	}
 
 	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyCreated, apiKey.CreatedAt, map[string]any{
-		"apiKeyID":  apiKey.ID,
-		"name":      apiKey.Name,
-		"createdBy": createdBy,
+		"apiKeyID":      apiKey.ID,
+		"name":          apiKey.Name,
+		"createdBy":     createdBy,
+		"capabilities":  model.CapabilityStrings(apiKey.Capabilities),
+		"keyPreview":    apiKey.KeyPreview,
+		"storageBacked": s.store != nil,
 	})
 
 	return apiKey, nil
@@ -359,7 +386,7 @@ func (s *SessionsService) ListApiKeys(sessionID string) ([]*model.ApiKey, error)
 	for _, apiKey := range s.apiKeys[sessionID] {
 		// Skip revoked keys
 		if !apiKey.IsRevoked() {
-			apiKeys = append(apiKeys, apiKey)
+			apiKeys = append(apiKeys, apiKey.CloneWithoutSecret())
 		}
 	}
 
@@ -396,39 +423,78 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 		revokedAt = *apiKey.RevokedAt
 	}
 	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyRevoked, revokedAt, map[string]any{
-		"apiKeyID": apiKey.ID,
-		"name":     apiKey.Name,
+		"apiKeyID":     apiKey.ID,
+		"name":         apiKey.Name,
+		"capabilities": model.CapabilityStrings(apiKey.Capabilities),
 	})
 
 	return nil
 }
 
-// ValidateApiKey validates an API key and returns the session ID if valid
-func (s *SessionsService) ValidateApiKey(key string) (string, error) {
+func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, error) {
 	normalizedKey := strings.TrimSpace(key)
 	if strings.HasPrefix(strings.ToLower(normalizedKey), "bearer ") {
 		normalizedKey = strings.TrimSpace(normalizedKey[7:])
 	}
 	if normalizedKey == "" {
-		return "", fmt.Errorf("api key is empty")
+		return nil, fmt.Errorf("api key is empty")
 	}
 
-	s.apiKeysMutex.RLock()
-	defer s.apiKeysMutex.RUnlock()
+	var matchedKey *model.ApiKey
+	matchedSessionID := ""
+	revokedMatch := false
 
+	s.apiKeysMutex.RLock()
 	for sessionID, keys := range s.apiKeys {
 		for _, apiKey := range keys {
-			if apiKey == nil || apiKey.Key != normalizedKey {
+			if apiKey == nil || !apiKey.Matches(normalizedKey) {
 				continue
 			}
 			if apiKey.IsRevoked() {
-				return "", fmt.Errorf("api key is revoked")
+				revokedMatch = true
+				break
 			}
-			return sessionID, nil
+			matchedSessionID = sessionID
+			matchedKey = apiKey
+			break
+		}
+		if matchedKey != nil || revokedMatch {
+			break
 		}
 	}
+	s.apiKeysMutex.RUnlock()
 
-	return "", fmt.Errorf("api key not found")
+	if revokedMatch {
+		return nil, fmt.Errorf("api key is revoked")
+	}
+	if matchedKey == nil {
+		return nil, fmt.Errorf("api key not found")
+	}
+
+	userID := ""
+	s.sessionsMutex.RLock()
+	if session, ok := s.sessions[matchedSessionID]; ok && session != nil {
+		userID = session.CreatedBy
+	}
+	s.sessionsMutex.RUnlock()
+
+	return &model.AuthPrincipal{
+		Mode:         model.AuthModeSessionKey,
+		SessionID:    matchedSessionID,
+		UserID:       userID,
+		KeyID:        matchedKey.ID,
+		Capabilities: append([]model.APIKeyCapability(nil), matchedKey.Capabilities...),
+		TokenPreview: matchedKey.KeyPreview,
+	}, nil
+}
+
+// ValidateApiKey validates an API key and returns the session ID if valid
+func (s *SessionsService) ValidateApiKey(key string) (string, error) {
+	principal, err := s.AuthenticateAPIKey(key)
+	if err != nil {
+		return "", err
+	}
+	return principal.SessionID, nil
 }
 
 // ListUserSessions lists sessions for a user with pagination and filtering
@@ -449,8 +515,8 @@ func (s *SessionsService) ListUserSessions(userID string, pageSize, pageToken in
 		if session, exists := s.sessions[sessionID]; exists {
 			// Apply filter if specified (simplified implementation)
 			if filter == "" ||
-				(filter == "active" && session.ApiKey != "") ||
-				(filter == "inactive" && session.ApiKey == "") {
+				(filter == "active" && s.sessionHasActiveAPIKeys(sessionID)) ||
+				(filter == "inactive" && !s.sessionHasActiveAPIKeys(sessionID)) {
 				filteredSessions = append(filteredSessions, session)
 			}
 		}
@@ -499,10 +565,10 @@ func (s *SessionsService) BulkDeleteSessions(userID string, sessionIDs []string,
 	if filter != "" {
 		s.sessionsMutex.RLock()
 		for _, sessionID := range userSessionIDs {
-			if session, exists := s.sessions[sessionID]; exists {
+			if _, exists := s.sessions[sessionID]; exists {
 				// Apply filter (simplified implementation)
-				if (filter == "active" && session.ApiKey != "") ||
-					(filter == "inactive" && session.ApiKey == "") {
+				if (filter == "active" && s.sessionHasActiveAPIKeys(sessionID)) ||
+					(filter == "inactive" && !s.sessionHasActiveAPIKeys(sessionID)) {
 					sessionsToDelete = append(sessionsToDelete, sessionID)
 				}
 			}
@@ -548,8 +614,8 @@ func (s *SessionsService) GetSessionStats(userID string) (int, int, int, error) 
 
 	s.sessionsMutex.RLock()
 	for _, sessionID := range sessionIDs {
-		if session, exists := s.sessions[sessionID]; exists {
-			if session.ApiKey != "" {
+		if _, exists := s.sessions[sessionID]; exists {
+			if s.sessionHasActiveAPIKeys(sessionID) {
 				activeSessions++
 			} else {
 				inactiveSessions++
@@ -598,4 +664,20 @@ func (s *SessionsService) recordSessionEvent(sessionID, machineID string, event 
 		Timestamp: timestamp,
 		Metadata:  metadata,
 	})
+}
+
+func (s *SessionsService) sessionHasActiveAPIKeys(sessionID string) bool {
+	s.apiKeysMutex.RLock()
+	defer s.apiKeysMutex.RUnlock()
+
+	keys, ok := s.apiKeys[sessionID]
+	if !ok {
+		return false
+	}
+	for _, apiKey := range keys {
+		if apiKey != nil && !apiKey.IsRevoked() {
+			return true
+		}
+	}
+	return false
 }

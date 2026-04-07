@@ -28,15 +28,21 @@ class HTTPSessionManager:
             "created_at": session.get("createdAt", session.get("created_at", "")),
             "created_by": created_by,
             "user_id": created_by,
-            "api_key": session.get("apiKey", session.get("api_key", "")),
+            "api_key": "",
             "status": "active",
         }
 
     def _normalize_api_key(self, api_key: Dict[str, Any]) -> Dict[str, Any]:
+        capabilities = api_key.get("capabilities", [])
+        if not isinstance(capabilities, list):
+            capabilities = []
+
         return {
             "id": api_key.get("id", ""),
             "name": api_key.get("name", ""),
             "key": api_key.get("key", ""),
+            "key_preview": api_key.get("keyPreview", api_key.get("key_preview", "")),
+            "capabilities": capabilities,
             "session_id": api_key.get("sessionId", api_key.get("session_id", "")),
             "created_at": api_key.get("createdAt", api_key.get("created_at", "")),
             "created_by": api_key.get("createdBy", api_key.get("created_by", "")),
@@ -64,7 +70,6 @@ class HTTPSessionManager:
                 "userId": user_id or "",
                 "name": name or "",
                 "description": description or "",
-                "apiKey": api_key or "",
             }
 
             if namespace:
@@ -249,12 +254,21 @@ class HTTPSessionManager:
         except Exception as e:
             raise SessionError(f"Failed to invalidate session: {e}")
 
-    def create_api_key(self, session_id: str, name: str) -> Dict[str, Any]:
+    def create_api_key(
+        self,
+        session_id: str,
+        name: str,
+        capabilities: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Create a new API key for a session."""
         try:
             self.connection_manager.ensure_connected()
 
-            payload = {"sessionId": session_id, "name": name}
+            payload = {
+                "sessionId": session_id,
+                "name": name,
+                "capabilities": capabilities or [],
+            }
             response = self.connection_manager.create_api_key(payload)
             return self._normalize_api_key(response)
 

@@ -100,6 +100,8 @@ The maintained isolation boundary is session-scoped.
 - Session ownership is keyed by `CreatedBy` plus the persisted user-to-session mapping.
 - Machines, tools, requests, and tasks are all scoped to a single session ID.
 - API keys are session-scoped credentials, not global tenancy credentials.
+- Session-owned API keys carry explicit `read`, `execute`, or `admin` capabilities, and server authorization binds them to the owning session or user scope per RPC.
+- API-key secrets are returned only from `CreateApiKey`; `ListApiKeys` is metadata-only and exposes `key_preview` plus `capabilities` instead of replaying the secret.
 - Python-only admin helpers such as bulk delete, stats, token refresh, and invalidation remain explicitly labeled `admin` scope in `SDK_MAP.md`; they are not implied portable SDK guarantees.
 - Proxy throttling provides the current platform guardrails for request volume by API key and client IP. Per-machine load protection remains enforced by the server runtime's machine-capacity tracking.
 
@@ -274,6 +276,7 @@ The server currently has two different expiration paths depending on whether a p
 Provider behavior is now observable through server-owned trace events instead of only through SDK-local logs.
 
 - Session and API-key audit tracing emits `session_created`, `session_updated`, `session_deleted`, `api_key_created`, and `api_key_revoked`.
+- Auth tracing emits `auth_validated`, `auth_rejected`, and `auth_policy_denied` so operators can distinguish invalid tokens from scope or capability failures.
 - Drain emits `machine_drain_started` and `machine_drain_completed`.
 - Request lifecycle tracing emits `request_created`, `request_claimed`, `request_execution_started`, `request_execution_completed`, `request_execution_failed`, `request_cancelled`, `request_chunks_appended`, `request_lease_expired`, `request_requeued`, and `request_dead_lettered`.
 - Task lifecycle tracing emits `task_created`, `task_execution_started`, `task_retry_scheduled`, `task_execution_completed`, `task_execution_failed`, `task_cancelled`, and `task_dead_lettered`.

@@ -6,6 +6,7 @@ import {
   ClientConfig,
   ClientProtocol,
   ConnectionStatus,
+  CreateApiKeyOptions,
   CreateSessionRequest,
   Machine,
   ProviderRuntimeOptions,
@@ -355,7 +356,6 @@ export class ToolplaneClient {
       userId: this.config.userId,
       name,
       description,
-      apiKey: this.config.apiKey || '',
       sessionId,
       namespace,
     };
@@ -364,7 +364,7 @@ export class ToolplaneClient {
     message.setUserId(request.userId);
     message.setName(request.name);
     message.setDescription(request.description);
-    message.setApiKey(request.apiKey);
+		message.setApiKey('');
     message.setSessionId(request.sessionId);
     message.setNamespace(request.namespace);
 
@@ -424,12 +424,13 @@ export class ToolplaneClient {
     return this.normalizeSession(response);
   }
 
-  async createApiKey(name: string): Promise<ApiKey> {
+  async createApiKey(name: string, capabilities: string[] = []): Promise<ApiKey> {
     this.ensureGRPCConnected('api key creation');
 
     const request = new CreateApiKeyMessage();
     request.setSessionId(this.getRequiredSessionId('api key creation'));
     request.setName(name);
+		request.setCapabilitiesList(capabilities);
 
     const response = await this.invokeGRPCUnary<ProtoApiKey>(
       (metadata, options, callback) => this.sessionClient!.createApiKey(request, metadata, options, callback),
@@ -1088,9 +1089,11 @@ export class ToolplaneClient {
       id: apiKey.getId(),
       name: apiKey.getName(),
       key: apiKey.getKey(),
+		keyPreview: apiKey.getKeyPreview() || undefined,
       sessionId: apiKey.getSessionId(),
       createdAt: apiKey.getCreatedAt(),
       createdBy: apiKey.getCreatedBy(),
+		capabilities: apiKey.getCapabilitiesList(),
       revokedAt: revokedAt || undefined,
     };
   }

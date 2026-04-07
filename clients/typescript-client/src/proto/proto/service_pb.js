@@ -213,7 +213,7 @@ if (goog.DEBUG && !COMPILED) {
  * @constructor
  */
 proto.api.ApiKey = function(opt_data) {
-  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.api.ApiKey.repeatedFields_, null);
 };
 goog.inherits(proto.api.ApiKey, jspb.Message);
 if (goog.DEBUG && !COMPILED) {
@@ -864,7 +864,7 @@ if (goog.DEBUG && !COMPILED) {
  * @constructor
  */
 proto.api.CreateApiKeyRequest = function(opt_data) {
-  jspb.Message.initialize(this, opt_data, 0, -1, null, null);
+  jspb.Message.initialize(this, opt_data, 0, -1, proto.api.CreateApiKeyRequest.repeatedFields_, null);
 };
 goog.inherits(proto.api.CreateApiKeyRequest, jspb.Message);
 if (goog.DEBUG && !COMPILED) {
@@ -2841,6 +2841,13 @@ proto.api.Session.prototype.setNamespace = function(value) {
 
 
 
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.api.ApiKey.repeatedFields_ = [8];
+
 
 
 if (jspb.Message.GENERATE_TO_OBJECT) {
@@ -2878,7 +2885,9 @@ proto.api.ApiKey.toObject = function(includeInstance, msg) {
     sessionId: jspb.Message.getFieldWithDefault(msg, 4, ""),
     createdAt: jspb.Message.getFieldWithDefault(msg, 5, ""),
     createdBy: jspb.Message.getFieldWithDefault(msg, 6, ""),
-    revokedAt: jspb.Message.getFieldWithDefault(msg, 7, "")
+    revokedAt: jspb.Message.getFieldWithDefault(msg, 7, ""),
+    capabilitiesList: (f = jspb.Message.getRepeatedField(msg, 8)) == null ? undefined : f,
+    keyPreview: jspb.Message.getFieldWithDefault(msg, 9, "")
   };
 
   if (includeInstance) {
@@ -2942,6 +2951,14 @@ proto.api.ApiKey.deserializeBinaryFromReader = function(msg, reader) {
     case 7:
       var value = /** @type {string} */ (reader.readString());
       msg.setRevokedAt(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addCapabilities(value);
+      break;
+    case 9:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setKeyPreview(value);
       break;
     default:
       reader.skipField();
@@ -3018,6 +3035,20 @@ proto.api.ApiKey.serializeBinaryToWriter = function(message, writer) {
   if (f.length > 0) {
     writer.writeString(
       7,
+      f
+    );
+  }
+  f = message.getCapabilitiesList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      8,
+      f
+    );
+  }
+  f = message.getKeyPreview();
+  if (f.length > 0) {
+    writer.writeString(
+      9,
       f
     );
   }
@@ -3147,6 +3178,61 @@ proto.api.ApiKey.prototype.getRevokedAt = function() {
  */
 proto.api.ApiKey.prototype.setRevokedAt = function(value) {
   return jspb.Message.setProto3StringField(this, 7, value);
+};
+
+
+/**
+ * repeated string capabilities = 8;
+ * @return {!Array<string>}
+ */
+proto.api.ApiKey.prototype.getCapabilitiesList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 8));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.api.ApiKey} returns this
+ */
+proto.api.ApiKey.prototype.setCapabilitiesList = function(value) {
+  return jspb.Message.setField(this, 8, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.api.ApiKey} returns this
+ */
+proto.api.ApiKey.prototype.addCapabilities = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 8, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.api.ApiKey} returns this
+ */
+proto.api.ApiKey.prototype.clearCapabilitiesList = function() {
+  return this.setCapabilitiesList([]);
+};
+
+
+/**
+ * optional string key_preview = 9;
+ * @return {string}
+ */
+proto.api.ApiKey.prototype.getKeyPreview = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 9, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.ApiKey} returns this
+ */
+proto.api.ApiKey.prototype.setKeyPreview = function(value) {
+  return jspb.Message.setProto3StringField(this, 9, value);
 };
 
 
@@ -8721,6 +8807,13 @@ proto.api.DeleteSessionResponse.prototype.setSuccess = function(value) {
 
 
 
+/**
+ * List of repeated fields within this message type.
+ * @private {!Array<number>}
+ * @const
+ */
+proto.api.CreateApiKeyRequest.repeatedFields_ = [3];
+
 
 
 if (jspb.Message.GENERATE_TO_OBJECT) {
@@ -8753,7 +8846,8 @@ proto.api.CreateApiKeyRequest.prototype.toObject = function(opt_includeInstance)
 proto.api.CreateApiKeyRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    name: jspb.Message.getFieldWithDefault(msg, 2, "")
+    name: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    capabilitiesList: (f = jspb.Message.getRepeatedField(msg, 3)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -8798,6 +8892,10 @@ proto.api.CreateApiKeyRequest.deserializeBinaryFromReader = function(msg, reader
       var value = /** @type {string} */ (reader.readString());
       msg.setName(value);
       break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addCapabilities(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -8841,6 +8939,13 @@ proto.api.CreateApiKeyRequest.serializeBinaryToWriter = function(message, writer
       f
     );
   }
+  f = message.getCapabilitiesList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      3,
+      f
+    );
+  }
 };
 
 
@@ -8877,6 +8982,43 @@ proto.api.CreateApiKeyRequest.prototype.getName = function() {
  */
 proto.api.CreateApiKeyRequest.prototype.setName = function(value) {
   return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * repeated string capabilities = 3;
+ * @return {!Array<string>}
+ */
+proto.api.CreateApiKeyRequest.prototype.getCapabilitiesList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 3));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.api.CreateApiKeyRequest} returns this
+ */
+proto.api.CreateApiKeyRequest.prototype.setCapabilitiesList = function(value) {
+  return jspb.Message.setField(this, 3, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.api.CreateApiKeyRequest} returns this
+ */
+proto.api.CreateApiKeyRequest.prototype.addCapabilities = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 3, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.api.CreateApiKeyRequest} returns this
+ */
+proto.api.CreateApiKeyRequest.prototype.clearCapabilitiesList = function() {
+  return this.setCapabilitiesList([]);
 };
 
 
