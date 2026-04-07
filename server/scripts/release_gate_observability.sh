@@ -5,12 +5,18 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 server_dir="$(cd "$script_dir/.." && pwd)"
 log_dir="${TOOLPLANE_RELEASE_GATE_LOG_DIR:-$server_dir/../.tmp/release-gate-observability}"
 
-python_bin="${PYTHON_BIN:-python}"
+python_bin="${PYTHON_BIN:-python3}"
 if ! command -v "$python_bin" >/dev/null 2>&1; then
-	python_bin="python3"
+	echo "Python 3 is required for release_gate_observability.sh; set PYTHON_BIN to a Python 3 executable if needed" >&2
+	exit 1
 fi
-if ! command -v "$python_bin" >/dev/null 2>&1; then
-	echo "python or python3 is required for release_gate_observability.sh" >&2
+if ! "$python_bin" - <<'PY'
+import sys
+
+sys.exit(0 if sys.version_info.major >= 3 else 1)
+PY
+then
+	echo "release_gate_observability.sh requires Python 3; PYTHON_BIN resolved to an incompatible interpreter" >&2
 	exit 1
 fi
 
