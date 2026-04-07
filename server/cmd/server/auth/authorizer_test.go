@@ -59,6 +59,20 @@ func TestRequireSessionCapabilityEnforcesCapabilityAndScope(t *testing.T) {
 	}
 }
 
+func TestRequireUserCapabilityFailsClosedWithoutPrincipalUserScope(t *testing.T) {
+	principal := &model.AuthPrincipal{
+		Mode:         model.AuthModeSessionKey,
+		SessionID:    "session-1",
+		Capabilities: []model.APIKeyCapability{model.APIKeyCapabilityAdmin},
+	}
+	ctx := context.WithValue(context.Background(), authPrincipalContextKey, principal)
+
+	err := RequireUserCapability(ctx, "user-1", model.APIKeyCapabilityAdmin)
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("RequireUserCapability error = %v, want permission denied", err)
+	}
+}
+
 func TestAPIKeyAuthorizerUnaryInterceptorRecordsValidationAndDenial(t *testing.T) {
 	tracer := &recordingTracer{}
 	principal := &model.AuthPrincipal{
@@ -117,5 +131,26 @@ func TestAPIKeyAuthorizerUnaryInterceptorRecordsValidationAndDenial(t *testing.T
 	}
 	if !deniedTracer.hasEvent(trace.EventAuthPolicyDenied) {
 		t.Fatal("expected auth_policy_denied event")
+	}
+}
+
+func TestAPIKeyAuthorizerUnaryInterceptorDeniesUserBoundRequestWithoutPrincipalUserScope(t *testing.T) {
+	authorizer := NewAPIKeyAuthorizer(func(ctx context.Context, token string) (*model.AuthPrincipal, error) {
+		return &model.AuthPrincipal{
+			Mode:         model.AuthModeSessionKey,
+			SessionID:    "session-1",
+			KeyID:        "key-no-user",
+			TokenPreview: "toolplane_missing",
+			Capabilities: []model.APIKeyCapability{model.APIKeyCapabilityAdmin},
+		}, nil
+	}, trace.NopTracer())
+
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("api_key", "token-1"))
+	_, err := authorizer.UnaryInterceptor()(ctx, &proto.CreateSessionRequest{UserId: "user-1", SessionId: "session-2"}, &grpc.UnaryServerInfo{FullMethod: "/api.SessionsService/CreateSession"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+		t.Fatal("handler should not be called when principal user scope is missing")
+		return nil, nil
+	})
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("UnaryInterceptor error = %v, want permission denied", err)
 	}
 }

@@ -333,6 +333,9 @@ func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRe
 	// Create API key
 	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities)
 	if err != nil {
+		if errors.Is(err, model.ErrUnsupportedAPIKeyCapability) {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to create API key: %v", err)
+		}
 		return nil, status.Errorf(codes.Internal, "failed to create API key: %v", err)
 	}
 

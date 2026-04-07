@@ -78,8 +78,13 @@ func RequireUserCapability(ctx context.Context, userID string, capability model.
 	if capability != "" && !principal.HasCapability(capability) {
 		return status.Errorf(codes.PermissionDenied, "api key does not have %s capability", capability)
 	}
-	if userID != "" && principal.UserID != "" && principal.UserID != userID {
-		return status.Errorf(codes.PermissionDenied, "api key is not authorized for user %s", userID)
+	if userID != "" {
+		if principal.UserID == "" {
+			return status.Errorf(codes.PermissionDenied, "api key is missing user scope for user %s", userID)
+		}
+		if principal.UserID != userID {
+			return status.Errorf(codes.PermissionDenied, "api key is not authorized for user %s", userID)
+		}
 	}
 	return nil
 }
@@ -200,8 +205,13 @@ func (a *APIKeyAuthorizer) authorizeUnary(principal *model.AuthPrincipal, fullMe
 			return status.Errorf(codes.PermissionDenied, "%s requires user-scoped authorization", fullMethod)
 		}
 		targetUserID := userRequest.GetUserId()
-		if targetUserID != "" && principal.UserID != "" && targetUserID != principal.UserID {
-			return status.Errorf(codes.PermissionDenied, "api key is not authorized for user %s", targetUserID)
+		if targetUserID != "" {
+			if principal.UserID == "" {
+				return status.Errorf(codes.PermissionDenied, "api key is missing user scope for user %s", targetUserID)
+			}
+			if targetUserID != principal.UserID {
+				return status.Errorf(codes.PermissionDenied, "api key is not authorized for user %s", targetUserID)
+			}
 		}
 	}
 	return nil

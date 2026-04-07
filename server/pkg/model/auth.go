@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -20,6 +21,8 @@ var apiKeyCapabilityOrder = []APIKeyCapability{
 }
 
 type AuthMode string
+
+var ErrUnsupportedAPIKeyCapability = errors.New("unsupported api key capability")
 
 const (
 	AuthModeFixed      AuthMode = "fixed"
@@ -61,7 +64,7 @@ func NormalizeAPIKeyCapabilities(values []string) ([]APIKeyCapability, error) {
 		}
 		capability, ok := allowed[normalized]
 		if !ok {
-			return nil, fmt.Errorf("unsupported api key capability %q", value)
+			return nil, fmt.Errorf("%w %q", ErrUnsupportedAPIKeyCapability, value)
 		}
 		if _, ok := seen[capability]; ok {
 			continue
