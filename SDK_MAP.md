@@ -1,6 +1,10 @@
 # SDK Map
 
-This file maps `server/proto/service.proto` to the maintained Python, Go, and TypeScript SDK surfaces. Toolplane is worth adopting for durable remote tools, not as a thin wrapper catalog, so use this map to see which SDKs actually own the consumer, provider, and admin flows that make request recovery, provider drain, and session-scoped policy legible.
+This file maps `server/proto/service.proto` to the maintained Python, Go, and TypeScript SDK surfaces. Use this map after clearing the same decision rule used in the root docs: Toolplane is worth adopting when one remote tool may outlive the caller, needs inspection or bounded replay after disconnect, needs explicit provider ownership or drain behavior, or is queue-backed enough that request lifecycle control matters. If the work is quick and same-lifecycle, direct tool calling is simpler. If deferral alone is enough, a simpler job system may fit. Thin adapters remain edge glue, not the parity story.
+
+A concrete first-offload mental model is one sandboxed code-execution worker. Python is the best place to start for that full lifecycle; Go and TypeScript stay honest about the narrower maintained surfaces documented below.
+
+For the full four-layer seam model and the reference edge-adapter contract, see `server/docs/agent-runtime-integration-seam.md`.
 
 ## Support Labels
 
@@ -29,6 +33,21 @@ These categories are the maintained platform boundary: consumer flows invoke and
 - `/rpc` remains a server-side removal-path surface documented in `server/docs/rpc-retirement.md`; it stays outside maintained SDK support and parity.
 - `clients/typescript-mcp-adapter/` is an optional stdio adapter for one Toolplane session. Keep it outside the SDK parity tables.
 - Treat this map as a guide to the maintained durable-remote-tool surface, not as a generic wrapper inventory.
+
+## Integration Seam Layers
+
+- Layer 1: the canonical control plane in `server/proto/service.proto` and `server/pkg/service/` owns request lifecycle, leases, retained replay, machine ownership, and drain.
+- Layer 2: the maintained SDK projections in this file expose the public wrappers available today and make the current limits explicit.
+- Layer 3: Python and TypeScript `ProviderRuntime` surfaces package provider-side orchestration so edge adapters do not reimplement claim, heartbeat, chunk append, result submission, or drain behavior.
+- Layer 4: edge adapters such as `clients/typescript-mcp-adapter/` bind one session and translate foreign discovery, invocation, and inspection shapes without redefining native lifecycle semantics.
+
+## Minimal Adapter Contract Notes
+
+- Tool descriptor mapping should reuse session-scoped `ListTools` or `RegisterTool` rather than a separate global catalog.
+- Invocation should map onto `CreateRequest` or `ExecuteTool` and keep native request IDs visible when possible.
+- Cancellation should map onto `CancelRequest` when the foreign protocol can express it.
+- Streaming may be presented directly or aggregated to fit the foreign protocol, but replay semantics remain native Toolplane concerns.
+- Inspection should reuse native session, request, and machine records instead of inventing a parallel model.
 
 ## Provider Mode Support Decision
 

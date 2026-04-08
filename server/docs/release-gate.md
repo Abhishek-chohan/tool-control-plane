@@ -14,6 +14,19 @@ The relationship is deliberate:
 
 The release signal is intentionally split into three categories so the repo can state what is proven directly, what is proven by focused runtime tests, and what remains a documented limit.
 
+## Named Failure Drill Coverage
+
+See `server/docs/reliability-drills.md` for the full drill matrix. The release gate maps onto that matrix as follows.
+
+| Drill | Release-gate coverage | Note |
+| --- | --- | --- |
+| D1. Provider crash or lease expiry mid-run | `release-gate-runtime` | Focused lease-expiry requeue proof, not a shared fixture |
+| D2. Caller disconnect during streaming | Shared conformance leg plus `release-gate-runtime` | Portable request-recovery fixtures plus retained-replay runtime assertions |
+| D3. Replay behind the retained window | Shared conformance leg plus `release-gate-runtime` | Explicit `out_of_range` checks remain part of the authoritative gate |
+| D4. Deploy drain with in-flight work | Shared conformance leg plus `release-gate-runtime` | Provider-runtime and machine-lifecycle drain-under-load fixtures plus drain waiting tests |
+| D5. Restart recovery with durable storage | Postgres-backed `release-gate-runtime` | Skipped when `TOOLPLANE_DATABASE_URL` is unset |
+| D6. Claim-state and capacity safety | Focused runtime slice only | Drain-blocked create or claim paths are covered; standalone machine-capacity rejection is not yet a named gate leg |
+
 ## Observability Coverage
 
 Observability is now part of the maintained runtime contract, and the release gate now includes one live scrape leg in addition to the focused tests.
@@ -45,6 +58,8 @@ The shared-fixture conformance leg proves one canonical provider-backed flow and
 6. **Request inspection and bounded replay**: `GetRequestChunks()` exposes retained-window metadata, `ResumeStream()` replays from within the retained window, and replay before the retained window fails with the canonical `out_of_range` error.
 7. **Graceful drain**: drain-under-load fixtures prove that new routing stops while in-flight work still completes before the machine disappears.
 
+These map directly onto drills D2 through D4 in `server/docs/reliability-drills.md`, and they provide the shared-fixture portion of the authoritative release story.
+
 ### Proven By Focused Go Tests In `release-gate-runtime`
 
 The focused runtime slice keeps the gate narrow while making the durability claims precise:
@@ -55,6 +70,8 @@ The focused runtime slice keeps the gate narrow while making the durability clai
 - Graceful drain waits for both running and claimed in-flight work to resolve before unregistering the machine.
 - Stream replay returns ordered retained chunks plus the terminal marker, including replay from inside a trimmed retained window.
 - Replay before the retained window still fails with `OUT_OF_RANGE` instead of silently skipping lost chunks.
+
+These focused tests provide the narrow runtime proof for drills D1 through D5 and the drain-blocked routing slice of D6.
 
 ### Documented Limits, Not Durability Guarantees
 

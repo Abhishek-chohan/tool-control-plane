@@ -1,6 +1,12 @@
 # Toolplane TypeScript Client
 
-This package is the maintained JavaScript-family SDK for Toolplane's durable remote tool-execution control plane. Use it when TypeScript or Node code needs explicit provider runtime ownership, request lifecycle control, and drain-safe machine management over the canonical gRPC contract. Its public surface is gRPC-only and centers on session, tool, machine, request, and task lifecycle helpers.
+This package is the maintained JavaScript-family SDK for Toolplane's durable remote tool-execution control plane. Use it when TypeScript or Node code needs the maintained gRPC control-plane surface plus an explicit provider runtime over the canonical contract in `server/proto/service.proto`.
+
+## Decision Rule
+
+Use Toolplane when one remote tool may outlive the caller, needs inspection or bounded replay after disconnect, needs explicit provider ownership or drain behavior, or is queue-backed enough that request lifecycle control matters. If the work is quick, in-process, same-lifecycle, and not operationally sensitive, direct tool calling is simpler.
+
+A concrete first-offload workload is one sandboxed code-execution worker. TypeScript is the maintained JavaScript-family path for that provider or consumer lifecycle on gRPC; the repository-internal HTTP adapters remain conformance-only.
 
 ## When To Start Here
 
@@ -14,6 +20,15 @@ This package is the maintained JavaScript-family SDK for Toolplane's durable rem
 - The maintained control-plane story is the gRPC surface for session, tool, machine, request, and task lifecycle helpers.
 - This SDK now ships a maintained explicit `ProviderRuntime` for the gRPC provider lifecycle: session create or attach, machine registration, request claim, heartbeat, chunk append, result submission, and drain-aware shutdown.
 - Repository-internal HTTP adapters still exist under `tests/conformance/` so the shared fixture runner can exercise the maintained HTTP gateway. They are not part of the public SDK surface.
+
+## Integration Seam Role
+
+This package spans two layers of the maintained agent-runtime seam:
+
+- Layer 2: the maintained JavaScript-family gRPC projection for session, tool, machine, request, and task lifecycle helpers.
+- Layer 3: the explicit `ProviderRuntime` packaging for session attach or create, machine registration, tool registration, polling, claim, heartbeat, chunk append, result submission, and drain.
+
+Build foreign-protocol adapters on top of these surfaces instead of reimplementing claim, heartbeat, or drain logic in the adapter itself. This package still does not make every server capability portable: `ResumeStream` and `GetRequestChunks` remain server-level capabilities without maintained public wrappers here. For the full seam model and current gap caveats, see `server/docs/agent-runtime-integration-seam.md`.
 
 ## Features
 
@@ -34,7 +49,7 @@ npm run build
 
 ## Canonical Flow
 
-The canonical end-to-end path for Toolplane is: register a provider, create or attach a session, execute a request, stream or recover results, and drain the machine. The TypeScript SDK ships that provider loop directly through the explicit `ProviderRuntime` over the maintained gRPC path.
+The canonical end-to-end path for Toolplane is to offload one painful remote tool first: register a provider, create or attach a session, execute a request, stream or recover results, and drain the machine. The TypeScript SDK ships that provider loop directly through the explicit `ProviderRuntime` over the maintained gRPC path.
 
 ## Quick Start
 
