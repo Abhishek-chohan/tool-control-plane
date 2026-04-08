@@ -293,7 +293,7 @@ curl -sS \
   -d '{"sessionId":"your-session-id","requestId":"your-request-id"}' | python3 -m json.tool
 ```
 
-After cancellation, confirm the request reaches a terminal rejected or dead-lettered state through `GetRequest` and the matching `request_cancelled` trace.
+After cancellation, confirm through `GetRequest` that the request reaches terminal `status=failure` with `resultType=rejection` and `error` equal to `"Request was cancelled"`, and verify the matching `request_cancelled` trace event.
 
 ### Drain One Machine
 
