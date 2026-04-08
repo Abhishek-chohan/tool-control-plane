@@ -25,10 +25,48 @@ What this is not:
 - Not the place to infer equal support across every SDK; use `SDK_MAP.md` for that.
 - Not an MCP protocol specification or a one-for-one MCP replacement. MCP is a comparison point and possible adapter target, not the core protocol documented here.
 
-## Adoption Threshold
+## Agent-Runtime Seam Boundary
 
-- Reach for Toolplane when remote tool work is queue-backed, streaming, restart-sensitive, or deploy-sensitive.
-- Direct tool calling is simpler when the tool and the caller share one short-lived process and failure domain.
+This document plus `server/proto/service.proto` define Layer 1 of the maintained agent-runtime seam.
+
+- Layer 1: the control plane owns session scope, request lifecycle, retained replay, machine ownership, session-scoped policy, and drain.
+- Layer 2: maintained SDK projections expose the current public wrappers and limits; `SDK_MAP.md` is the truth source for those support boundaries.
+- Layer 3: Python and TypeScript `ProviderRuntime` surfaces package provider attach or create, machine or tool registration, polling, claim, heartbeat, result submission, chunk append, and drain.
+- Layer 4: edge adapters stay session-bound translation layers that map foreign protocol shapes onto native Toolplane discovery, request execution, and inspection.
+
+For the full four-layer seam model, minimal adapter contract, current projection gaps, and the reference session-bound edge pattern, see `server/docs/agent-runtime-integration-seam.md`.
+
+## Adoption Decision Rule
+
+Use Toolplane when at least one of the following is true and direct in-process tool calling would otherwise force the caller to own remote execution concerns itself:
+
+- The tool may outlive the model turn, HTTP request, websocket, or caller process.
+- Execution must survive or recover cleanly from consumer disconnects.
+- The provider needs explicit machine ownership, heartbeats, or drain behavior.
+- Streaming output needs bounded replay or later inspection after disconnect.
+- Deploys or restarts must avoid blindly dropping in-flight remote work.
+- The workload is queue-backed, multi-worker, or capacity-limited enough that request lifecycle control matters.
+
+Do not use Toolplane just because a model can call a tool. If the work is quick, in-process, same-lifecycle, and not operationally sensitive, direct tool calling is simpler.
+
+A simpler fit is usually:
+
+- Direct tool calling for quick same-lifecycle work.
+- A basic queue or job system when deferral is enough but request inspection, retained replay, explicit provider ownership, and drain are unnecessary.
+- A thin adapter layer only as edge glue onto an existing Toolplane session, not as the product wedge itself.
+
+A concrete reference workload is one sandboxed code-execution worker that runs outside the caller process, may outlive the original interaction, and benefits from inspection, cancellation, and drain-safe rollout.
+
+## Incremental Adoption Boundary
+
+Toolplane is intended to sit behind one hard remote tool first, not to force an all-at-once orchestrator migration.
+
+- Start with one explicit session for one painful remote tool family.
+- Keep the surrounding agent runtime or orchestration layer as the caller of record.
+- Let Toolplane own the remote execution slice only: request creation, provider ownership, result submission, inspection, replay-window recovery, and drain.
+- Exercise inspection, cancellation, and drain during the first evaluation so the control-plane value is visible operationally.
+
+See `server/docs/incremental-adoption.md` for the maintained first-tool migration sequence, coexistence model, reference workload shape, and validation path.
 
 ## Release Gate
 
@@ -104,6 +142,8 @@ This section is the canonical summary of the durability guarantees supported by 
 | Retained-window overflow before a caller resumes | `GetRequestChunks()` exposes the current `start_seq` / `next_seq` window. Resume from inside that window replays the retained tail plus the final marker. Resume from before `start_seq` fails with `OUT_OF_RANGE`. | `server/pkg/service/request_stream_test.go`; `conformance/cases/request_recovery_resume_trimmed_window.json`; `conformance/cases/request_recovery_expired_window.json` | The runtime does not promise durable replay of every chunk ever emitted |
 
 The detailed lifecycle sections below expand these guarantees. If a future behavior change is not reflected here and in the tests or fixtures named above, it should not be treated as part of the maintained durability contract.
+
+For a small evaluator-facing matrix that packages these guarantees into named drills with runnable proof paths and explicit limits, see `server/docs/reliability-drills.md`.
 
 ## Tenant And Policy Boundary
 
@@ -303,7 +343,7 @@ The compact operator contract, supported metric names, throttle reasons, and red
 
 ## Operator Diagnostics
 
-The maintained first-debug path now starts from the supported observability contract in `server/docs/observability.md`.
+The maintained first-debug path now starts from `server/docs/operator-runbook.md`, which is grounded in the supported observability contract in `server/docs/observability.md` and the request inspection surfaces described in this document.
 
 The shortest version is:
 
@@ -313,6 +353,8 @@ The shortest version is:
 - Dead-letter churn: inspect `toolplane_request_dead_letters_total` or `toolplane_task_dead_letters_total`, then follow the matching `requestId` or `taskId` traces.
 - Stuck drains: inspect `toolplane_machine_draining`, then look for `machine_drain_started` without `machine_drain_completed` and the in-flight `requestId` values for that machine.
 - Proxy throttling or circuit-open symptoms: inspect `/health`, `Retry-After`, and proxy throttle logs keyed by stable throttle `reason` and redacted `client_fingerprint`.
+
+Use `GetRequest()`, `ListRequests()`, `ListMachines()`, and `GetRequestChunks()` when the question becomes request ownership, machine ownership, or retained replay-window state. Replay-window state is a request-inspection concern, not part of the maintained observability surface.
 
 ### Streaming, Chunk Retrieval, And ResumeStream
 

@@ -1,10 +1,16 @@
 # Toolplane Python Client
 
-The Python package is the primary maintained SDK for Toolplane's durable remote tool-execution control plane. Toolplane is built for remote tools that need explicit provider ownership, request lifecycle control, retained-window recovery, and deploy-safe drain over the canonical contract in `server/proto/service.proto`. Python is the richest current client surface and the baseline for end-to-end platform capability.
+The Python package is the primary maintained SDK for Toolplane's durable remote tool-execution control plane. Python is the richest current client surface and the baseline for the repo's end-to-end provider, consumer, and admin capability.
+
+## Decision Rule
+
+Use Toolplane when one remote tool may outlive the caller, needs inspection or bounded replay after disconnect, needs explicit provider ownership or drain behavior, or is queue-backed enough that request lifecycle control matters. If the work is quick, in-process, same-lifecycle, and not operationally sensitive, direct tool calling is simpler.
+
+A concrete first offload candidate is one sandboxed code-execution worker. The Python provider-consumer path is the maintained starting point for that shape because it covers explicit provider ownership, request lifecycle control, and the maintained HTTP gateway compatibility layer on the richest SDK surface.
 
 ## When To Start Here
 
-- You want the clearest first-touch path for Toolplane's full provider-consumer lifecycle.
+- You want the clearest maintained first-offload path for one remote tool.
 - You need the richest maintained provider runtime plus the maintained HTTP gateway compatibility surface.
 - You want the repo's baseline surface before comparing narrower Go or TypeScript projections in `SDK_MAP.md`.
 
@@ -15,15 +21,15 @@ The Python package is the primary maintained SDK for Toolplane's durable remote 
 - `ToolplaneHTTP` is a maintained compatibility surface over the same session, tool, machine, request, and task flows.
 - Python exposes a broader public surface than the current Go and TypeScript SDKs; confirm cross-SDK portability in `SDK_MAP.md` before assuming parity.
 
-## Canonical First-Touch Path
+## First Offload Path
 
-Start with the maintained provider-consumer pair before exploring the full API:
+Start with the maintained provider-consumer pair before exploring the full API. The sample tools are intentionally simple, but this is the same lifecycle you would reuse to offload one sandboxed code-execution tool or another environment-bound worker:
 
 1. Run `example_client.py` — connects via gRPC, creates a session through the explicit `ProviderRuntime`, registers machine-backed tools, and starts the provider loop.
 2. Copy the printed `TOOLPLANE_SESSION_ID`.
 3. Run `example_user.py` with that session ID — lists tools, invokes provider-backed work, and polls request state.
 
-See `README_EXAMPLES.md` for environment defaults and the full example flow. For runtime semantics — request lifecycle, streaming, recovery windows, machine drain — see `server/DOCUMENTATION.md`.
+See `README_EXAMPLES.md` for environment defaults and the full example flow. The examples are framed as the maintained first offload path, not as a generic inventory of SDK features. For runtime semantics — request lifecycle, streaming, recovery windows, machine drain — see `server/DOCUMENTATION.md`.
 
 ### Scope Categories
 
