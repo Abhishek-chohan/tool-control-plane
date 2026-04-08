@@ -1,10 +1,16 @@
 # Go Toolplane Client
 
-This Go package is a supported secondary SDK for Toolplane's durable remote tool-execution control plane. Use it when Go code needs the maintained gRPC control-plane flow for session, tool, machine, request, and task lifecycle helpers, but not the full provider worker loop. The canonical contract is `server/proto/service.proto`.
+This Go package is a supported secondary SDK for Toolplane's durable remote tool-execution control plane. Use it when Go code needs the maintained gRPC control-plane flow for a Toolplane-backed remote tool, but not the full provider worker loop. The canonical contract is `server/proto/service.proto`.
+
+## Decision Rule
+
+Reach for Toolplane when one remote tool may outlive the caller, needs inspection after disconnect, needs explicit provider ownership or drain behavior, or is queue-backed enough that request lifecycle control matters. If the work is quick and same-lifecycle, direct tool calling is simpler.
+
+For a concrete first-offload workload, think of one sandboxed code-execution worker. Go is a good fit for the consumer-side and operator-side access around that worker. It is not the maintained SDK for building the provider loop itself.
 
 ## When To Start Here
 
-- Your Go code needs consumer-side or operator-side access to the maintained gRPC lifecycle.
+- Your Go code needs consumer-side or operator-side access around a Toolplane-backed remote tool.
 - You want session, machine, tool, request, and task helpers in Go while keeping the server-owned runtime semantics intact.
 - You do not need a maintained claim-and-submit provider worker loop in Go; for that path, use Python or TypeScript.
 
@@ -32,7 +38,7 @@ go mod tidy
 
 ## Canonical Flow
 
-The canonical end-to-end path for Toolplane is: register a provider, create a session, execute a request, stream or recover results, and drain the machine. The Python and TypeScript SDKs ship the maintained provider runtimes for that flow. The Go examples below follow the same request, recovery, and drain model at a narrower consumer-side scope.
+The canonical end-to-end path for Toolplane is to offload one painful remote tool first: register a provider, create a session, execute a request, stream or recover results, and drain the machine. The Python and TypeScript SDKs ship the maintained provider runtimes for that flow. The Go examples below are the narrower consumer-side and operator-side projection you use alongside that flow, not in place of the maintained provider runtime.
 
 ## Quick Start
 
