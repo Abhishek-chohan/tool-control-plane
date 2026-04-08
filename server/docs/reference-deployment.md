@@ -112,6 +112,26 @@ curl -sS \
 
 For an automated rehearsal of the same bootstrap and post-deploy validation flow, run `cd server && make reference-deployment-integration`.
 
+## First-Tool Evaluation On This Stack
+
+This reference deployment is meant to support incremental adoption, not only a full-platform rollout.
+
+- Start one provider for one explicit session and keep the rest of the caller or orchestration stack unchanged.
+- Route one painful remote tool through that session first.
+- Validate not only the happy path but also inspection, cancellation, and drain before broadening scope.
+
+Use `server/docs/incremental-adoption.md` for the first-tool migration sequence and `server/docs/operator-runbook.md` for the supported inspection and drain workflows.
+
+## Why This Deployment Contract Matters
+
+This document is part of Toolplane's simplification case, not just an operator checklist.
+
+- upgrade order is maintained once instead of rediscovered by each adopting team
+- drain handoff and rollback checks are written down instead of being left to local worker conventions
+- the same stack shape is paired with the authoritative release gate so rollout reasoning and runtime validation stay connected
+
+See `server/docs/economic-case.md` for the broader operational argument built on this reference path.
+
 ## Upgrade Order
 
 Use this order for upgrades to the reference stack:
@@ -133,6 +153,8 @@ Drain is part of the rollout contract, not an optional runtime feature.
 2. Call `DrainMachine` for each machine you are retiring.
 3. Wait until `toolplane_machine_draining` returns to zero, the old machine disappears from `ListMachines`, and the corresponding `machine_drain_completed` event appears in the session trace stream.
 4. Only then terminate the old provider process or host.
+
+The same completion checks and the request-inspection fallback for blocked drains are summarized in `server/docs/operator-runbook.md`.
 
 Example drain call through the gateway:
 

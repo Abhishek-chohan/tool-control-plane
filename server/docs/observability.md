@@ -8,6 +8,16 @@ It answers three questions directly:
 - which identifiers and redaction rules are stable enough to depend on
 - where operators should look first for the most common runtime failures
 
+## Why This Contract Exists
+
+This signal set is intentionally small because part of Toolplane's simplification claim is operational standardization, not metric sprawl.
+
+- queue depth, inflight work, dead letters, drain progress, and gateway throttling should have one maintained vocabulary
+- request, task, and machine correlation should start from stable identifiers instead of per-tool logging conventions
+- the first operator questions should be answerable without each team inventing a separate debugging contract for its remote tools
+
+See `server/docs/economic-case.md` for how this observability contract fits into the broader simplification argument.
+
 ## Supported Signals
 
 ### Server Lifecycle Trace Events
@@ -129,6 +139,8 @@ These are part of the maintained contract, not incidental implementation detail.
 - metrics and `/health` expose aggregate counts only and do not include request payloads, user identifiers, or client addresses
 
 ## Operator Playbook
+
+Use `server/docs/operator-runbook.md` for the step-by-step symptom-first workflows, request-inspection boundaries, and safe `CancelRequest` versus `DrainMachine` guidance. The table below remains the compact summary of the maintained signal contract.
 
 | Symptom | First check | Likely owner | Next confirming check |
 | --- | --- | --- | --- |
