@@ -71,18 +71,30 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 		// Re-adopt in-flight work: re-launch the execution loop for any task that
 		// was pending or running when this instance started (e.g. after a restart).
 		// Without this, a non-terminal task loaded above would stall forever.
-		// Each re-adopted task goes through the normal executeTask loop, which
-		// creates a fresh request against the store-backed claim path, so it is
-		// safe even under multi-instance (only one instance will win each claim).
+		//
+		// Multi-instance safety: each task is claimed via ClaimTaskForAdoption
+		// before its execution loop is launched, so two replicas starting
+		// simultaneously cannot both adopt (and thus duplicate-execute) the same
+		// task. Only the instance that wins the claim launches executeTask.
 		adoptCtx, adoptCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		if nonTerminal, err := store.FindNonTerminalTasks(adoptCtx); err != nil {
 			log.Printf("task re-adoption scan failed: %v", err)
 		} else {
 			for _, task := range nonTerminal {
-				service.recordTaskEvent(task, trace.EventTaskRetryScheduled, map[string]any{
+				// Claim this task for adoption; only one instance wins.
+				claimed, ok, claimErr := store.ClaimTaskForAdoption(adoptCtx, task.ID, 30*time.Second)
+				if claimErr != nil {
+					log.Printf("task re-adoption claim %s failed: %v", task.ID, claimErr)
+					continue
+				}
+				if !ok {
+					// Another instance already adopted this task.
+					continue
+				}
+				service.recordTaskEvent(claimed, trace.EventTaskRetryScheduled, map[string]any{
 					"reason": "instance restart re-adoption",
 				})
-				go service.executeTask(task)
+				go service.executeTask(claimed)
 			}
 		}
 		adoptCancel()

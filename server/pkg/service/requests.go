@@ -146,13 +146,13 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string) (*mod
 
 	// Store request: persist-first so the store is authoritative. On a persist
 	// failure, surface the error instead of leaving the local cache divergent.
+	// Derive from s.ctx so store operations participate in graceful shutdown.
 	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
-			cancel()
 			return nil, fmt.Errorf("persist request create failed: %w", err)
 		}
-		cancel()
 	}
 
 	// Mirror into the local cache after a successful persist.
