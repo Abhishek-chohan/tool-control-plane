@@ -94,3 +94,51 @@ func (s *Store) DeleteTask(ctx context.Context, taskID string) error {
 	}
 	return nil
 }
+
+// FindNonTerminalTasks returns tasks that are not in a terminal state
+// (completed/failed/cancelled). Used on startup to re-adopt in-flight work so
+// a task interrupted by an instance restart resumes instead of stalling.
+func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, created_at, updated_at, completed_at FROM tasks WHERE status NOT IN ($1,$2,$3) AND dead_letter=false`, string(model.StatusCompleted), string(model.StatusFailed), string(model.StatusCancelled))
+	if err != nil {
+		return nil, fmt.Errorf("find non-terminal tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		t := &model.Task{}
+		var result, resultType, errorText sql.NullString
+		var completedAt sql.NullTime
+		var nextAttempt sql.NullTime
+		var lastError sql.NullString
+		if err := rows.Scan(&t.ID, &t.SessionID, &t.ToolName, &t.Status, &t.Input, &result, &resultType, &errorText, &t.Attempts, &t.MaxAttempts, &t.BackoffSeconds, &nextAttempt, &t.TimeoutSeconds, &t.DeadLetter, &lastError, &t.CreatedAt, &t.UpdatedAt, &completedAt); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		if result.Valid {
+			t.Result = result.String
+		}
+		if resultType.Valid {
+			t.ResultType = resultType.String
+		}
+		if errorText.Valid {
+			t.Error = errorText.String
+		}
+		if completedAt.Valid {
+			ct := completedAt.Time
+			t.CompletedAt = &ct
+		}
+		if nextAttempt.Valid {
+			nt := nextAttempt.Time
+			t.NextAttemptAt = &nt
+		}
+		if lastError.Valid {
+			t.LastError = lastError.String
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
