@@ -275,3 +275,231 @@ func scanRequestRow(row rowScanner) (*model.Request, error) {
 	}
 	return r, nil
 }
+
+// requestColumns is the canonical column list used by guarded single-row
+// request reads/updates. It must stay in sync with scanRequestRow.
+const requestColumns = "id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at"
+
+// GetRequest fetches a single request by ID regardless of session. It supports
+// store-backed reads when a request is not present in the local cache, which is
+// required for multi-instance visibility.
+func (s *Store) GetRequest(ctx context.Context, requestID string) (*model.Request, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE id=$1`, requestColumns), requestID)
+	req, err := scanRequestRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get request: %w", err)
+	}
+	return req, nil
+}
+
+// ClaimRequest atomically transitions a pending request to claimed for machineID
+// inside a serializable transaction. It is the explicit-claim (by request ID)
+// counterpart to LeasePendingRequest (which selects any matching pending row).
+// Returns (req, true, nil) on a successful claim, or (nil, false, nil) when the
+// request is missing, not pending, or already claimed/draining.
+func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineID string, leaseDuration time.Duration) (*model.Request, bool, error) {
+	if s == nil {
+		return nil, false, nil
+	}
+	var claimed *model.Request
+	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		row := tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE id=$1 FOR UPDATE`, requestColumns), requestID)
+		req, err := scanRequestRow(row)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return sql.ErrNoRows
+			}
+			return err
+		}
+		if req.SessionID != sessionID || req.Status != model.RequestStatusPending || req.DeadLetter {
+			// Not claimable by this caller; report as not-claimed without error.
+			return nil
+		}
+		now := time.Now()
+		visible := now.Add(leaseDuration)
+		attempts := req.Attempts + 1
+		if _, err := tx.ExecContext(ctx, `
+            UPDATE requests
+            SET status=$1,
+                executing_machine_id=$2,
+                leased_by=$2,
+                leased_at=$3,
+                attempts=$4,
+                visible_at=$5,
+                next_attempt_at=NULL,
+                last_error=NULL,
+                updated_at=$3
+            WHERE id=$6
+        `, string(model.RequestStatusClaimed), machineID, now, attempts, visible, req.ID); err != nil {
+			return fmt.Errorf("claim request: update: %w", err)
+		}
+		req.Status = model.RequestStatusClaimed
+		req.ExecutingMachineID = machineID
+		req.Attempts = attempts
+		req.VisibleAt = visible
+		req.LeasedBy = machineID
+		req.LeasedAt = &now
+		req.NextAttemptAt = nil
+		req.LastError = ""
+		req.UpdatedAt = now
+		claimed = req
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if claimed == nil {
+		return nil, false, nil
+	}
+	return claimed, true, nil
+}
+
+// MachineInFlightCount returns the number of requests currently claimed or
+// running on the given machine. It is the multi-instance-safe source of truth
+// for per-machine capacity enforcement.
+func (s *Store) MachineInFlightCount(ctx context.Context, sessionID, machineID string) (int, error) {
+	if s == nil {
+		return 0, nil
+	}
+	var count int
+	err := s.db.QueryRowContext(ctx, `
+        SELECT COUNT(*) FROM requests
+        WHERE executing_machine_id=$1 AND session_id=$2 AND status IN ($3,$4)
+    `, machineID, sessionID, string(model.RequestStatusClaimed), string(model.RequestStatusRunning)).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("machine in-flight count: %w", err)
+	}
+	return count, nil
+}
+
+// ReclaimExpiredRequest reclaims a single request whose lease has expired,
+// inside a guarded transaction. It either marks the request dead-lettered (when
+// attempts are exhausted) or requeues it to pending with a retry backoff. It
+// returns the updated request and reclaimed=true when this caller won the row,
+// or reclaimed=false (nil error) when the request was not expired, already
+// terminal, or handled by another caller.
+func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now time.Time, leaseDuration time.Duration, maxAttempts int, backoff time.Duration) (*model.Request, bool, error) {
+	if s == nil {
+		return nil, false, nil
+	}
+	var (
+		result    *model.Request
+		reclaimed bool
+	)
+	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		row := tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE id=$1 FOR UPDATE`, requestColumns), requestID)
+		req, err := scanRequestRow(row)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return sql.ErrNoRows
+			}
+			return err
+		}
+		// Only claimed/running requests with an active lease are reclaimable.
+		if req.Status != model.RequestStatusClaimed && req.Status != model.RequestStatusRunning {
+			return nil
+		}
+		if !req.HasTimedOut(now) {
+			return nil
+		}
+
+		updated := *req // shallow copy; we mutate fields below
+		updated.ExecutingMachineID = ""
+		updated.LeasedBy = ""
+		updated.LeasedAt = nil
+		updated.NextAttemptAt = nil
+		updated.UpdatedAt = now
+
+		if req.Attempts >= maxAttempts {
+			// Exhausted: dead-letter and mark terminal-failed.
+			updated.DeadLetter = true
+			updated.Status = model.RequestStatusFailed
+			updated.LastError = "request timed out: max attempts reached"
+			updated.Error = updated.LastError
+			updated.VisibleAt = now
+		} else {
+			// Requeue to pending with linear backoff.
+			updated.Status = model.RequestStatusPending
+			updated.Attempts = req.Attempts + 1
+			updated.LastError = "request lease expired"
+			retryAt := now.Add(backoff)
+			updated.VisibleAt = retryAt
+			updated.NextAttemptAt = &retryAt
+		}
+
+		if err := persistRequestInTx(ctx, tx, &updated); err != nil {
+			return err
+		}
+		result = &updated
+		reclaimed = true
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return result, reclaimed, nil
+}
+
+// persistRequestInTx writes the full request row within an existing
+// transaction. It mirrors SaveRequest but accepts a *sql.Tx so guarded methods
+// can persist atomically.
+func persistRequestInTx(ctx context.Context, tx *sql.Tx, req *model.Request) error {
+	metaBytes := toJSON(req.Meta)
+	if req.Meta == nil {
+		metaBytes = []byte("{}")
+	}
+	streamBytes := toJSON(req.StreamResults)
+	if req.StreamResults == nil {
+		streamBytes = []byte("[]")
+	}
+	resultBytes := []byte("null")
+	if req.Result != nil {
+		resultBytes = toJSON(req.Result)
+	}
+	leasedAtVal := nullableTime(req.LeasedAt)
+	nextAttempt := nullableTime(req.NextAttemptAt)
+	if _, err := tx.ExecContext(ctx, `
+	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+        ON CONFLICT (id) DO UPDATE SET
+            session_id = EXCLUDED.session_id,
+            tool_name = EXCLUDED.tool_name,
+            status = EXCLUDED.status,
+            input = EXCLUDED.input,
+            result = EXCLUDED.result,
+            result_type = EXCLUDED.result_type,
+            error = EXCLUDED.error,
+            executing_machine_id = EXCLUDED.executing_machine_id,
+            meta = EXCLUDED.meta,
+            stream_results = EXCLUDED.stream_results,
+		stream_start_seq = EXCLUDED.stream_start_seq,
+		next_stream_seq = EXCLUDED.next_stream_seq,
+            attempts = EXCLUDED.attempts,
+            max_attempts = EXCLUDED.max_attempts,
+            backoff_seconds = EXCLUDED.backoff_seconds,
+            visible_at = EXCLUDED.visible_at,
+            next_attempt_at = EXCLUDED.next_attempt_at,
+            leased_by = EXCLUDED.leased_by,
+            leased_at = EXCLUDED.leased_at,
+            timeout_seconds = EXCLUDED.timeout_seconds,
+            dead_letter = EXCLUDED.dead_letter,
+            last_error = EXCLUDED.last_error,
+            created_at = EXCLUDED.created_at,
+            updated_at = EXCLUDED.updated_at
+	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt); err != nil {
+		return fmt.Errorf("persist request in tx: %w", err)
+	}
+	return nil
+}

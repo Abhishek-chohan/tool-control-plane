@@ -82,3 +82,25 @@ jobs:
           TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
         working-directory: server
         run: make release-gate
+
+      - name: Run multi-instance (active-active) conformance
+        # End-to-end two-process proof: boots a second toolplane-server replica
+        # sharing the same Postgres and runs the multi_instance conformance case
+        # (a request created on one replica is visible on the other). Requires
+        # the postgres service container above. See server/docs/release-gate.md
+        # and drill D7 in server/docs/reliability-drills.md.
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_MULTI_INSTANCE: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_DATABASE_URL: "postgres://postgres:postgres@localhost:5432/toolplane?sslmode=disable"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+        run: |
+          python -m pytest clients/python-client/tests/conformance/test_conformance_runner.py \
+            -m conformance \
+            -k "multi_instance" \
+            -q

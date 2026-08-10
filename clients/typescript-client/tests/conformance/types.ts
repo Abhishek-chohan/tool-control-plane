@@ -11,7 +11,8 @@ export type SupportedFeature =
   | 'request_recovery'
   | 'api_key_lifecycle'
   | 'machine_lifecycle'
-  | 'provider_runtime';
+  | 'provider_runtime'
+  | 'multi_instance';
 
 export interface ConformanceCase {
   id: string;

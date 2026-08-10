@@ -29,8 +29,8 @@ func (s staticTaskSource) TaskMetricsSnapshot() (pending, running, completed, fa
 func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing.T) {
 	collector := NewRuntimeMetricsCollector()
 	toolService := service.NewToolService(collector, nil)
-	machineService := service.NewMachinesService(toolService, collector, nil)
-	requestService := service.NewRequestsService(toolService, machineService, collector, nil)
+	machineService := service.NewMachinesService(context.Background(), toolService, collector, nil)
+	requestService := service.NewRequestsService(context.Background(), toolService, machineService, collector, nil)
 	collector.Bind(requestService, machineService, staticTaskSource{pending: 1, deadLetter: 1})
 
 	const sessionID = "metrics-session"

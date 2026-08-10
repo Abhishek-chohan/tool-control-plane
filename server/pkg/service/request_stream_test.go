@@ -169,8 +169,8 @@ func newRequestStreamTestServer(t *testing.T) (*GRPCServer, *RequestsService, st
 	t.Helper()
 
 	toolService := NewToolService(trace.NopTracer(), nil)
-	machineService := NewMachinesService(toolService, trace.NopTracer(), nil)
-	requestService := NewRequestsService(toolService, machineService, trace.NopTracer(), nil)
+	machineService := NewMachinesService(context.Background(), toolService, trace.NopTracer(), nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, trace.NopTracer(), nil)
 	server := NewGRPCServer(toolService, nil, machineService, requestService, nil)
 
 	const sessionID = "session-stream"

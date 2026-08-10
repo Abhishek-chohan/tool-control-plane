@@ -20,11 +20,11 @@ type ToolService struct {
 	activeMachines map[string]map[string]struct{}
 	toolsMutex     sync.RWMutex
 	tracer         trace.SessionTracer
-	store          *storage.Store
+	store          storage.Storer
 }
 
 // NewToolService creates a new tool service
-func NewToolService(tracer trace.SessionTracer, store *storage.Store) *ToolService {
+func NewToolService(tracer trace.SessionTracer, store storage.Storer) *ToolService {
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}

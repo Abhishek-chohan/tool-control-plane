@@ -3,7 +3,9 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 
 	"toolplane/pkg/model"
 )
@@ -93,4 +95,137 @@ func (s *Store) DeleteTask(ctx context.Context, taskID string) error {
 		return fmt.Errorf("delete task: %w", err)
 	}
 	return nil
+}
+
+// FindNonTerminalTasks returns tasks that are not in a terminal state
+// (completed/failed/cancelled). Used on startup to re-adopt in-flight work so
+// a task interrupted by an instance restart resumes instead of stalling.
+func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, created_at, updated_at, completed_at FROM tasks WHERE status NOT IN ($1,$2,$3) AND dead_letter=false`, string(model.StatusCompleted), string(model.StatusFailed), string(model.StatusCancelled))
+	if err != nil {
+		return nil, fmt.Errorf("find non-terminal tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		t := &model.Task{}
+		var result, resultType, errorText sql.NullString
+		var completedAt sql.NullTime
+		var nextAttempt sql.NullTime
+		var lastError sql.NullString
+		if err := rows.Scan(&t.ID, &t.SessionID, &t.ToolName, &t.Status, &t.Input, &result, &resultType, &errorText, &t.Attempts, &t.MaxAttempts, &t.BackoffSeconds, &nextAttempt, &t.TimeoutSeconds, &t.DeadLetter, &lastError, &t.CreatedAt, &t.UpdatedAt, &completedAt); err != nil {
+			return nil, fmt.Errorf("scan task: %w", err)
+		}
+		if result.Valid {
+			t.Result = result.String
+		}
+		if resultType.Valid {
+			t.ResultType = resultType.String
+		}
+		if errorText.Valid {
+			t.Error = errorText.String
+		}
+		if completedAt.Valid {
+			ct := completedAt.Time
+			t.CompletedAt = &ct
+		}
+		if nextAttempt.Valid {
+			nt := nextAttempt.Time
+			t.NextAttemptAt = &nt
+		}
+		if lastError.Valid {
+			t.LastError = lastError.String
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+// ClaimTaskForAdoption atomically claims a non-terminal task for re-adoption by
+// this instance, preventing duplicate execution across replicas. It works by
+// bumping updated_at inside a guarded transaction: only the first instance to
+// call this for a given task wins (subsequent callers see updated_at is too
+// recent and return claimed=false). The minAge threshold ensures two instances
+// starting simultaneously don't both adopt — the first one's updated_at bump
+// excludes the second.
+func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error) {
+	if s == nil {
+		return nil, false, nil
+	}
+	var claimed *model.Task
+	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		var updatedAt time.Time
+		if err := tx.QueryRowContext(ctx, `SELECT updated_at FROM tasks WHERE id=$1 FOR UPDATE`, taskID).Scan(&updatedAt); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return sql.ErrNoRows
+			}
+			return fmt.Errorf("claim task adoption: load: %w", err)
+		}
+		// Only adopt if the task hasn't been touched recently (another instance
+		// may have just adopted it).
+		cutoff := time.Now().Add(-minAge)
+		if updatedAt.After(cutoff) {
+			return nil // recently touched; don't claim
+		}
+		now := time.Now()
+		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET updated_at=$1 WHERE id=$2`, now, taskID); err != nil {
+			return fmt.Errorf("claim task adoption: update: %w", err)
+		}
+		row := tx.QueryRowContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, created_at, updated_at, completed_at FROM tasks WHERE id=$1`, taskID)
+		t, err := scanTaskRow(row)
+		if err != nil {
+			return err
+		}
+		claimed = t
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if claimed == nil {
+		return nil, false, nil
+	}
+	return claimed, true, nil
+}
+
+// scanTaskRow scans a single task row from a QueryRow or rows.Next result.
+func scanTaskRow(row interface {
+	Scan(dest ...interface{}) error
+}) (*model.Task, error) {
+	t := &model.Task{}
+	var result, resultType, errorText sql.NullString
+	var completedAt sql.NullTime
+	var nextAttempt sql.NullTime
+	var lastError sql.NullString
+	if err := row.Scan(&t.ID, &t.SessionID, &t.ToolName, &t.Status, &t.Input, &result, &resultType, &errorText, &t.Attempts, &t.MaxAttempts, &t.BackoffSeconds, &nextAttempt, &t.TimeoutSeconds, &t.DeadLetter, &lastError, &t.CreatedAt, &t.UpdatedAt, &completedAt); err != nil {
+		return nil, fmt.Errorf("scan task: %w", err)
+	}
+	if result.Valid {
+		t.Result = result.String
+	}
+	if resultType.Valid {
+		t.ResultType = resultType.String
+	}
+	if errorText.Valid {
+		t.Error = errorText.String
+	}
+	if completedAt.Valid {
+		ct := completedAt.Time
+		t.CompletedAt = &ct
+	}
+	if nextAttempt.Valid {
+		nt := nextAttempt.Time
+		t.NextAttemptAt = &nt
+	}
+	if lastError.Valid {
+		t.LastError = lastError.String
+	}
+	return t, nil
 }
