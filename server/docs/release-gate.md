@@ -73,6 +73,23 @@ The focused runtime slice keeps the gate narrow while making the durability clai
 
 These focused tests provide the narrow runtime proof for drills D1 through D5 and the drain-blocked routing slice of D6.
 
+### Multi-Instance (Active-Active) Runtime Proof
+
+The store-first rework makes the server safe to run as multiple replicas sharing
+one Postgres store. The runtime proof is drill D7:
+
+- `make release-gate-runtime` runs the Go-side proofs (`TestActiveActive_*`
+  plus the storage contract suite `go test ./pkg/storage`) against the in-memory
+  store, so they need no Postgres. They assert cross-instance visibility,
+  no-double-claim, capacity-cap-shared, and no-double-requeue.
+- For end-to-end two-process proof, set `TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1`
+  alongside `TOOLPLANE_DATABASE_URL`. The Python conformance bootstrap then boots
+  a **second** `toolplane-server` replica (its own gRPC + metrics ports) sharing
+  the same Postgres, and the `conformance/cases/multi_instance_claim.json` case
+  proves a request created on one replica is visible and inspectable on the
+  other. Without the flag, the multi-instance case is skipped so the standard
+  single-instance suite stays green.
+
 ### Documented Limits, Not Durability Guarantees
 
 - Toolplane does **not** currently promise durable full-history stream replay beyond the retained 100-chunk window.
