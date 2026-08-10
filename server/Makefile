@@ -119,6 +119,16 @@ release-gate-runtime:
 	go test ./cmd/server -run 'TestLoadServerConfigRejectsProductionInMemoryStorage|TestLoadServerConfigAllowsProductionPostgresStorage' -count=1
 	go test ./pkg/service -run 'TestSessionsServiceRecordsAuditEvents|TestTasksServiceCancelTaskCancelsUnderlyingRequest|TestTasksServiceTimeoutCancelsUnderlyingRequest' -count=1
 	go test ./pkg/service -run 'TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest|TestRequestsServicePersistentRecoveryRequeuesExpiredRequest|TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork|TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt|TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker|TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired' -count=1
+	# Multi-instance store-first proofs: cross-instance visibility, no-double-claim,
+	# capacity cap shared, and no-double-requeue. Run on the in-memory store so
+	# they do not require a Postgres; the Postgres-backed variants live in
+	# pkg/storage and run when TOOLPLANE_DATABASE_URL is set. See
+	# server/docs/release-gate.md (drill D7) for the scenario.
+	go test ./pkg/service -run 'TestActiveActive' -count=1
+	# Storage contract suite: guarded claim, guarded reclaim, capacity count,
+	# drain flag, lease, reclaim, task re-adoption. Memory path always runs;
+	# Postgres path runs when TOOLPLANE_DATABASE_URL is set.
+	go test ./pkg/storage -count=1
 
 reference-deployment-integration:
 	bash ./scripts/reference_deployment_integration.sh
