@@ -104,6 +104,7 @@ server/proto/googleapis/
 
 # IDE and editor files
 .vscode/
+.zcode/
 .idea/
 *.swp
 *.swo
@@ -123,3 +124,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 /tmp/logs/
+
+# Internal documentation (not for the repo)
+docs/
