@@ -86,6 +86,11 @@ def conformance_environment():
         "false",
         "no",
     }
+    multi_instance = os.getenv("TOOLPLANE_CONFORMANCE_MULTI_INSTANCE", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     default_api_key = "toolplane-conformance-fixture-key"
     if not os.getenv("TOOLPLANE_CONFORMANCE_API_KEY"):
@@ -96,6 +101,18 @@ def conformance_environment():
     os.environ.setdefault("TOOLPLANE_AUTH_FIXED_API_KEY", os.environ["TOOLPLANE_CONFORMANCE_API_KEY"])
     os.environ.setdefault("TOOLPLANE_STORAGE_MODE", "memory")
     os.environ.setdefault("TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND", "1")
+
+    # Multi-instance mode requires a shared durable store: two server processes
+    # must see the same request/machine/tool state. In-memory mode gives each
+    # process an isolated store, so force Postgres when multi-instance is on.
+    # The release-gate workflow provisions Postgres and sets the DSN.
+    if multi_instance:
+        if not os.getenv("TOOLPLANE_DATABASE_URL"):
+            pytest.skip(
+                "TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1 requires TOOLPLANE_DATABASE_URL "
+                "(two server replicas must share one Postgres store)"
+            )
+        os.environ["TOOLPLANE_STORAGE_MODE"] = "postgres"
 
     if not auto_boot:
         os.environ.setdefault("TOOLPLANE_CONFORMANCE_GRPC_HOST", "localhost")
@@ -140,6 +157,50 @@ def conformance_environment():
             f"Conformance bootstrap failed: gRPC server did not become ready on {grpc_port}. Check {server_log_path}"
         )
 
+    # Optional second server instance for multi-instance (active-active)
+    # conformance. Both replicas share the same Postgres store so request claim,
+    # drain, and requeue behave coherently across them. The second instance gets
+    # its own gRPC port and its own metrics port; the adapter layer targets it
+    # via TOOLPLANE_CONFORMANCE_GRPC_PORT_B.
+    server_b_process = None
+    server_b_log_handle = None
+    if multi_instance:
+        grpc_port_b = _find_free_port()
+        metrics_port_b = _find_free_port()
+        os.environ["TOOLPLANE_CONFORMANCE_GRPC_PORT_B"] = str(grpc_port_b)
+
+        server_b_log_path = log_dir / "grpc_server_b.log"
+        server_b_log_handle = open(server_b_log_path, "w", encoding="utf-8")
+
+        server_b_process = subprocess.Popen(
+            [
+                "go",
+                "run",
+                "./cmd/server",
+                "--port",
+                str(grpc_port_b),
+                "--metrics-listen",
+                f"127.0.0.1:{metrics_port_b}",
+            ],
+            cwd=_server_root(),
+            stdout=server_b_log_handle,
+            stderr=subprocess.STDOUT,
+            env=os.environ.copy(),
+        )
+
+        if not _wait_for_tcp(
+            "127.0.0.1", grpc_port_b, timeout_seconds=BOOTSTRAP_READINESS_TIMEOUT_SECONDS
+        ):
+            _terminate_process(server_b_process)
+            _terminate_process(server_process)
+            server_log_handle.close()
+            proxy_log_handle.close()
+            if server_b_log_handle:
+                server_b_log_handle.close()
+            pytest.skip(
+                f"Conformance bootstrap failed: second gRPC server did not become ready on {grpc_port_b}. Check {server_b_log_path}"
+            )
+
     proxy_process = subprocess.Popen(
         [
             "go",
@@ -160,8 +221,12 @@ def conformance_environment():
     if not _wait_for_http_health(health_url, timeout_seconds=BOOTSTRAP_READINESS_TIMEOUT_SECONDS):
         _terminate_process(proxy_process)
         _terminate_process(server_process)
+        if server_b_process is not None:
+            _terminate_process(server_b_process)
         server_log_handle.close()
         proxy_log_handle.close()
+        if server_b_log_handle:
+            server_b_log_handle.close()
         pytest.skip(
             f"Conformance bootstrap failed: HTTP gateway did not become ready on {http_port}. Check {proxy_log_path}"
         )
@@ -171,5 +236,9 @@ def conformance_environment():
     finally:
         _terminate_process(proxy_process)
         _terminate_process(server_process)
+        if server_b_process is not None:
+            _terminate_process(server_b_process)
         server_log_handle.close()
         proxy_log_handle.close()
+        if server_b_log_handle:
+            server_b_log_handle.close()

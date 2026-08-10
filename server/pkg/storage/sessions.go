@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -22,22 +23,53 @@ func (s *Store) AllSessions(ctx context.Context) ([]*model.Session, error) {
 
 	var sessions []*model.Session
 	for rows.Next() {
-		var rec model.Session
-		var namespace sql.NullString
-		var apiKey sql.NullString
-		if err := rows.Scan(&rec.ID, &rec.Name, &rec.Description, &namespace, &rec.CreatedAt, &rec.CreatedBy, &apiKey); err != nil {
-			return nil, fmt.Errorf("scan session: %w", err)
+		rec, err := scanSessionRow(rows)
+		if err != nil {
+			return nil, err
 		}
-		if namespace.Valid {
-			rec.Namespace = namespace.String
-		}
-		if apiKey.Valid {
-			rec.ApiKey = apiKey.String
-		}
-		sessions = append(sessions, &rec)
+		sessions = append(sessions, rec)
 	}
 
 	return sessions, rows.Err()
+}
+
+// GetSession fetches a single session by ID. It supports store-backed reads
+// when a session is not present in the local cache (multi-instance visibility).
+func (s *Store) GetSession(ctx context.Context, sessionID string) (*model.Session, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, description, namespace, created_at, created_by, api_key FROM sessions WHERE id=$1`, sessionID)
+	rec, err := scanSessionRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get session: %w", err)
+	}
+	return rec, nil
+}
+
+// sessionRowScanner is the scan interface shared by AllSessions rows and
+// GetSession's single-row QueryRow.
+type sessionRowScanner interface {
+	Scan(dest ...interface{}) error
+}
+
+func scanSessionRow(row sessionRowScanner) (*model.Session, error) {
+	var rec model.Session
+	var namespace sql.NullString
+	var apiKey sql.NullString
+	if err := row.Scan(&rec.ID, &rec.Name, &rec.Description, &namespace, &rec.CreatedAt, &rec.CreatedBy, &apiKey); err != nil {
+		return nil, fmt.Errorf("scan session: %w", err)
+	}
+	if namespace.Valid {
+		rec.Namespace = namespace.String
+	}
+	if apiKey.Valid {
+		rec.ApiKey = apiKey.String
+	}
+	return &rec, nil
 }
 
 func (s *Store) SaveSession(ctx context.Context, session *model.Session) error {

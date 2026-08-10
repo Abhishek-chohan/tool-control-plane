@@ -38,6 +38,10 @@ func (s *machineDrainState) complete() {
 
 // MachinesService handles machine registration and management
 type MachinesService struct {
+	// ctx is the server-shutdown root context; the heartbeat-reaper loop honors
+	// it for graceful shutdown.
+	ctx context.Context
+
 	// In-memory storage for machines
 	machines      map[string]map[string]*model.Machine // map[sessionID]map[machineID]Machine
 	machinesMutex sync.RWMutex
@@ -53,16 +57,20 @@ type MachinesService struct {
 	toolService *ToolService
 
 	tracer trace.SessionTracer
-	store  *storage.Store
+	store  storage.Storer
 }
 
 // NewMachinesService creates a new machines service
-func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, store *storage.Store) *MachinesService {
+func NewMachinesService(ctx context.Context, toolService *ToolService, tracer trace.SessionTracer, store storage.Storer) *MachinesService {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
 
 	service := &MachinesService{
+		ctx:              ctx,
 		machines:         make(map[string]map[string]*model.Machine),
 		machineCapacity:  make(map[string]map[string]int),
 		machineInFlight:  make(map[string]map[string]int),
@@ -73,9 +81,9 @@ func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, st
 	}
 
 	if store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		defer cancel()
-		if machines, err := store.AllMachines(ctx); err != nil {
+		if machines, err := store.AllMachines(loadCtx); err != nil {
 			log.Printf("machine persistence load failed: %v", err)
 		} else {
 			for _, machine := range machines {
@@ -88,7 +96,8 @@ func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, st
 		}
 	}
 
-	// Start cleanup goroutine for inactive machines
+	// Start cleanup goroutine for inactive machines. Honors ctx for graceful
+	// shutdown.
 	go service.cleanupInactiveMachines()
 
 	return service
@@ -247,11 +256,29 @@ func (s *MachinesService) DrainMachine(ctx context.Context, sessionID, machineID
 
 // IsMachineDraining reports whether the machine is in graceful-drain mode.
 func (s *MachinesService) IsMachineDraining(sessionID, machineID string) bool {
+	// Fast path: check the in-memory drain map first.
 	s.drainMutex.RLock()
-	defer s.drainMutex.RUnlock()
 	if sessionDrains, ok := s.drainingMachines[sessionID]; ok {
-		_, ok = sessionDrains[machineID]
-		return ok
+		if _, draining := sessionDrains[machineID]; draining {
+			s.drainMutex.RUnlock()
+			return true
+		}
+	}
+	s.drainMutex.RUnlock()
+
+	// Store path: when a store is configured, consult the persisted drain flag
+	// so a drain initiated on another instance is visible here (multi-instance
+	// coherence). Without this, instance B could claim/dispatch work to a
+	// machine that instance A is draining.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		draining, err := s.store.IsMachineDraining(ctx, machineID)
+		if err != nil {
+			log.Printf("is machine draining lookup failed: %v", err)
+			return false
+		}
+		return draining
 	}
 	return false
 }
@@ -387,8 +414,13 @@ func (s *MachinesService) cleanupInactiveMachines() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.cleanupMachines()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.cleanupMachines()
+		}
 	}
 }
 
@@ -741,20 +773,46 @@ func (s *MachinesService) OrderMachinesByLoad(sessionID string, machines []*mode
 
 // MachineLoadInfo exposes current in-flight count and capacity.
 func (s *MachinesService) MachineLoadInfo(sessionID, machineID string) (int, int) {
-	s.capacityMutex.RLock()
-	defer s.capacityMutex.RUnlock()
-	load := 0
 	cap := maxMachineConcurrentRequests
-	if loads, ok := s.machineInFlight[sessionID]; ok {
-		if current, ok := loads[machineID]; ok {
-			load = current
-		}
-	}
+	s.capacityMutex.RLock()
 	if caps, ok := s.machineCapacity[sessionID]; ok {
 		if current, ok := caps[machineID]; ok && current > 0 {
 			cap = current
 		}
 	}
+	s.capacityMutex.RUnlock()
+
+	// When a store is configured, use the shared (cross-instance) in-flight
+	// count so per-machine capacity holds across replicas. The in-memory
+	// counter is only a local approximation; the store COUNT is authoritative.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		count, err := s.store.MachineInFlightCount(ctx, sessionID, machineID)
+		if err != nil {
+			log.Printf("machine in-flight count lookup failed: %v", err)
+			// Fall back to the in-memory counter on error.
+			s.capacityMutex.RLock()
+			load := 0
+			if loads, ok := s.machineInFlight[sessionID]; ok {
+				if current, ok := loads[machineID]; ok {
+					load = current
+				}
+			}
+			s.capacityMutex.RUnlock()
+			return load, cap
+		}
+		return count, cap
+	}
+
+	s.capacityMutex.RLock()
+	load := 0
+	if loads, ok := s.machineInFlight[sessionID]; ok {
+		if current, ok := loads[machineID]; ok {
+			load = current
+		}
+	}
+	s.capacityMutex.RUnlock()
 	return load, cap
 }
 

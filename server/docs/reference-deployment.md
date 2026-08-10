@@ -143,7 +143,21 @@ Use this order for upgrades to the reference stack:
 5. Re-run the post-deploy validation above.
 6. Run the authoritative release gate locally against the same Postgres database before declaring the rollout complete.
 
-The reference artifact is single-instance for clarity. If your platform runs multiple replicas, keep the same order: one migrate step, then server replicas, then gateway replicas.
+The reference `compose.yaml` ships one server replica for clarity, but the
+server is **multi-instance (active-active) ready**: the store is the source of
+truth and request claim, lease-expiry reclaim, tool ownership, and capacity are
+guarded by serializable transactions with row-level locking
+(`SELECT ... FOR UPDATE SKIP LOCKED`), so two or more server replicas can share
+one Postgres store without double-dispatching work or double-requeueing expired
+requests. See `server/docs/reliability-drills.md` drill D7 for the proof path.
+
+To run multiple replicas, keep the same order: one `migrate` step, then N
+`server` replicas (each with its own `--port` and `--metrics-listen`), then the
+`gateway` replicas. All server replicas must point at the same
+`TOOLPLANE_DATABASE_URL`. The release-gate runtime suite
+(`make release-gate-runtime`, `TestActiveActive*`) proves the multi-instance
+invariants against the in-memory store; the Postgres-backed variants run when
+`TOOLPLANE_DATABASE_URL` is set.
 
 ## Provider Drain And Safe Handoff
 

@@ -15,8 +15,8 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 
 	tracer := &recordingTracer{}
 	toolService := NewToolService(tracer, nil)
-	machineService := NewMachinesService(toolService, tracer, nil)
-	requestService := NewRequestsService(toolService, machineService, tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
 	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
 
 	const sessionID = "session-task-cancel"
@@ -95,8 +95,8 @@ func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
 
 	tracer := &recordingTracer{}
 	toolService := NewToolService(tracer, nil)
-	machineService := NewMachinesService(toolService, tracer, nil)
-	requestService := NewRequestsService(toolService, machineService, tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
 	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
 
 	const sessionID = "session-task-timeout"

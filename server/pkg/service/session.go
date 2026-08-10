@@ -31,11 +31,11 @@ type SessionsService struct {
 	userLocks sync.Map // map[userID]*sync.Mutex to serialize per-user changes
 
 	tracer trace.SessionTracer
-	store  *storage.Store
+	store  storage.Storer
 }
 
 // NewSessionsService creates a new sessions service
-func NewSessionsService(tracer trace.SessionTracer, store *storage.Store) *SessionsService {
+func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *SessionsService {
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
@@ -186,14 +186,34 @@ func (s *SessionsService) CreateSession(userID, name, description, apiKey, reque
 // GetSessionByID gets a session by ID
 func (s *SessionsService) GetSessionByID(sessionID string) (*model.Session, error) {
 	s.sessionsMutex.RLock()
-	defer s.sessionsMutex.RUnlock()
-
 	session, ok := s.sessions[sessionID]
-	if !ok {
-		return nil, fmt.Errorf("session %s not found", sessionID)
+	s.sessionsMutex.RUnlock()
+	if ok {
+		return session, nil
 	}
 
-	return session, nil
+	// Cache miss: fall back to the store so a session created on another
+	// instance is visible here (multi-instance read-through). Populate the
+	// local cache on a successful lookup so subsequent reads stay fast.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		found, err := s.store.GetSession(ctx, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("session %s lookup failed: %w", sessionID, err)
+		}
+		if found == nil {
+			return nil, fmt.Errorf("session %s not found", sessionID)
+		}
+		s.sessionsMutex.Lock()
+		if _, exists := s.sessions[sessionID]; !exists {
+			s.sessions[sessionID] = found
+		}
+		s.sessionsMutex.Unlock()
+		return found, nil
+	}
+
+	return nil, fmt.Errorf("session %s not found", sessionID)
 }
 
 // ListSessions lists all sessions for a user

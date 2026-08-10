@@ -38,11 +38,11 @@ type TasksService struct {
 	machinesService *MachinesService
 	requestsService *RequestsService
 	tracer          trace.SessionTracer
-	store           *storage.Store
+	store           storage.Storer
 }
 
 // NewTasksService creates a new tasks service
-func NewTasksService(ctx context.Context, toolService *ToolService, machinesService *MachinesService, requestsService *RequestsService, tracer trace.SessionTracer, store *storage.Store) *TasksService {
+func NewTasksService(ctx context.Context, toolService *ToolService, machinesService *MachinesService, requestsService *RequestsService, tracer trace.SessionTracer, store storage.Storer) *TasksService {
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
@@ -58,7 +58,7 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 		store:           store,
 	}
 	if store != nil {
-		loadCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		defer cancel()
 		if tasks, err := store.AllTasks(loadCtx); err != nil {
 			log.Printf("task persistence load failed: %v", err)
@@ -67,6 +67,37 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 				service.tasks[task.ID] = task
 			}
 		}
+
+		// Re-adopt in-flight work: re-launch the execution loop for any task that
+		// was pending or running when this instance started (e.g. after a restart).
+		// Without this, a non-terminal task loaded above would stall forever.
+		//
+		// Multi-instance safety: each task is claimed via ClaimTaskForAdoption
+		// before its execution loop is launched, so two replicas starting
+		// simultaneously cannot both adopt (and thus duplicate-execute) the same
+		// task. Only the instance that wins the claim launches executeTask.
+		adoptCtx, adoptCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		if nonTerminal, err := store.FindNonTerminalTasks(adoptCtx); err != nil {
+			log.Printf("task re-adoption scan failed: %v", err)
+		} else {
+			for _, task := range nonTerminal {
+				// Claim this task for adoption; only one instance wins.
+				claimed, ok, claimErr := store.ClaimTaskForAdoption(adoptCtx, task.ID, 30*time.Second)
+				if claimErr != nil {
+					log.Printf("task re-adoption claim %s failed: %v", task.ID, claimErr)
+					continue
+				}
+				if !ok {
+					// Another instance already adopted this task.
+					continue
+				}
+				service.recordTaskEvent(claimed, trace.EventTaskRetryScheduled, map[string]any{
+					"reason": "instance restart re-adoption",
+				})
+				go service.executeTask(claimed)
+			}
+		}
+		adoptCancel()
 	}
 	return service
 }

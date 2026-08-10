@@ -39,7 +39,8 @@ func (s *Store) migrate(ctx context.Context) error {
             sdk_language TEXT,
             ip TEXT,
             created_at TIMESTAMPTZ NOT NULL,
-            last_ping_at TIMESTAMPTZ NOT NULL
+            last_ping_at TIMESTAMPTZ NOT NULL,
+            draining BOOLEAN NOT NULL DEFAULT FALSE
         )`,
 		`CREATE TABLE IF NOT EXISTS tools (
             id TEXT PRIMARY KEY,
@@ -142,6 +143,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
 		`ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
+		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS draining BOOLEAN NOT NULL DEFAULT FALSE`,
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

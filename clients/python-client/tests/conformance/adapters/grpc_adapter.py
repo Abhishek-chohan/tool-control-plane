@@ -75,6 +75,16 @@ class GrpcConformanceAdapter:
     def get_session_context(self, session_id: str):
         return self.client.get_session(session_id)
 
+    def attach_session(self, session_id: str) -> None:
+        """Attach this client to an existing session without creating a new one.
+
+        Used by the multi-instance conformance case so a second server instance's
+        client can read state for a session created on another instance. The
+        underlying ensure_session_context reaches the server's GetSession RPC,
+        which (with the store read-through) resolves the session across replicas.
+        """
+        self.client.ensure_session_context(session_id, create_if_missing=False)
+
     def update_session(self, session_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
         return self.client.update_session(
             session_id=session_id,

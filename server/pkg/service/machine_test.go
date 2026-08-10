@@ -12,8 +12,8 @@ import (
 
 func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *testing.T) {
 	toolService := NewToolService(trace.NopTracer(), nil)
-	machineService := NewMachinesService(toolService, trace.NopTracer(), nil)
-	requestService := NewRequestsService(toolService, machineService, trace.NopTracer(), nil)
+	machineService := NewMachinesService(context.Background(), toolService, trace.NopTracer(), nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, trace.NopTracer(), nil)
 
 	const sessionID = "session-drain"
 	const machineID = "machine-drain"
@@ -103,8 +103,8 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 func TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt(t *testing.T) {
 	tracer := &recordingTracer{}
 	toolService := NewToolService(tracer, nil)
-	machineService := NewMachinesService(toolService, tracer, nil)
-	requestService := NewRequestsService(toolService, machineService, tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
 
 	const sessionID = "session-drain-claimed"
 	const machineID = "machine-drain-claimed"
@@ -193,8 +193,8 @@ func TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeu
 
 func TestMachinesServiceDrainMachineIsIdempotentForMissingMachine(t *testing.T) {
 	toolService := NewToolService(trace.NopTracer(), nil)
-	machineService := NewMachinesService(toolService, trace.NopTracer(), nil)
-	_ = NewRequestsService(toolService, machineService, trace.NopTracer(), nil)
+	machineService := NewMachinesService(context.Background(), toolService, trace.NopTracer(), nil)
+	_ = NewRequestsService(context.Background(), toolService, machineService, trace.NopTracer(), nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()

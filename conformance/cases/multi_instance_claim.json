@@ -1,0 +1,20 @@
+{
+  "id": "multi_instance_claim_cross_visibility",
+  "feature": "multi_instance",
+  "description": "Two server replicas sharing one Postgres store: a request created on instance A is visible and inspectable on instance B through B's store-backed read path. This is the end-to-end, two-process counterpart to the Go-side TestActiveActive_CrossInstanceVisibility proof. It exercises two real toolplane-server processes against one Postgres store, proving the session and request read-through paths work across replicas. Requires TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1 plus TOOLPLANE_DATABASE_URL so the conformance bootstrap boots a second server replica.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-multi-instance-session",
+    "description": "session for multi-instance cross-visibility fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_multi_instance_tool",
+    "tool_description": "conformance multi-instance tool",
+    "params": {
+      "message": "cross-instance"
+    }
+  },
+  "expected": {
+    "request_visible_on_instance_b": true
+  },
+  "tags": ["multi_instance", "request"]
+}

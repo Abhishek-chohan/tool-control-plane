@@ -173,3 +173,44 @@ func (s *Store) ReclaimMachine(ctx context.Context, machineID string, cutoff tim
 
 	return reclaimedSessionID, updates, true, nil
 }
+
+// SetMachineDraining marks the machine as draining so drain state is coherent
+// across instances. It is idempotent.
+func (s *Store) SetMachineDraining(ctx context.Context, sessionID, machineID string) error {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE machines SET draining=true WHERE id=$1 AND session_id=$2`, machineID, sessionID); err != nil {
+		return fmt.Errorf("set machine draining: %w", err)
+	}
+	return nil
+}
+
+// ClearMachineDraining clears the drain flag, e.g. after the machine has been
+// fully unregistered or the drain was aborted. It is idempotent.
+func (s *Store) ClearMachineDraining(ctx context.Context, machineID string) error {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE machines SET draining=false WHERE id=$1`, machineID); err != nil {
+		return fmt.Errorf("clear machine draining: %w", err)
+	}
+	return nil
+}
+
+// IsMachineDraining reports whether the machine is currently draining, reading
+// the persisted flag so the answer is consistent across instances.
+func (s *Store) IsMachineDraining(ctx context.Context, machineID string) (bool, error) {
+	if s == nil {
+		return false, nil
+	}
+	var draining bool
+	err := s.db.QueryRowContext(ctx, `SELECT draining FROM machines WHERE id=$1`, machineID).Scan(&draining)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("is machine draining: %w", err)
+	}
+	return draining, nil
+}
