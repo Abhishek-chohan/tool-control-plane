@@ -38,6 +38,10 @@ func (s *machineDrainState) complete() {
 
 // MachinesService handles machine registration and management
 type MachinesService struct {
+	// ctx is the server-shutdown root context; the heartbeat-reaper loop honors
+	// it for graceful shutdown.
+	ctx context.Context
+
 	// In-memory storage for machines
 	machines      map[string]map[string]*model.Machine // map[sessionID]map[machineID]Machine
 	machinesMutex sync.RWMutex
@@ -53,16 +57,20 @@ type MachinesService struct {
 	toolService *ToolService
 
 	tracer trace.SessionTracer
-	store  *storage.Store
+	store  storage.Storer
 }
 
 // NewMachinesService creates a new machines service
-func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, store *storage.Store) *MachinesService {
+func NewMachinesService(ctx context.Context, toolService *ToolService, tracer trace.SessionTracer, store storage.Storer) *MachinesService {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
 
 	service := &MachinesService{
+		ctx:              ctx,
 		machines:         make(map[string]map[string]*model.Machine),
 		machineCapacity:  make(map[string]map[string]int),
 		machineInFlight:  make(map[string]map[string]int),
@@ -73,9 +81,9 @@ func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, st
 	}
 
 	if store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		defer cancel()
-		if machines, err := store.AllMachines(ctx); err != nil {
+		if machines, err := store.AllMachines(loadCtx); err != nil {
 			log.Printf("machine persistence load failed: %v", err)
 		} else {
 			for _, machine := range machines {
@@ -88,7 +96,8 @@ func NewMachinesService(toolService *ToolService, tracer trace.SessionTracer, st
 		}
 	}
 
-	// Start cleanup goroutine for inactive machines
+	// Start cleanup goroutine for inactive machines. Honors ctx for graceful
+	// shutdown.
 	go service.cleanupInactiveMachines()
 
 	return service
@@ -387,8 +396,13 @@ func (s *MachinesService) cleanupInactiveMachines() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.cleanupMachines()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.cleanupMachines()
+		}
 	}
 }
 

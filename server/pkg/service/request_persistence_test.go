@@ -33,8 +33,8 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	tracer := &recordingTracer{}
 	sessionSvc := NewSessionsService(tracer, store)
 	toolSvc := NewToolService(tracer, store)
-	machineSvc := NewMachinesService(toolSvc, tracer, store)
-	requestSvc := NewRequestsService(toolSvc, machineSvc, tracer, store)
+	machineSvc := NewMachinesService(context.Background(), toolSvc, tracer, store)
+	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, tracer, store)
 
 	session, err := sessionSvc.CreateSession("persistent-user", "Persistent Recovery", "tier 4 persistence validation", "", "", "")
 	if err != nil {
@@ -83,8 +83,8 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 
 	restartedTracer := &recordingTracer{}
 	restartedToolSvc := NewToolService(restartedTracer, restartedStore)
-	restartedMachineSvc := NewMachinesService(restartedToolSvc, restartedTracer, restartedStore)
-	restartedRequestSvc := NewRequestsService(restartedToolSvc, restartedMachineSvc, restartedTracer, restartedStore)
+	restartedMachineSvc := NewMachinesService(context.Background(), restartedToolSvc, restartedTracer, restartedStore)
+	restartedRequestSvc := NewRequestsService(context.Background(), restartedToolSvc, restartedMachineSvc, restartedTracer, restartedStore)
 
 	restartedRequestSvc.markStalledRequests()
 

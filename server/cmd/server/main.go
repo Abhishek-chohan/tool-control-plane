@@ -19,11 +19,22 @@ import (
 	"toolplane/pkg/observability"
 	"toolplane/pkg/service"
 	"toolplane/pkg/storage"
+	"toolplane/pkg/storage/memory"
 	"toolplane/pkg/trace"
 	proto "toolplane/proto"
 
 	"toolplane/cmd/server/auth"
 )
+
+// storeClose closes the underlying store if the implementation exposes Close.
+// Both the Postgres store (*storage.Store) and the in-memory store
+// (*memory.Store) implement Close().
+func storeClose(store storage.Storer) error {
+	if c, ok := store.(interface{ Close() error }); ok {
+		return c.Close()
+	}
+	return nil
+}
 
 func main() {
 	port := flag.Int("port", 9001, "Port for gRPC server")
@@ -54,26 +65,28 @@ func main() {
 		tracer = trace.NewMultiTracer(metricsCollector, trace.NewLoggingTracer(log.Default()))
 	}
 
-	store, err := storage.OpenFromEnv(ctx, log.Default())
+	pgStore, err := storage.OpenFromEnv(ctx, log.Default())
+	var store storage.Storer
 	if err != nil {
 		switch {
 		case errors.Is(err, storage.ErrExplicitInMemoryMode):
+			store = memory.New()
 			log.Printf("storage mode: explicit in-memory")
 		case errors.Is(err, storage.ErrConfigMissing):
 			log.Fatalf("storage configuration error: %v", err)
 		default:
 			log.Fatalf("failed to initialize storage: %v", err)
 		}
+	} else {
+		store = pgStore
 	}
-	if store != nil {
-		defer func() {
-			if cerr := store.Close(); cerr != nil {
-				log.Printf("error closing storage: %v", cerr)
-			}
-		}()
-	}
+	defer func() {
+		if cerr := storeClose(store); cerr != nil {
+			log.Printf("error closing storage: %v", cerr)
+		}
+	}()
 	if *migrateOnly {
-		if store == nil {
+		if pgStore == nil {
 			log.Fatalf("migrate-only requires Postgres-backed storage")
 		}
 		log.Printf("database schema ready (env=%s storage=postgres)", cfg.environment)
@@ -83,8 +96,8 @@ func main() {
 	// initialize your services
 	sessionSvc := service.NewSessionsService(tracer, store)
 	toolSvc := service.NewToolService(tracer, store)
-	machineSvc := service.NewMachinesService(toolSvc, tracer, store)
-	requestSvc := service.NewRequestsService(toolSvc, machineSvc, tracer, store)
+	machineSvc := service.NewMachinesService(ctx, toolSvc, tracer, store)
+	requestSvc := service.NewRequestsService(ctx, toolSvc, machineSvc, tracer, store)
 	tasksSvc := service.NewTasksService(ctx, toolSvc, machineSvc, requestSvc, tracer, store)
 	metricsCollector.Bind(requestSvc, machineSvc, tasksSvc)
 

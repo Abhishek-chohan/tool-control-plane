@@ -38,11 +38,11 @@ type TasksService struct {
 	machinesService *MachinesService
 	requestsService *RequestsService
 	tracer          trace.SessionTracer
-	store           *storage.Store
+	store           storage.Storer
 }
 
 // NewTasksService creates a new tasks service
-func NewTasksService(ctx context.Context, toolService *ToolService, machinesService *MachinesService, requestsService *RequestsService, tracer trace.SessionTracer, store *storage.Store) *TasksService {
+func NewTasksService(ctx context.Context, toolService *ToolService, machinesService *MachinesService, requestsService *RequestsService, tracer trace.SessionTracer, store storage.Storer) *TasksService {
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
@@ -58,7 +58,7 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 		store:           store,
 	}
 	if store != nil {
-		loadCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		defer cancel()
 		if tasks, err := store.AllTasks(loadCtx); err != nil {
 			log.Printf("task persistence load failed: %v", err)
@@ -67,6 +67,25 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 				service.tasks[task.ID] = task
 			}
 		}
+
+		// Re-adopt in-flight work: re-launch the execution loop for any task that
+		// was pending or running when this instance started (e.g. after a restart).
+		// Without this, a non-terminal task loaded above would stall forever.
+		// Each re-adopted task goes through the normal executeTask loop, which
+		// creates a fresh request against the store-backed claim path, so it is
+		// safe even under multi-instance (only one instance will win each claim).
+		adoptCtx, adoptCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		if nonTerminal, err := store.FindNonTerminalTasks(adoptCtx); err != nil {
+			log.Printf("task re-adoption scan failed: %v", err)
+		} else {
+			for _, task := range nonTerminal {
+				service.recordTaskEvent(task, trace.EventTaskRetryScheduled, map[string]any{
+					"reason": "instance restart re-adoption",
+				})
+				go service.executeTask(task)
+			}
+		}
+		adoptCancel()
 	}
 	return service
 }
