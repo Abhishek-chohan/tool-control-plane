@@ -201,7 +201,8 @@ func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) 
 }
 
 // intEnv reads a positive integer from the named environment variable, falling
-// back to fallback when unset, empty, or non-positive.
+// back to fallback when the variable is unset, empty, not parseable as an int,
+// or non-positive.
 func intEnv(name string, fallback int) int {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
@@ -215,7 +216,8 @@ func intEnv(name string, fallback int) int {
 }
 
 // durationEnv reads a Go duration string (e.g. "5m", "30s") from the named
-// environment variable, falling back to fallback when unset, empty, or invalid.
+// environment variable, falling back to fallback when the variable is unset,
+// empty, not parseable as a duration, or non-positive.
 func durationEnv(name string, fallback time.Duration) time.Duration {
 	raw := strings.TrimSpace(os.Getenv(name))
 	if raw == "" {
