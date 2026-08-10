@@ -14,6 +14,10 @@ import (
 
 // RequestsService handles request-related operations
 type RequestsService struct {
+	// ctx is the server-shutdown root context; background loops honor it for
+	// graceful shutdown.
+	ctx context.Context
+
 	// In-memory storage for requests
 	requests      map[string]map[string]*model.Request // map[sessionID]map[requestID]Request
 	requestsMutex sync.RWMutex
@@ -22,7 +26,7 @@ type RequestsService struct {
 	// Service dependencies
 	toolService    *ToolService
 	machineService *MachinesService
-	store          *storage.Store
+	store          storage.Storer
 	tracer         trace.SessionTracer
 
 	leaseDuration    time.Duration
@@ -61,12 +65,16 @@ func (e *RequestStreamExpiredError) Error() string {
 }
 
 // NewRequestsService creates a new requests service
-func NewRequestsService(toolService *ToolService, machineService *MachinesService, tracer trace.SessionTracer, store *storage.Store) *RequestsService {
+func NewRequestsService(ctx context.Context, toolService *ToolService, machineService *MachinesService, tracer trace.SessionTracer, store storage.Storer) *RequestsService {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
 
 	service := &RequestsService{
+		ctx:              ctx,
 		requests:         make(map[string]map[string]*model.Request),
 		toolService:      toolService,
 		machineService:   machineService,
@@ -81,9 +89,9 @@ func NewRequestsService(toolService *ToolService, machineService *MachinesServic
 	}
 
 	if store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		defer cancel()
-		if requests, err := store.AllRequests(ctx); err != nil {
+		if requests, err := store.AllRequests(loadCtx); err != nil {
 			log.Printf("request persistence load failed: %v", err)
 		} else {
 			for _, req := range requests {
@@ -96,7 +104,8 @@ func NewRequestsService(toolService *ToolService, machineService *MachinesServic
 		}
 	}
 
-	// Start cleanup goroutine for stalled requests
+	// Start cleanup goroutine for stalled requests. Honors ctx for graceful
+	// shutdown so the lease-expiry loop stops cleanly on SIGTERM.
 	go service.cleanupStalledRequests()
 
 	return service
@@ -135,16 +144,19 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string) (*mod
 		s.requests[sessionID] = make(map[string]*model.Request)
 	}
 
-	// Store request
-	s.requests[sessionID][request.ID] = request
-
+	// Store request: persist-first so the store is authoritative. On a persist
+	// failure, surface the error instead of leaving the local cache divergent.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
-			log.Printf("persist request create failed: %v", err)
+			cancel()
+			return nil, fmt.Errorf("persist request create failed: %w", err)
 		}
+		cancel()
 	}
+
+	// Mirror into the local cache after a successful persist.
+	s.requests[sessionID][request.ID] = request
 
 	s.recordRequestEvent(request, trace.EventRequestCreated, "", map[string]any{
 		"toolName":       toolName,
@@ -157,34 +169,82 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string) (*mod
 	return request, nil
 }
 
-// GetRequestByID gets a request by ID
+// GetRequestByID gets a request by ID. On a cache miss it falls back to the
+// store so a request created on another instance is visible here (multi-instance
+// read-through), then populates the local cache.
 func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Request, error) {
 	s.requestsMutex.RLock()
 	sessionRequests, ok := s.requests[sessionID]
-	if !ok {
-		s.requestsMutex.RUnlock()
-		return nil, fmt.Errorf("no requests found for session %s", sessionID)
+	if ok {
+		if request, ok := sessionRequests[requestID]; ok {
+			s.ensureRequestDefaults(request)
+			s.requestsMutex.RUnlock()
+			return request, nil
+		}
 	}
-	request, ok := sessionRequests[requestID]
 	s.requestsMutex.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
-	}
-	s.ensureRequestDefaults(request)
 
-	return request, nil
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		found, err := s.store.GetRequest(ctx, requestID)
+		if err != nil {
+			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
+		}
+		if found == nil {
+			return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		}
+		if found.SessionID != sessionID {
+			return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		}
+		s.ensureRequestDefaults(found)
+		s.requestsMutex.Lock()
+		if _, exists := s.requests[sessionID]; !exists {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		if _, exists := s.requests[sessionID][requestID]; !exists {
+			s.requests[sessionID][requestID] = found
+		}
+		s.requestsMutex.Unlock()
+		return found, nil
+	}
+
+	return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
 }
 
 // GetRequestByIDAnySession gets a request by ID without requiring a known session ID.
+// On a cache miss it falls back to the store (multi-instance read-through).
 func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Request, error) {
 	s.requestsMutex.RLock()
-	defer s.requestsMutex.RUnlock()
-
 	for _, sessionRequests := range s.requests {
 		if request, ok := sessionRequests[requestID]; ok {
 			s.ensureRequestDefaults(request)
+			s.requestsMutex.RUnlock()
 			return request, nil
 		}
+	}
+	s.requestsMutex.RUnlock()
+
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		found, err := s.store.GetRequest(ctx, requestID)
+		if err != nil {
+			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
+		}
+		if found == nil {
+			return nil, fmt.Errorf("request %s not found", requestID)
+		}
+		s.ensureRequestDefaults(found)
+		s.requestsMutex.Lock()
+		if _, exists := s.requests[found.SessionID]; !exists {
+			s.requests[found.SessionID] = make(map[string]*model.Request)
+		}
+		if _, exists := s.requests[found.SessionID][requestID]; !exists {
+			s.requests[found.SessionID][requestID] = found
+		}
+		s.requestsMutex.Unlock()
+		return found, nil
 	}
 
 	return nil, fmt.Errorf("request %s not found", requestID)
@@ -372,11 +432,40 @@ func (s *RequestsService) UpdateRequest(
 
 // ClaimRequest marks a request as claimed by a machine
 func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (*model.Request, error) {
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
 	if s.machineService.IsMachineDraining(sessionID, machineID) {
 		return nil, fmt.Errorf("machine %s is draining", machineID)
 	}
+
+	// Store-first path: use the guarded claim primitive so the same request
+	// cannot be claimed by two instances (multi-instance safety). The local
+	// in-memory map is updated as a cache mirror of the authoritative store row.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		claimed, ok, err := s.store.ClaimRequest(ctx, sessionID, requestID, machineID, s.leaseDuration)
+		if err != nil {
+			return nil, fmt.Errorf("persist request claim failed: %w", err)
+		}
+		if !ok {
+			return nil, fmt.Errorf("request %s is not claimable in session %s", requestID, sessionID)
+		}
+		s.requestsMutex.Lock()
+		if _, exists := s.requests[sessionID]; !exists {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		s.requests[sessionID][claimed.ID] = claimed
+		s.requestsMutex.Unlock()
+
+		s.recordRequestEvent(claimed, trace.EventRequestClaimed, machineID, map[string]any{
+			"attempts": claimed.Attempts,
+		})
+		s.notifyRequestUpdate(claimed.ID)
+		return claimed, nil
+	}
+
+	// In-memory path (dev/test only when no store is configured).
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
 
 	// Check if session exists
 	if _, ok := s.requests[sessionID]; !ok {
@@ -406,14 +495,6 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 	request.VisibleAt = now.Add(s.leaseDuration)
 	request.NextAttemptAt = nil
 	request.LastError = ""
-
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
-			log.Printf("persist request claim failed: %v", err)
-		}
-	}
 
 	s.recordRequestEvent(request, trace.EventRequestClaimed, machineID, map[string]any{
 		"attempts": request.Attempts,
@@ -549,7 +630,7 @@ func (s *RequestsService) SubmitRequestResult(
 					ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 					defer cancel()
 					if err := s.store.SaveRequest(ctx, request); err != nil {
-						log.Printf("persist request streaming append failed: %v", err)
+						return fmt.Errorf("persist request streaming append failed: %w", err)
 					}
 				}
 				s.notifyRequestUpdate(request.ID)
@@ -599,7 +680,7 @@ func (s *RequestsService) SubmitRequestResult(
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
-			log.Printf("persist request result failed: %v", err)
+			return fmt.Errorf("persist request result failed: %w", err)
 		}
 	}
 
@@ -650,7 +731,7 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
-			log.Printf("persist request cancel failed: %v", err)
+			return fmt.Errorf("persist request cancel failed: %w", err)
 		}
 	}
 
@@ -694,7 +775,7 @@ func (s *RequestsService) AppendRequestChunks(
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
-			log.Printf("persist request append chunks failed: %v", err)
+			return fmt.Errorf("persist request append chunks failed: %w", err)
 		}
 	}
 
@@ -793,17 +874,29 @@ func (s *RequestsService) ActiveRequestsForMachine(sessionID, machineID string) 
 	return active
 }
 
-// cleanupStalledRequests periodically cleans up stalled requests
+// cleanupStalledRequests periodically cleans up stalled requests. It honors the
+// service's root context for graceful shutdown.
 func (s *RequestsService) cleanupStalledRequests() {
 	ticker := time.NewTicker(s.dispatchInterval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		s.markStalledRequests()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.markStalledRequests()
+		}
 	}
 }
 
-// markStalledRequests marks stalled requests
+// markStalledRequests marks stalled requests.
+//
+// When a store is present, this uses the guarded store.ReclaimExpiredRequest
+// primitive so multiple instances can each run this loop without double-requeuing
+// or double-incrementing attempts: only one instance wins each row (the reclaim
+// is a FOR UPDATE-guarded transaction). When no store is configured (dev/test
+// in-memory mode), it falls back to the in-memory scan + handleExpiredRequest.
 func (s *RequestsService) markStalledRequests() {
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -816,8 +909,27 @@ func (s *RequestsService) markStalledRequests() {
 		if len(expired) == 0 {
 			return
 		}
+		now := time.Now()
 		for _, req := range expired {
-			s.handleExpiredRequest(req)
+			// Reclaim each expired request through the guarded primitive. The
+			// store is the authority here; the local cache is mirrored on success.
+			reclaimed, ok, err := s.reclaimExpired(req, now)
+			if err != nil {
+				log.Printf("reclaim expired request %s failed: %v", req.ID, err)
+				continue
+			}
+			if !ok {
+				// Another instance already handled it, or it was no longer
+				// expired/claimable — a normal multi-instance no-op.
+				continue
+			}
+			s.requestsMutex.Lock()
+			if _, exists := s.requests[reclaimed.SessionID]; !exists {
+				s.requests[reclaimed.SessionID] = make(map[string]*model.Request)
+			}
+			s.requests[reclaimed.SessionID][reclaimed.ID] = reclaimed
+			s.requestsMutex.Unlock()
+			s.notifyRequestUpdate(reclaimed.ID)
 		}
 		return
 	}
@@ -839,6 +951,41 @@ func (s *RequestsService) markStalledRequests() {
 	for _, request := range expired {
 		s.handleExpiredRequest(request)
 	}
+}
+
+// reclaimExpired runs the guarded store reclaim for one expired request and
+// records the appropriate lifecycle trace events. It returns the updated
+// request and ok=true when this caller reclaimed the row.
+func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*model.Request, bool, error) {
+	if req == nil || s.store == nil {
+		return nil, false, nil
+	}
+	s.ensureRequestDefaults(req)
+	machineID := req.ExecutingMachineID
+	if machineID != "" {
+		s.machineService.ReleaseMachineSlot(req.SessionID, machineID)
+	}
+	s.recordRequestEvent(req, trace.EventRequestLeaseExpired, machineID, map[string]any{
+		"visibleAt": req.VisibleAt,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+	defer cancel()
+	reclaimed, ok, err := s.store.ReclaimExpiredRequest(ctx, req.ID, now, s.leaseDuration, req.MaxAttempts, s.retryBackoff)
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	if reclaimed.DeadLetter {
+		s.recordRequestEvent(reclaimed, trace.EventRequestDeadLettered, machineID, map[string]any{
+			"reason": reclaimed.LastError,
+		})
+	} else {
+		s.recordRequestEvent(reclaimed, trace.EventRequestRequeued, machineID, map[string]any{
+			"reason":        reclaimed.LastError,
+			"nextAttemptAt": reclaimed.NextAttemptAt,
+		})
+	}
+	return reclaimed, true, nil
 }
 
 // ExecuteTool executes a tool on a specific machine

@@ -46,8 +46,8 @@ func (t *recordingTracer) event(eventType trace.SessionEventType) (trace.Session
 func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) {
 	tracer := trace.NopTracer()
 	toolService := NewToolService(tracer, nil)
-	machineService := NewMachinesService(toolService, tracer, nil)
-	requestService := NewRequestsService(toolService, machineService, tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
 
 	const sessionID = "session-requeue"
 	const machineID = "machine-requeue"
@@ -100,8 +100,8 @@ func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) 
 func TestRequestsServiceRecordsProviderLifecycleEvents(t *testing.T) {
 	tracer := &recordingTracer{}
 	toolService := NewToolService(tracer, nil)
-	machineService := NewMachinesService(toolService, tracer, nil)
-	requestService := NewRequestsService(toolService, machineService, tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
 
 	const sessionID = "session-trace"
 	const machineID = "machine-trace"
