@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,10 +148,10 @@ func OpenFromEnv(parentCtx context.Context, logger *log.Logger) (*Store, error) 
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
 
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(25)
-	db.SetConnMaxIdleTime(5 * time.Minute)
-	db.SetConnMaxLifetime(60 * time.Minute)
+	db.SetMaxOpenConns(intEnv("TOOLPLANE_DB_MAX_OPEN_CONNS", 25))
+	db.SetMaxIdleConns(intEnv("TOOLPLANE_DB_MAX_IDLE_CONNS", 25))
+	db.SetConnMaxIdleTime(durationEnv("TOOLPLANE_DB_CONN_MAX_IDLE_TIME", 5*time.Minute))
+	db.SetConnMaxLifetime(durationEnv("TOOLPLANE_DB_CONN_MAX_LIFETIME", 60*time.Minute))
 
 	ctx, cancel := context.WithTimeout(parentCtx, defaultConnectTimeout)
 	defer cancel()
@@ -197,4 +198,32 @@ func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) 
 		return fmt.Errorf("commit tx: %w", err)
 	}
 	return nil
+}
+
+// intEnv reads a positive integer from the named environment variable, falling
+// back to fallback when unset, empty, or non-positive.
+func intEnv(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
+}
+
+// durationEnv reads a Go duration string (e.g. "5m", "30s") from the named
+// environment variable, falling back to fallback when unset, empty, or invalid.
+func durationEnv(name string, fallback time.Duration) time.Duration {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		return fallback
+	}
+	return d
 }
