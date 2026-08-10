@@ -68,6 +68,7 @@ SUPPORTED_FEATURES = {
     "api_key_lifecycle",
     "machine_lifecycle",
     "provider_runtime",
+    "multi_instance",
 }
 
 
@@ -234,6 +235,108 @@ def _execute_request_recovery_case(
             )
 
 
+def _execute_multi_instance_case(
+    case_id: str,
+    request: Dict[str, Any],
+    expected: Dict[str, Any],
+    transport: str,
+    user_id: str,
+) -> None:
+    """End-to-end two-process multi-instance proof.
+
+    Creates a session, registers a tool, and creates a request through server
+    instance A; then, through a SEPARATE adapter connected to server instance B
+    (a different process sharing the same Postgres store), proves the request is
+    visible and inspectable. This is the process-level counterpart to the Go-side
+    TestActiveActive_* proofs: it exercises two real `toolplane-server` processes
+    against one Postgres store.
+
+    Requires the conformance bootstrap to have booted the second instance
+    (TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1 + TOOLPLANE_DATABASE_URL).
+    """
+    if not os.getenv("TOOLPLANE_CONFORMANCE_GRPC_PORT_B"):
+        raise AssertionError(
+            f"[{transport}] {case_id}: multi-instance case requires "
+            "TOOLPLANE_CONFORMANCE_GRPC_PORT_B (set TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1)"
+        )
+
+    tool_name = request["tool_name"]
+    session_request = {
+        "user_id": user_id,
+        "name": request.get("name", "conformance-multi-instance"),
+        "description": request.get("description", "multi-instance conformance session"),
+        "namespace": request.get("namespace", "conformance"),
+    }
+
+    adapter_a = _adapter_for_instance(transport, user_id, "a")
+    adapter_b = _adapter_for_instance(transport, user_id, "b")
+    try:
+        adapter_a.connect()
+        adapter_b.connect()
+
+        # Instance A: create session, register tool, create request.
+        session_id = adapter_a.create_session(session_request)
+        assert_session_id_non_empty(session_id, case_id, transport)
+
+        adapter_a.register_unary_echo_tool(
+            session_id=session_id,
+            tool_name=tool_name,
+            description=request.get("tool_description", "conformance multi-instance tool"),
+        )
+        request_id = adapter_a.create_request(
+            session_id, tool_name, request.get("params", {})
+        )
+        assert_request_id_non_empty(request_id, case_id, transport)
+
+        # Instance B attaches to the session created on A. This resolves the
+        # session via the server's GetSession RPC, which (with the store
+        # read-through) works across replicas. All subsequent B operations
+        # (request read, second request create) go through this attached context.
+        adapter_b.attach_session(session_id)
+
+        # Instance B: prove the request created on A is visible through B's
+        # store-backed read path. This is the core multi-instance guarantee: a
+        # request created on one replica is inspectable on another.
+        if expected.get("request_visible_on_instance_b", False):
+            b_status = adapter_b.get_request_status(session_id, request_id)
+            if not b_status or not b_status.get("id"):
+                raise AssertionError(
+                    f"[{transport}] {case_id}: request {request_id} created on "
+                    "instance A was not visible on instance B (cross-instance "
+                    "visibility failed)"
+                )
+            if b_status.get("id") != request_id:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: instance B returned a different "
+                    f"request id {b_status.get('id')!r}, expected {request_id!r}"
+                )
+
+        # Instance B: a second request created for the same tool must get a
+        # distinct id and be independently visible (no cross-instance collision).
+        if expected.get("second_request_distinct", False):
+            second_id = adapter_b.create_request(
+                session_id, tool_name, request.get("params", {})
+            )
+            if not second_id or second_id == request_id:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: second request id {second_id!r} "
+                    f"collided with the first {request_id!r}"
+                )
+
+        # Instance A: both requests are visible from A's read path.
+        if expected.get("both_requests_listed_on_a", False):
+            listed = adapter_a.list_requests(session_id, {"limit": 20})
+            ids = {entry.get("id") for entry in listed if isinstance(entry, dict)}
+            if request_id not in ids:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: request {request_id} missing "
+                    f"from instance A listing {ids}"
+                )
+    finally:
+        adapter_a.close()
+        adapter_b.close()
+
+
 def get_repo_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
@@ -273,6 +376,36 @@ def _adapter_for_transport(transport: str, user_id: str):
         port = int(os.getenv("TOOLPLANE_CONFORMANCE_HTTP_PORT", "8080"))
         return HttpConformanceAdapter(host=host, port=port, user_id=user_id, api_key=api_key)
     raise ValueError(f"Unsupported transport: {transport}")
+
+
+def _adapter_for_instance(transport: str, user_id: str, instance: str):
+    """Build an adapter targeting a specific server instance.
+
+    instance="a" targets the primary server (TOOLPLANE_CONFORMANCE_GRPC_PORT).
+    instance="b" targets the optional second server
+    (TOOLPLANE_CONFORMANCE_GRPC_PORT_B), used by the multi-instance feature.
+    The second instance is only available when the conformance bootstrap booted
+    it behind TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1.
+    """
+    api_key = os.getenv("TOOLPLANE_CONFORMANCE_API_KEY", "")
+    if transport == "grpc":
+        host = os.getenv("TOOLPLANE_CONFORMANCE_GRPC_HOST", "localhost")
+        if instance == "b":
+            port_b = os.getenv("TOOLPLANE_CONFORMANCE_GRPC_PORT_B")
+            if not port_b:
+                raise RuntimeError(
+                    "TOOLPLANE_CONFORMANCE_GRPC_PORT_B not set; multi-instance "
+                    "conformance requires TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1"
+                )
+            return GrpcConformanceAdapter(
+                host=host, port=int(port_b), user_id=user_id, api_key=api_key
+            )
+        port = int(os.getenv("TOOLPLANE_CONFORMANCE_GRPC_PORT", "50051"))
+        return GrpcConformanceAdapter(host=host, port=port, user_id=user_id, api_key=api_key)
+    raise ValueError(
+        f"Multi-instance conformance targets gRPC server instances directly; "
+        f"transport {transport!r} is not supported for instance targeting"
+    )
 
 
 def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
@@ -809,6 +942,12 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
             assert_stream_chunks(chunks, expected.get("ordered_chunks", []), case_id, transport)
             if expected.get("final_marker", False):
                 assert_final_marker(saw_final, case_id, transport)
+            return
+
+        if feature == "multi_instance":
+            _execute_multi_instance_case(
+                case_id, request, expected, transport, user_id
+            )
             return
 
         raise ValueError(f"[{transport}] {case_id}: unsupported feature {feature}")
