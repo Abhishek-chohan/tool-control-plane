@@ -104,6 +104,7 @@ server/proto/googleapis/
 
 # IDE and editor files
 .vscode/
+.zcode/
 .idea/
 *.swp
 *.swo
