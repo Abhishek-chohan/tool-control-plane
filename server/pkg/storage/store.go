@@ -85,6 +85,11 @@ type Storer interface {
 	// FindNonTerminalTasks returns tasks that are not in a terminal state
 	// (done/failed/cancelled). Used on startup to re-adopt in-flight work.
 	FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
+	// ClaimTaskForAdoption atomically claims a non-terminal task for re-adoption
+	// by this instance, preventing duplicate execution across replicas. Only the
+	// first caller wins; subsequent callers see the task was recently touched and
+	// return claimed=false.
+	ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error)
 
 	// Sessions
 	AllSessions(ctx context.Context) ([]*model.Session, error)

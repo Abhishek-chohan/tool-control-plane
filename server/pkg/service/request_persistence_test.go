@@ -55,11 +55,21 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
-	if _, err := requestSvc.ClaimRequest(session.ID, request.ID, machineID); err != nil {
+	// ClaimRequest and UpdateRequest are store-first: they return new objects
+	// and do not mutate the passed-in request in place. Capture the returned
+	// objects so the expired-lease re-save below reflects the claimed/running
+	// state rather than the stale pre-claim state.
+	claimed, err := requestSvc.ClaimRequest(session.ID, request.ID, machineID)
+	if err != nil {
 		t.Fatalf("claim request: %v", err)
 	}
-	if _, err := requestSvc.UpdateRequest(session.ID, request.ID, model.RequestStatusRunning, nil, ""); err != nil {
+	running, err := requestSvc.UpdateRequest(session.ID, request.ID, model.RequestStatusRunning, nil, "")
+	if err != nil {
 		t.Fatalf("mark request running: %v", err)
+	}
+	request = running
+	if request == nil {
+		request = claimed
 	}
 
 	expiredAt := time.Now().Add(-2 * time.Second)

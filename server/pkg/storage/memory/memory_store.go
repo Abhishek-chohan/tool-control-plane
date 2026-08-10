@@ -290,11 +290,13 @@ func (s *Store) ReclaimMachine(ctx context.Context, machineID string, cutoff tim
 func (s *Store) SetMachineDraining(ctx context.Context, sessionID, machineID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Track drain state implicitly via the machine map presence; the in-memory
-	// store does not persist a separate draining column. For correctness parity
-	// with the Postgres store we record drain intent on the machine by leaving
-	// it in place; IsMachineDraining reads the dedicated set below.
-	s.draining[machineID] = struct{}{}
+	// Mirror the Postgres store's UPDATE ... WHERE id=$1 AND session_id=$2: only
+	// mark draining if the machine exists in the given session, otherwise it's a
+	// no-op. This prevents IsMachineDraining from blocking work for a
+	// non-existent or wrong-session machine.
+	if m, ok := s.machines[machineID]; ok && m.SessionID == sessionID {
+		s.draining[machineID] = struct{}{}
+	}
 	return nil
 }
 
@@ -356,6 +358,21 @@ func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
 		out = append(out, cloneTask(t))
 	}
 	return out, nil
+}
+
+func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tasks[taskID]
+	if !ok {
+		return nil, false, nil
+	}
+	cutoff := time.Now().Add(-minAge)
+	if t.UpdatedAt.After(cutoff) {
+		return nil, false, nil // recently touched; don't claim
+	}
+	t.UpdatedAt = time.Now()
+	return cloneTask(t), true, nil
 }
 
 // ---------------- Sessions ----------------

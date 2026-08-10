@@ -3,10 +3,12 @@ package storage_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,9 +20,6 @@ import (
 // TestMain wires the Postgres DSN from the environment. The shared contract
 // suite runs against the in-memory store unconditionally and additionally
 // against a Postgres store when TOOLPLANE_DATABASE_URL is provided.
-
-// storeFactory returns a fresh, empty store plus a cleanup func.
-type storeFactory func(t *testing.T) (storage.Storer, func())
 
 // memoryStoreFactory builds an isolated in-memory store per test.
 func memoryStoreFactory(_ *testing.T) (storage.Storer, func()) {
@@ -73,11 +72,31 @@ func runAgainstBoth(t *testing.T, name string, fn func(t *testing.T, s storage.S
 	})
 }
 
+// uid returns a unique suffix for this test invocation so seeded rows never
+// collide with other tests OR with prior test runs on a shared Postgres store
+// (the memory path is isolated per-test, but the Postgres path shares one
+// database across runs). The runID is randomized once per process so IDs are
+// unique across binary invocations, not just within one.
+var (
+	uidCounter uint64
+	runID      = fmt.Sprintf("%d", time.Now().UnixNano())
+)
+
+func uid(t *testing.T) string {
+	t.Helper()
+	n := atomic.AddUint64(&uidCounter, 1)
+	// Combine a sanitized test name, a per-run randomizer, and a counter for
+	// readability + cross-run uniqueness.
+	name := strings.NewReplacer("/", "_", "-", "_", ".", "_").Replace(t.Name())
+	return fmt.Sprintf("%s-r%s-%d", name, runID, n)
+}
+
 // seedSession persists a session so request/machine/tool FK constraints hold.
-func seedSession(t *testing.T, s storage.Storer, id string) *model.Session {
+// The sessionID should be unique per test (use uid(t)).
+func seedSession(t *testing.T, s storage.Storer, sessionID string) *model.Session {
 	t.Helper()
 	sess := model.NewSession("test-session", "test", "test-user", "", "")
-	sess.ID = id
+	sess.ID = sessionID
 	ctx := context.Background()
 	if err := s.SaveSession(ctx, sess); err != nil {
 		t.Fatalf("seed session: %v", err)
@@ -113,16 +132,21 @@ func seedPendingRequest(t *testing.T, s storage.Storer, sessionID, requestID, to
 func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 	runAgainstBoth(t, "guarded claim", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
-		seedPendingRequest(t, s, "sess-a", "req-1", "echo")
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		machB := "machB-" + uid(t)
+		reqID := "req-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
+		seedPendingRequest(t, s, sess, reqID, tool)
 
 		lease := 30 * time.Second
-		first, claimed, err := s.ClaimRequest(ctx, "sess-a", "req-1", "machine-a", lease)
+		first, claimed, err := s.ClaimRequest(ctx, sess, reqID, machA, lease)
 		if err != nil || !claimed {
 			t.Fatalf("first claim: claimed=%v err=%v", claimed, err)
 		}
-		if first.Status != model.RequestStatusClaimed || first.LeasedBy != "machine-a" {
+		if first.Status != model.RequestStatusClaimed || first.LeasedBy != machA {
 			t.Fatalf("first claim state: status=%s leasedBy=%s", first.Status, first.LeasedBy)
 		}
 		if first.Attempts != 1 {
@@ -130,7 +154,7 @@ func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 		}
 
 		// A second claim for the same request must be rejected without error.
-		_, claimed2, err := s.ClaimRequest(ctx, "sess-a", "req-1", "machine-b", lease)
+		_, claimed2, err := s.ClaimRequest(ctx, sess, reqID, machB, lease)
 		if err != nil {
 			t.Fatalf("second claim errored: %v", err)
 		}
@@ -139,12 +163,12 @@ func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 		}
 
 		// Verify the request is still owned by the first claimant.
-		stored, err := s.GetRequest(ctx, "req-1")
+		stored, err := s.GetRequest(ctx, reqID)
 		if err != nil {
 			t.Fatalf("get request: %v", err)
 		}
-		if stored.LeasedBy != "machine-a" {
-			t.Fatalf("after second claim, leasedBy=%s want machine-a", stored.LeasedBy)
+		if stored.LeasedBy != machA {
+			t.Fatalf("after second claim, leasedBy=%s want %s", stored.LeasedBy, machA)
 		}
 		if stored.Attempts != 1 {
 			t.Fatalf("after second claim, attempts=%d want 1 (double-increment = bug)", stored.Attempts)
@@ -158,19 +182,22 @@ func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 func TestClaimRequest_RejectsMissingOrNonPending(t *testing.T) {
 	runAgainstBoth(t, "non-claimable", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
 
 		lease := 30 * time.Second
 
 		// Missing request.
-		if _, claimed, err := s.ClaimRequest(ctx, "sess-a", "missing", "machine-a", lease); err != nil || claimed {
+		if _, claimed, err := s.ClaimRequest(ctx, sess, "missing-"+uid(t), machA, lease); err != nil || claimed {
 			t.Fatalf("missing claim: claimed=%v err=%v", claimed, err)
 		}
 
 		// Wrong session.
-		seedPendingRequest(t, s, "sess-a", "req-2", "echo")
-		if _, claimed, err := s.ClaimRequest(ctx, "sess-b", "req-2", "machine-a", lease); err != nil || claimed {
+		reqID := "req-" + uid(t)
+		seedPendingRequest(t, s, sess, reqID, "tool-"+uid(t))
+		if _, claimed, err := s.ClaimRequest(ctx, "wrong-sess-"+uid(t), reqID, machA, lease); err != nil || claimed {
 			t.Fatalf("wrong-session claim: claimed=%v err=%v", claimed, err)
 		}
 	})
@@ -183,12 +210,16 @@ func TestClaimRequest_RejectsMissingOrNonPending(t *testing.T) {
 func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 	runAgainstBoth(t, "single requeue", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
-		seedPendingRequest(t, s, "sess-a", "req-1", "echo")
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		reqID := "req-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
+		seedPendingRequest(t, s, sess, reqID, tool)
 
 		// Claim it, then force the lease into the past.
-		claimed, ok, err := s.ClaimRequest(ctx, "sess-a", "req-1", "machine-a", 30*time.Second)
+		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
 		if err != nil || !ok {
 			t.Fatalf("claim: ok=%v err=%v", ok, err)
 		}
@@ -201,7 +232,7 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 		}
 
 		now := time.Now()
-		reclaimed, rOk, err := s.ReclaimExpiredRequest(ctx, "req-1", now, 30*time.Second, 3, 5*time.Second)
+		reclaimed, rOk, err := s.ReclaimExpiredRequest(ctx, reqID, now, 30*time.Second, 3, 5*time.Second)
 		if err != nil || !rOk {
 			t.Fatalf("first reclaim: reclaimed=%v err=%v", rOk, err)
 		}
@@ -217,7 +248,7 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 
 		// Second reclaim (e.g. from another instance) must be a no-op: the
 		// request is now pending (not claimed/running), so it is not reclaimable.
-		_, rOk2, err := s.ReclaimExpiredRequest(ctx, "req-1", now, 30*time.Second, 3, 5*time.Second)
+		_, rOk2, err := s.ReclaimExpiredRequest(ctx, reqID, now, 30*time.Second, 3, 5*time.Second)
 		if err != nil {
 			t.Fatalf("second reclaim errored: %v", err)
 		}
@@ -225,7 +256,7 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 			t.Fatalf("second reclaim should be no-op (reclaimed=false), got true (double-requeue)")
 		}
 
-		stored, _ := s.GetRequest(ctx, "req-1")
+		stored, _ := s.GetRequest(ctx, reqID)
 		if stored.Attempts != 2 {
 			t.Fatalf("after second reclaim attempts=%d want 2 (double-increment = bug)", stored.Attempts)
 		}
@@ -237,11 +268,15 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 func TestReclaimExpiredRequest_DeadLettersAfterMaxAttempts(t *testing.T) {
 	runAgainstBoth(t, "dead letter", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
-		seedPendingRequest(t, s, "sess-a", "req-1", "echo")
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		reqID := "req-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
+		seedPendingRequest(t, s, sess, reqID, tool)
 
-		claimed, ok, err := s.ClaimRequest(ctx, "sess-a", "req-1", "machine-a", 30*time.Second)
+		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
 		if err != nil || !ok {
 			t.Fatalf("claim: ok=%v err=%v", ok, err)
 		}
@@ -255,7 +290,7 @@ func TestReclaimExpiredRequest_DeadLettersAfterMaxAttempts(t *testing.T) {
 		}
 
 		now := time.Now()
-		reclaimed, rOk, err := s.ReclaimExpiredRequest(ctx, "req-1", now, 30*time.Second, 3, 5*time.Second)
+		reclaimed, rOk, err := s.ReclaimExpiredRequest(ctx, reqID, now, 30*time.Second, 3, 5*time.Second)
 		if err != nil || !rOk {
 			t.Fatalf("reclaim: reclaimed=%v err=%v", rOk, err)
 		}
@@ -273,10 +308,13 @@ func TestReclaimExpiredRequest_DeadLettersAfterMaxAttempts(t *testing.T) {
 func TestMachineInFlightCount(t *testing.T) {
 	runAgainstBoth(t, "in-flight count", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
 
-		count, err := s.MachineInFlightCount(ctx, "sess-a", "machine-a")
+		count, err := s.MachineInFlightCount(ctx, sess, machA)
 		if err != nil {
 			t.Fatalf("initial count: %v", err)
 		}
@@ -285,13 +323,14 @@ func TestMachineInFlightCount(t *testing.T) {
 		}
 
 		// Two claimed requests.
-		for _, id := range []string{"r1", "r2"} {
-			seedPendingRequest(t, s, "sess-a", id, "echo")
-			if _, ok, err := s.ClaimRequest(ctx, "sess-a", id, "machine-a", 30*time.Second); err != nil || !ok {
-				t.Fatalf("claim %s: ok=%v err=%v", id, ok, err)
+		for i := 0; i < 2; i++ {
+			rid := "req-" + uid(t)
+			seedPendingRequest(t, s, sess, rid, tool)
+			if _, ok, err := s.ClaimRequest(ctx, sess, rid, machA, 30*time.Second); err != nil || !ok {
+				t.Fatalf("claim %s: ok=%v err=%v", rid, ok, err)
 			}
 		}
-		count, err = s.MachineInFlightCount(ctx, "sess-a", "machine-a")
+		count, err = s.MachineInFlightCount(ctx, sess, machA)
 		if err != nil {
 			t.Fatalf("after claims count: %v", err)
 		}
@@ -300,14 +339,14 @@ func TestMachineInFlightCount(t *testing.T) {
 		}
 
 		// A terminal request on the same machine must NOT be counted.
-		terminal := model.NewRequest("sess-a", "echo", `{}`)
-		terminal.ID = "r3"
+		terminal := model.NewRequest(sess, tool, `{}`)
+		terminal.ID = "req-" + uid(t)
 		terminal.Status = model.RequestStatusDone
-		terminal.ExecutingMachineID = "machine-a"
+		terminal.ExecutingMachineID = machA
 		if err := s.SaveRequest(ctx, terminal); err != nil {
 			t.Fatalf("save terminal: %v", err)
 		}
-		count, _ = s.MachineInFlightCount(ctx, "sess-a", "machine-a")
+		count, _ = s.MachineInFlightCount(ctx, sess, machA)
 		if count != 2 {
 			t.Fatalf("after terminal add count=%d want 2 (terminal must not count)", count)
 		}
@@ -319,10 +358,12 @@ func TestMachineInFlightCount(t *testing.T) {
 func TestMachineDrainFlag_PersistedCoherent(t *testing.T) {
 	runAgainstBoth(t, "drain flag", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
 
-		draining, err := s.IsMachineDraining(ctx, "machine-a")
+		draining, err := s.IsMachineDraining(ctx, machA)
 		if err != nil {
 			t.Fatalf("initial isDraining: %v", err)
 		}
@@ -330,24 +371,24 @@ func TestMachineDrainFlag_PersistedCoherent(t *testing.T) {
 			t.Fatalf("initial draining=true want false")
 		}
 
-		if err := s.SetMachineDraining(ctx, "sess-a", "machine-a"); err != nil {
+		if err := s.SetMachineDraining(ctx, sess, machA); err != nil {
 			t.Fatalf("set draining: %v", err)
 		}
-		draining, _ = s.IsMachineDraining(ctx, "machine-a")
+		draining, _ = s.IsMachineDraining(ctx, machA)
 		if !draining {
 			t.Fatalf("after set draining=false want true")
 		}
 
-		if err := s.ClearMachineDraining(ctx, "machine-a"); err != nil {
+		if err := s.ClearMachineDraining(ctx, machA); err != nil {
 			t.Fatalf("clear draining: %v", err)
 		}
-		draining, _ = s.IsMachineDraining(ctx, "machine-a")
+		draining, _ = s.IsMachineDraining(ctx, machA)
 		if draining {
 			t.Fatalf("after clear draining=true want false")
 		}
 
 		// Missing machine reports false, not an error.
-		draining, err = s.IsMachineDraining(ctx, "no-such-machine")
+		draining, err = s.IsMachineDraining(ctx, "no-such-machine-"+uid(t))
 		if err != nil || draining {
 			t.Fatalf("missing machine: draining=%v err=%v", draining, err)
 		}
@@ -360,11 +401,15 @@ func TestMachineDrainFlag_PersistedCoherent(t *testing.T) {
 func TestLeasePendingRequest_NoDoubleLease(t *testing.T) {
 	runAgainstBoth(t, "no double lease", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now())
-		seedPendingRequest(t, s, "sess-a", "req-1", "echo")
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		reqID := "req-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
+		seedPendingRequest(t, s, sess, reqID, tool)
 
-		first, err := s.LeasePendingRequest(ctx, "sess-a", "machine-a", []string{"echo"}, 30*time.Second)
+		first, err := s.LeasePendingRequest(ctx, sess, machA, []string{tool}, 30*time.Second)
 		if err != nil {
 			t.Fatalf("first lease: %v", err)
 		}
@@ -373,7 +418,7 @@ func TestLeasePendingRequest_NoDoubleLease(t *testing.T) {
 		}
 
 		// Second lease of the same pending pool returns nil (already claimed).
-		second, err := s.LeasePendingRequest(ctx, "sess-a", "machine-b", []string{"echo"}, 30*time.Second)
+		second, err := s.LeasePendingRequest(ctx, sess, "machB-"+uid(t), []string{tool}, 30*time.Second)
 		if err != nil {
 			t.Fatalf("second lease errored: %v", err)
 		}
@@ -388,33 +433,36 @@ func TestLeasePendingRequest_NoDoubleLease(t *testing.T) {
 func TestReclaimMachine_StaleHandoff(t *testing.T) {
 	runAgainstBoth(t, "stale reclaim", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
-		seedMachine(t, s, "sess-a", "machine-a", time.Now().Add(-10*time.Minute))
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		toolID := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now().Add(-10*time.Minute))
 
 		// Tool owned by the stale machine.
-		tool := model.NewTool("sess-a", "machine-a", "echo", "d", `{}`, nil, nil)
-		tool.ID = "tool-1"
+		tool := model.NewTool(sess, machA, "echo-"+uid(t), "d", `{}`, nil, nil)
+		tool.ID = toolID
 		if err := s.SaveTool(ctx, tool); err != nil {
 			t.Fatalf("save tool: %v", err)
 		}
 
 		cutoff := time.Now().Add(-5 * time.Minute)
-		sessionID, updates, removed, err := s.ReclaimMachine(ctx, "machine-a", cutoff)
+		sessionID, updates, removed, err := s.ReclaimMachine(ctx, machA, cutoff)
 		if err != nil {
 			t.Fatalf("reclaim: %v", err)
 		}
 		if !removed {
 			t.Fatalf("reclaim removed=false want true")
 		}
-		if sessionID != "sess-a" {
-			t.Fatalf("reclaim sessionID=%s want sess-a", sessionID)
+		if sessionID != sess {
+			t.Fatalf("reclaim sessionID=%s want %s", sessionID, sess)
 		}
-		if len(updates) != 1 || updates[0].ToolID != "tool-1" {
-			t.Fatalf("reclaim updates=%+v want [{tool-1 sess-a}]", updates)
+		if len(updates) != 1 || updates[0].ToolID != toolID {
+			t.Fatalf("reclaim updates=%+v want [{%s %s}]", updates, toolID, sess)
 		}
 
 		// Second reclaim is a no-op (already removed).
-		_, _, removed2, err := s.ReclaimMachine(ctx, "machine-a", cutoff)
+		_, _, removed2, err := s.ReclaimMachine(ctx, machA, cutoff)
 		if err != nil || removed2 {
 			t.Fatalf("second reclaim: removed=%v err=%v", removed2, err)
 		}
@@ -426,37 +474,44 @@ func TestReclaimMachine_StaleHandoff(t *testing.T) {
 func TestFindNonTerminalTasks(t *testing.T) {
 	runAgainstBoth(t, "non-terminal tasks", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
+		sess := "sess-" + uid(t)
+		seedSession(t, s, sess)
 
-		mk := func(id string, status model.TaskStatus, deadLetter bool) {
+		prefix := uid(t)
+		mk := func(suffix string, status model.TaskStatus, deadLetter bool) string {
 			t.Helper()
-			task := model.NewTask("sess-a", "echo", `{}`)
+			id := prefix + "-" + suffix
+			task := model.NewTask(sess, "echo", `{}`)
 			task.ID = id
 			task.Status = status
 			task.DeadLetter = deadLetter
 			if err := s.SaveTask(ctx, task); err != nil {
 				t.Fatalf("save task %s: %v", id, err)
 			}
+			return id
 		}
-		mk("pending-1", model.StatusPending, false)
-		mk("running-1", model.StatusRunning, false)
-		mk("completed-1", model.StatusCompleted, false)
-		mk("failed-1", model.StatusFailed, false)
-		mk("cancelled-1", model.StatusCancelled, false)
+		pendingID := mk("pending", model.StatusPending, false)
+		runningID := mk("running", model.StatusRunning, false)
+		mk("completed", model.StatusCompleted, false)
+		mk("failed", model.StatusFailed, false)
+		mk("cancelled", model.StatusCancelled, false)
 		mk("pending-dead", model.StatusPending, true)
 
 		tasks, err := s.FindNonTerminalTasks(ctx)
 		if err != nil {
 			t.Fatalf("find non-terminal: %v", err)
 		}
+		// Filter to only this test's tasks (shared Postgres may have others).
 		got := map[string]bool{}
 		for _, tk := range tasks {
-			got[tk.ID] = true
+			if strings.HasPrefix(tk.ID, prefix) {
+				got[tk.ID] = true
+			}
 		}
-		if !got["pending-1"] || !got["running-1"] {
+		if !got[pendingID] || !got[runningID] {
 			t.Fatalf("non-terminal missing pending/running: %+v", got)
 		}
-		for _, terminal := range []string{"completed-1", "failed-1", "cancelled-1", "pending-dead"} {
+		for _, terminal := range []string{prefix + "-completed", prefix + "-failed", prefix + "-cancelled", prefix + "-pending-dead"} {
 			if got[terminal] {
 				t.Fatalf("non-terminal included %s (should be excluded)", terminal)
 			}
@@ -469,22 +524,26 @@ func TestFindNonTerminalTasks(t *testing.T) {
 func TestClaimToolOwnership_ConflictAndStaleTransfer(t *testing.T) {
 	runAgainstBoth(t, "tool ownership", func(t *testing.T, s storage.Storer) {
 		ctx := context.Background()
-		seedSession(t, s, "sess-a")
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		machB := "machB-" + uid(t)
+		toolName := "echo-" + uid(t)
 		now := time.Now()
-		seedMachine(t, s, "sess-a", "machine-a", now)
-		seedMachine(t, s, "sess-a", "machine-b", now)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, now)
+		seedMachine(t, s, sess, machB, now)
 
-		// machine-a owns "echo".
-		first := model.NewTool("sess-a", "machine-a", "echo", "d", `{}`, nil, nil)
-		first.ID = "tool-1"
+		// machine-a owns the tool.
+		first := model.NewTool(sess, machA, toolName, "d", `{}`, nil, nil)
+		first.ID = "tool-" + uid(t)
 		first.LastPingAt = now
 		if err := s.SaveTool(ctx, first); err != nil {
 			t.Fatalf("save first tool: %v", err)
 		}
 
-		// machine-b tries to claim "echo" while machine-a is fresh -> conflict.
-		candidate := model.NewTool("sess-a", "machine-b", "echo", "d2", `{}`, nil, nil)
-		candidate.ID = "tool-2"
+		// machine-b tries to claim the same tool while machine-a is fresh -> conflict.
+		candidate := model.NewTool(sess, machB, toolName, "d2", `{}`, nil, nil)
+		candidate.ID = "tool-" + uid(t)
 		candidate.LastPingAt = now
 		_, _, err := s.ClaimToolOwnership(ctx, candidate, now.Add(-machineHeartbeatTTLForTest))
 		if !errors.Is(err, storage.ErrToolOwnershipConflict) {
@@ -492,7 +551,7 @@ func TestClaimToolOwnership_ConflictAndStaleTransfer(t *testing.T) {
 		}
 
 		// Make machine-a stale, then machine-b claims -> transfer.
-		staleMachine := model.NewMachine("sess-a", "machine-a", "test", "go", "127.0.0.1")
+		staleMachine := model.NewMachine(sess, machA, "test", "go", "127.0.0.1")
 		staleMachine.LastPingAt = now.Add(-2 * time.Hour)
 		staleMachine.CreatedAt = staleMachine.LastPingAt
 		if err := s.SaveMachine(ctx, staleMachine); err != nil {
@@ -502,11 +561,11 @@ func TestClaimToolOwnership_ConflictAndStaleTransfer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stale transfer: err=%v", err)
 		}
-		if replaced != "machine-a" {
-			t.Fatalf("stale transfer replaced=%s want machine-a", replaced)
+		if replaced != machA {
+			t.Fatalf("stale transfer replaced=%s want %s", replaced, machA)
 		}
-		if got.MachineID != "machine-b" {
-			t.Fatalf("stale transfer owner=%s want machine-b", got.MachineID)
+		if got.MachineID != machB {
+			t.Fatalf("stale transfer owner=%s want %s", got.MachineID, machB)
 		}
 	})
 }
