@@ -101,9 +101,20 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) serveMCP(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyBytes))
+	// Read one byte past the limit so oversized bodies get a clear 413
+	// instead of a silent truncation surfacing as a parse error.
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBodyBytes+1))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, newErrorResponse(nil, errInvalidRequest("failed to read request body: "+err.Error())))
+		return
+	}
+	if len(body) > maxRequestBodyBytes {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		if encErr := json.NewEncoder(w).Encode(newErrorResponse(nil, errInvalidRequest(
+			fmt.Sprintf("request body exceeds the %d byte limit", maxRequestBodyBytes)))); encErr != nil {
+			fmt.Printf("mcp-gateway: failed to encode response: %v\n", encErr)
+		}
 		return
 	}
 
@@ -194,16 +205,17 @@ func apiKeyForCache(r *http.Request) string {
 
 // resolveSession picks the Toolplane session for a request: an explicit
 // dev.toolplane/session_id in _meta wins; otherwise one session per API key
-// is auto-provisioned and cached, matching the TS adapter's behavior.
+// is auto-provisioned and cached, matching the TS adapter's behavior. The
+// lock spans lookup and creation so concurrent requests for the same key
+// cannot provision duplicate sessions.
 func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey string) (string, error) {
 	if meta.sessionID != "" {
 		return meta.sessionID, nil
 	}
 
 	s.sessionsMu.Lock()
-	cached, ok := s.sessionByKey[apiKey]
-	s.sessionsMu.Unlock()
-	if ok {
+	defer s.sessionsMu.Unlock()
+	if cached, ok := s.sessionByKey[apiKey]; ok {
 		return cached, nil
 	}
 
@@ -220,9 +232,7 @@ func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey st
 		return "", fmt.Errorf("create session: empty session in response")
 	}
 
-	s.sessionsMu.Lock()
 	s.sessionByKey[apiKey] = session.Session.Id
-	s.sessionsMu.Unlock()
 	return session.Session.Id, nil
 }
 

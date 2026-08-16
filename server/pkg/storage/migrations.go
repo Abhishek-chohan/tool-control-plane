@@ -98,6 +98,7 @@ func (s *Store) migrate(ctx context.Context) error {
             timeout_seconds INTEGER NOT NULL DEFAULT 60,
             dead_letter BOOLEAN NOT NULL DEFAULT FALSE,
             last_error TEXT,
+            current_request_id TEXT,
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
             completed_at TIMESTAMPTZ
@@ -139,6 +140,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 60`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS dead_letter BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS last_error TEXT`,
+		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS current_request_id TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,

@@ -810,7 +810,9 @@ func (s *GRPCServer) CreateTask(ctx context.Context, req *proto.CreateTaskReques
 	}
 
 	protoTask := convertModelTaskToProto(task)
-	protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	if protoTask.CurrentRequestId == "" {
+		protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	}
 	return protoTask, nil
 }
 
@@ -823,7 +825,9 @@ func (s *GRPCServer) GetTask(ctx context.Context, req *proto.GetTaskRequest) (*p
 	}
 
 	protoTask := convertModelTaskToProto(task)
-	protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	if protoTask.CurrentRequestId == "" {
+		protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	}
 	return protoTask, nil
 }
 
@@ -839,7 +843,9 @@ func (s *GRPCServer) ListTasks(ctx context.Context, req *proto.ListTasksRequest)
 	protoTasks := make([]*proto.Task, 0, len(tasks))
 	for _, task := range tasks {
 		protoTask := convertModelTaskToProto(task)
-		protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+		if protoTask.CurrentRequestId == "" {
+			protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+		}
 		protoTasks = append(protoTasks, protoTask)
 	}
 
