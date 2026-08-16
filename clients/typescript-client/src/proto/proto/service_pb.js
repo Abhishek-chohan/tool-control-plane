@@ -14400,7 +14400,8 @@ proto.api.Task.toObject = function(includeInstance, msg) {
     error: jspb.Message.getFieldWithDefault(msg, 8, ""),
     createdAt: jspb.Message.getFieldWithDefault(msg, 9, ""),
     updatedAt: jspb.Message.getFieldWithDefault(msg, 10, ""),
-    completedAt: jspb.Message.getFieldWithDefault(msg, 11, "")
+    completedAt: jspb.Message.getFieldWithDefault(msg, 11, ""),
+    currentRequestId: jspb.Message.getFieldWithDefault(msg, 12, "")
   };
 
   if (includeInstance) {
@@ -14480,6 +14481,10 @@ proto.api.Task.deserializeBinaryFromReader = function(msg, reader) {
     case 11:
       var value = /** @type {string} */ (reader.readString());
       msg.setCompletedAt(value);
+      break;
+    case 12:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setCurrentRequestId(value);
       break;
     default:
       reader.skipField();
@@ -14584,6 +14589,13 @@ proto.api.Task.serializeBinaryToWriter = function(message, writer) {
   if (f.length > 0) {
     writer.writeString(
       11,
+      f
+    );
+  }
+  f = message.getCurrentRequestId();
+  if (f.length > 0) {
+    writer.writeString(
+      12,
       f
     );
   }
@@ -14785,6 +14797,24 @@ proto.api.Task.prototype.getCompletedAt = function() {
  */
 proto.api.Task.prototype.setCompletedAt = function(value) {
   return jspb.Message.setProto3StringField(this, 11, value);
+};
+
+
+/**
+ * optional string current_request_id = 12;
+ * @return {string}
+ */
+proto.api.Task.prototype.getCurrentRequestId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 12, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.Task} returns this
+ */
+proto.api.Task.prototype.setCurrentRequestId = function(value) {
+  return jspb.Message.setProto3StringField(this, 12, value);
 };
 
 

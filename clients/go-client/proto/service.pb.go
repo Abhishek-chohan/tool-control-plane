@@ -3980,20 +3980,21 @@ func (x *HealthCheckResponse) GetVersion() string {
 
 // Task definition
 type Task struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	Input         string                 `protobuf:"bytes,5,opt,name=input,proto3" json:"input,omitempty"`   // JSON input as string
-	Result        string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"` // JSON result as string
-	ResultType    string                 `protobuf:"bytes,7,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
-	Error         string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	CompletedAt   string                 `protobuf:"bytes,11,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolName         string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Status           string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Input            string                 `protobuf:"bytes,5,opt,name=input,proto3" json:"input,omitempty"`   // JSON input as string
+	Result           string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"` // JSON result as string
+	ResultType       string                 `protobuf:"bytes,7,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
+	Error            string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
+	CreatedAt        string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CompletedAt      string                 `protobuf:"bytes,11,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	CurrentRequestId string                 `protobuf:"bytes,12,opt,name=current_request_id,json=currentRequestId,proto3" json:"current_request_id,omitempty"` // request executing the current attempt (empty when idle)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Task) Reset() {
@@ -4099,6 +4100,13 @@ func (x *Task) GetUpdatedAt() string {
 func (x *Task) GetCompletedAt() string {
 	if x != nil {
 		return x.CompletedAt
+	}
+	return ""
+}
+
+func (x *Task) GetCurrentRequestId() string {
+	if x != nil {
+		return x.CurrentRequestId
 	}
 	return ""
 }
@@ -4746,7 +4754,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x12HealthCheckRequest\"G\n" +
 	"\x13HealthCheckResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"\xb0\x02\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"\xde\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4763,7 +4771,8 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"updated_at\x18\n" +
 	" \x01(\tR\tupdatedAt\x12!\n" +
-	"\fcompleted_at\x18\v \x01(\tR\vcompletedAt\"e\n" +
+	"\fcompleted_at\x18\v \x01(\tR\vcompletedAt\x12,\n" +
+	"\x12current_request_id\x18\f \x01(\tR\x10currentRequestId\"e\n" +
 	"\x11CreateTaskRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +

@@ -475,6 +475,14 @@ func (s *TasksService) setTaskRequestID(taskID, requestID string) {
 	}
 }
 
+// CurrentRequestID returns the ID of the request executing the task's current
+// attempt, or "" when no attempt is in flight. Callers use it to observe
+// streaming chunks for the task through the request replay APIs.
+func (s *TasksService) CurrentRequestID(taskID string) string {
+	requestID, _ := s.taskExecutionSnapshot(taskID)
+	return requestID
+}
+
 func (s *TasksService) taskExecutionSnapshot(taskID string) (string, context.CancelFunc) {
 	s.execMutex.RLock()
 	defer s.execMutex.RUnlock()
