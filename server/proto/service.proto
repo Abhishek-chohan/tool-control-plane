@@ -778,6 +778,7 @@ message Task {
   string created_at = 9;
   string updated_at = 10;
   string completed_at = 11;
+  string current_request_id = 12;  // request executing the current attempt (empty when idle)
 }
 
 // CreateTaskRequest
