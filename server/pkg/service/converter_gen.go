@@ -4,9 +4,9 @@ package service
 
 import (
 	"encoding/json"
+	"time"
 	"toolplane/pkg/model"
 	proto "toolplane/proto"
-	"time"
 )
 
 func convertModelToolToProto(in *model.Tool) *proto.Tool {
@@ -128,17 +128,18 @@ func convertModelTaskToProto(in *model.Task) *proto.Task {
 		completedAt = in.CompletedAt.Format(time.RFC3339)
 	}
 	out := &proto.Task{
-		Id:          in.ID,
-		SessionId:   in.SessionID,
-		ToolName:    in.ToolName,
-		Status:      string(in.Status),
-		Input:       in.Input,
-		Result:      in.Result,
-		ResultType:  in.ResultType,
-		Error:       in.Error,
-		CreatedAt:   in.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   in.UpdatedAt.Format(time.RFC3339),
-		CompletedAt: completedAt,
+		Id:               in.ID,
+		SessionId:        in.SessionID,
+		ToolName:         in.ToolName,
+		Status:           string(in.Status),
+		Input:            in.Input,
+		Result:           in.Result,
+		ResultType:       in.ResultType,
+		Error:            in.Error,
+		CreatedAt:        in.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:        in.UpdatedAt.Format(time.RFC3339),
+		CompletedAt:      completedAt,
+		CurrentRequestId: in.CurrentRequestID,
 	}
 	return out
 }

@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -31,13 +30,6 @@ func (s *Server) handleDiscover() (any, *Error) {
 		},
 		"instructions": serverInstructions,
 	}, nil
-}
-
-// listToolsParams is the tools/list params object. Cursor pagination is
-// accepted but Toolplane returns the full session tool list in one page.
-type listToolsParams struct {
-	baseParams
-	Cursor string `json:"cursor"`
 }
 
 func (s *Server) handleToolsList(ctx context.Context, meta requestMeta, apiKey string) (any, *Error) {
@@ -139,9 +131,13 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 // awaitSyncResult serves clients that did not advertise the Tasks extension:
 // poll the task until it reaches a terminal state or the sync timeout elapses,
 // aggregating streaming chunks from the underlying request into one MCP
-// CallToolResult.
+// CallToolResult. If the caller's context already carries an earlier deadline,
+// it naturally bounds the wait through the ctx.Done select.
 func (s *Server) awaitSyncResult(ctx context.Context, sessionID, taskID string) (any, *Error) {
 	deadline := time.Now().Add(s.syncTimeout)
+	ticker := time.NewTicker(s.pollInterval)
+	defer ticker.Stop()
+
 	var lastRequestID string
 	for {
 		task, err := s.tasks.GetTask(ctx, &gw.GetTaskRequest{SessionId: sessionID, TaskId: taskID})
@@ -161,7 +157,7 @@ func (s *Server) awaitSyncResult(ctx context.Context, sessionID, taskID string) 
 			)
 		}
 		select {
-		case <-time.After(s.pollInterval):
+		case <-ticker.C:
 		case <-ctx.Done():
 			return nil, errInternal("request cancelled while waiting for tool execution", map[string]any{TaskIDDataKey: taskID})
 		}
@@ -207,5 +203,3 @@ func backendError(op string, err error) *Error {
 	}
 	return errInternal(op+" failed: "+message, nil)
 }
-
-var errNoSession = errors.New("no Toolplane session available")

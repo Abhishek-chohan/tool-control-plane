@@ -34,7 +34,12 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	sessionSvc := NewSessionsService(tracer, store)
 	toolSvc := NewToolService(tracer, store)
 	machineSvc := NewMachinesService(context.Background(), toolSvc, tracer, store)
-	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, tracer, store)
+	// Cancellable context so the first instance's background lease sweep can be
+	// stopped before the expired lease is forged below. Only the restarted
+	// instance should reclaim the request and record the asserted trace events.
+	requestCtx, stopRequestSweep := context.WithCancel(context.Background())
+	defer stopRequestSweep()
+	requestSvc := NewRequestsService(requestCtx, toolSvc, machineSvc, tracer, store)
 
 	session, err := sessionSvc.CreateSession("persistent-user", "Persistent Recovery", "tier 4 persistence validation", "", "", "")
 	if err != nil {
@@ -71,6 +76,13 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	if request == nil {
 		request = claimed
 	}
+
+	// Stop the first instance's background lease sweep and let any in-flight
+	// tick drain. No request is expired yet, so the draining sweep reclaims
+	// nothing; once it returns, only the restarted instance below can reclaim
+	// the expired lease this test forges.
+	stopRequestSweep()
+	time.Sleep(200 * time.Millisecond)
 
 	expiredAt := time.Now().Add(-2 * time.Second)
 	request.TimeoutSeconds = 1

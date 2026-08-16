@@ -12,6 +12,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 )
 
 const (
@@ -58,13 +59,13 @@ const (
 
 // JSON-RPC and MCP error codes.
 const (
-	CodeParseError                  = -32700
-	CodeInvalidRequest              = -32600
-	CodeMethodNotFound              = -32601
-	CodeInvalidParams               = -32602
-	CodeInternalError               = -32603
-	CodeUnsupportedProtocolVersion  = -32022
-	CodeMissingRequiredCapability   = -32021
+	CodeParseError                 = -32700
+	CodeInvalidRequest             = -32600
+	CodeMethodNotFound             = -32601
+	CodeInvalidParams              = -32602
+	CodeInternalError              = -32603
+	CodeUnsupportedProtocolVersion = -32022
+	CodeMissingRequiredCapability  = -32021
 )
 
 // MCP Tasks extension task statuses.
@@ -202,12 +203,12 @@ func parseRequestMeta(params json.RawMessage) (requestMeta, *Error) {
 		meta.sessionID = sessionID
 	}
 
-	switch cursor := base.Meta[LastSeqMetaKey].(type) {
-	case float64:
-		meta.lastSeq = int32(cursor)
-		meta.hasLastSeq = true
-	case int64:
-		meta.lastSeq = int32(cursor)
+	if rawCursor, present := base.Meta[LastSeqMetaKey]; present {
+		cursorValue, ok := rawCursor.(float64)
+		if !ok || cursorValue < 0 || cursorValue != math.Trunc(cursorValue) || cursorValue > math.MaxInt32 {
+			return requestMeta{}, errInvalidParams("_meta." + LastSeqMetaKey + " must be a non-negative 32-bit integer")
+		}
+		meta.lastSeq = int32(cursorValue)
 		meta.hasLastSeq = true
 	}
 

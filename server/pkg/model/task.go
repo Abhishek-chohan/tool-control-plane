@@ -37,6 +37,10 @@ type Task struct {
 	NextAttemptAt  *time.Time `json:"nextAttemptAt,omitempty"`
 	DeadLetter     bool       `json:"deadLetter"`
 	LastError      string     `json:"lastError,omitempty"`
+	// CurrentRequestID is the request executing the current attempt. It is
+	// persisted with the task so any replica can answer chunk-replay reads for
+	// a running task, not just the replica executing it.
+	CurrentRequestID string `json:"currentRequestId,omitempty"`
 }
 
 // NewTask creates a new task

@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/keepalive"
-
-	gw "toolplane/proto"
 
 	"toolplane/pkg/mcp"
 )
@@ -117,17 +116,24 @@ func main() {
 		mcp.WithDefaultUserID(*defaultUserID),
 	)
 
-	toolsClient := gw.NewToolServiceClient(conn)
 	root := http.NewServeMux()
 	root.Handle("/", corsMiddleware(cfg, facade.Handler()))
+	// Health probes transport-level connectivity only: backend RPCs require API
+	// keys, which an unauthenticated health check does not carry.
 	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		if _, err := toolsClient.HealthCheck(ctx, &gw.HealthCheckRequest{}); err != nil {
-			writeHealth(w, "degraded", *grpcEndpoint, http.StatusServiceUnavailable)
+		state := conn.GetState()
+		if state != connectivity.Ready {
+			conn.Connect()
+			conn.WaitForStateChange(ctx, state)
+			state = conn.GetState()
+		}
+		if state == connectivity.Ready {
+			writeHealth(w, "ok", *grpcEndpoint, http.StatusOK)
 			return
 		}
-		writeHealth(w, "ok", *grpcEndpoint, http.StatusOK)
+		writeHealth(w, "degraded", *grpcEndpoint, http.StatusServiceUnavailable)
 	})
 
 	log.Printf("MCP gateway listening on %s → gRPC %s (env=%s cors=%s backend=%s sync-timeout=%s)",
