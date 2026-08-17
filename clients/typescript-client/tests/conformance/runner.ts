@@ -54,6 +54,7 @@ export const SUPPORTED_FEATURES = new Set<SupportedFeature>([
   'machine_lifecycle',
   'provider_runtime',
   'multi_instance',
+  'mcp_tasks',
 ]);
 
 function sleep(ms: number): Promise<void> {
@@ -727,6 +728,13 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
     // is in SUPPORTED_FEATURES so case validation passes; this early return
     // prevents the unsupported-feature error.
     if (feature === 'multi_instance') {
+      return;
+    }
+
+    // The mcp_tasks feature runs against the Go MCP facade and is exercised by
+    // the Python conformance suite (mcp transport). The TypeScript runner does
+    // not speak the MCP JSON-RPC facade yet, so skip it the same way.
+    if (feature === 'mcp_tasks') {
       return;
     }
 

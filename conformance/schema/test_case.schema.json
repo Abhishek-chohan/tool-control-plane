@@ -23,7 +23,8 @@
         "api_key_lifecycle",
         "machine_lifecycle",
         "provider_runtime",
-        "multi_instance"
+        "multi_instance",
+        "mcp_tasks"
       ]
     },
     "description": {

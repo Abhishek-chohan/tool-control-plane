@@ -104,3 +104,26 @@ jobs:
             -m conformance \
             -k "multi_instance" \
             -q
+
+      - name: Run MCP facade conformance
+        # Boots toolplane-mcp-gateway beside the server and runs the tool-plane
+        # conformance features (unary/stream invoke) plus the mcp_tasks
+        # lifecycle case over the MCP 2026-07-28 JSON-RPC transport. The
+        # management-plane fixtures stay on grpc/http and are skipped here.
+        env:
+          TOOLPLANE_CONFORMANCE_AUTO_BOOT: "1"
+          TOOLPLANE_CONFORMANCE_MCP: "1"
+          TOOLPLANE_CONFORMANCE_USER_ID: "conformance-user"
+          TOOLPLANE_CONFORMANCE_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_ENV_MODE: "development"
+          TOOLPLANE_AUTH_MODE: "fixed"
+          TOOLPLANE_AUTH_FIXED_API_KEY: "toolplane-conformance-fixture-key"
+          TOOLPLANE_STORAGE_MODE: "postgres"
+          TOOLPLANE_DATABASE_URL: "postgres://postgres:postgres@localhost:5432/toolplane?sslmode=disable"
+          TOOLPLANE_PROXY_ALLOW_INSECURE_BACKEND: "1"
+          TOOLPLANE_MCP_ALLOW_INSECURE_BACKEND: "1"
+        run: |
+          python -m pytest clients/python-client/tests/conformance/test_conformance_runner.py \
+            -m conformance \
+            -k "mcp" \
+            -q

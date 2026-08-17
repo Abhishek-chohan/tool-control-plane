@@ -129,18 +129,34 @@ class HttpConformanceAdapter:
         )
 
     def register_stream_tool(self, session_id: str, tool_name: str, description: str):
-        context = self._ensure_context_machine(session_id)
-
         def _stream_tool(prefix: str = "chunk", count: int = 5, **_: Any):
             for index in range(int(count)):
                 yield f"{prefix}-{index + 1}"
 
+        self.register_stream_tool_func(
+            session_id, tool_name, description, _stream_tool, tags=["conformance", "stream"]
+        )
+
+    def register_stream_tool_func(
+        self,
+        session_id: str,
+        tool_name: str,
+        description: str,
+        func,
+        tags: List[str] = None,
+    ):
+        """Register a caller-supplied streaming tool on the session's machine.
+
+        Public so other adapters (e.g. the MCP adapter) can register custom
+        provider-executed tools without reaching into private helpers.
+        """
+        context = self._ensure_context_machine(session_id)
         context.register_tool(
             name=tool_name,
-            func=_stream_tool,
+            func=func,
             description=description,
             stream=True,
-            tags=["conformance", "stream"],
+            tags=tags or ["conformance", "stream"],
         )
 
     def list_tools(self, session_id: str) -> List[Dict[str, Any]]:
