@@ -252,23 +252,25 @@ class McpConformanceAdapter:
     # ------------------------------------------------------------------
     def register_tasks_tool(self, session_id: str, tool_name: str, description: str) -> None:
         """Register a slow streaming tool whose execution stays in flight long
-        enough to observe the working state and chunk cursor."""
-        context = self._management._ensure_context_machine(session_id)
+        enough to observe the working state and chunk cursor.
+
+        ``delay_ms`` is applied per chunk (not spread across all chunks), so the
+        task remains non-terminal for roughly ``delay_ms * count`` and the
+        chunk-cursor window is observable while it runs.
+        """
 
         def _tasks_tool(message: str = "chunk", count: int = 4, delay_ms: int = 0, **_: Any):
-            total = max(int(delay_ms or 0), 0)
-            steps = max(int(count or 1), 1)
-            per_step = total / 1000.0 / steps
-            for index in range(steps):
-                if per_step:
-                    time.sleep(per_step)
+            per_chunk = max(int(delay_ms or 0), 0) / 1000.0
+            for index in range(max(int(count or 1), 1)):
+                if per_chunk:
+                    time.sleep(per_chunk)
                 yield f"{message}-{index + 1}"
 
-        context.register_tool(
-            name=tool_name,
-            func=_tasks_tool,
-            description=description,
-            stream=True,
+        self._management.register_stream_tool_func(
+            session_id,
+            tool_name,
+            description,
+            _tasks_tool,
             tags=["conformance", "mcp", "tasks"],
         )
 

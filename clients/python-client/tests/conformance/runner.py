@@ -533,7 +533,17 @@ def _execute_mcp_tasks_case(
 
     # Cancellation path: start a second task and cancel it mid-flight.
     cancel_handle = adapter.mcp_call_tool(session_id, tool_name, params, with_tasks=True)
+    if cancel_handle.get("resultType") != "task":
+        raise AssertionError(
+            f"[{transport}] {case_id}: second tools/call did not return a task handle "
+            f"(resultType {cancel_handle.get('resultType')!r}); cannot exercise tasks/cancel"
+        )
     cancel_task_id = str(cancel_handle.get("taskId", ""))
+    if not cancel_task_id:
+        raise AssertionError(
+            f"[{transport}] {case_id}: second tools/call returned a task handle with an "
+            f"empty taskId; cannot exercise tasks/cancel"
+        )
     ack = adapter.mcp_tasks_cancel(session_id, cancel_task_id)
     if ack.get("resultType") != "complete":
         raise AssertionError(
