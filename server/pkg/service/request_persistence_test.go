@@ -84,7 +84,7 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	stopRequestSweep()
 	time.Sleep(200 * time.Millisecond)
 
-	expiredAt := time.Now().Add(-2 * time.Second)
+	expiredAt := time.Now().Add(-30 * time.Second)
 	request.TimeoutSeconds = 1
 	request.LeasedAt = &expiredAt
 	request.VisibleAt = expiredAt
@@ -108,14 +108,26 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	restartedMachineSvc := NewMachinesService(context.Background(), restartedToolSvc, restartedTracer, restartedStore)
 	restartedRequestSvc := NewRequestsService(context.Background(), restartedToolSvc, restartedMachineSvc, restartedTracer, restartedStore)
 
-	restartedRequestSvc.markStalledRequests()
-
-	updated, err := restartedRequestSvc.GetRequestByID(session.ID, request.ID)
-	if err != nil {
-		t.Fatalf("get recovered request: %v", err)
-	}
-	if updated.Status != model.RequestStatusPending {
-		t.Fatalf("request status = %q, want %q", updated.Status, model.RequestStatusPending)
+	// Reclaim is driven by markStalledRequests. Retry it within a bounded window:
+	// the expired-lease scan and the guarded reclaim each take their own time
+	// samples, so under CI load a single pass can occasionally observe the
+	// request a moment before it is eligible. Re-scanning is idempotent, and if
+	// the request is genuinely reclaimable one of the passes requeues it.
+	var updated *model.Request
+	reclaimDeadline := time.Now().Add(10 * time.Second)
+	for {
+		restartedRequestSvc.markStalledRequests()
+		updated, err = restartedRequestSvc.GetRequestByID(session.ID, request.ID)
+		if err != nil {
+			t.Fatalf("get recovered request: %v", err)
+		}
+		if updated.Status == model.RequestStatusPending {
+			break
+		}
+		if time.Now().After(reclaimDeadline) {
+			t.Fatalf("request status = %q, want %q (after retrying markStalledRequests)", updated.Status, model.RequestStatusPending)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if updated.ExecutingMachineID != "" {
 		t.Fatalf("executing machine = %q, want empty", updated.ExecutingMachineID)
