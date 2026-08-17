@@ -809,7 +809,11 @@ func (s *GRPCServer) CreateTask(ctx context.Context, req *proto.CreateTaskReques
 		return nil, status.Errorf(codes.Internal, "failed to create task: %v", err)
 	}
 
-	return convertModelTaskToProto(task), nil
+	protoTask := convertModelTaskToProto(task)
+	if protoTask.CurrentRequestId == "" {
+		protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	}
+	return protoTask, nil
 }
 
 // GetTask implements the gRPC GetTask method
@@ -820,7 +824,11 @@ func (s *GRPCServer) GetTask(ctx context.Context, req *proto.GetTaskRequest) (*p
 		return nil, status.Errorf(codes.NotFound, "failed to get task: %v", err)
 	}
 
-	return convertModelTaskToProto(task), nil
+	protoTask := convertModelTaskToProto(task)
+	if protoTask.CurrentRequestId == "" {
+		protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+	}
+	return protoTask, nil
 }
 
 // ListTasks implements the gRPC ListTasks method
@@ -834,7 +842,11 @@ func (s *GRPCServer) ListTasks(ctx context.Context, req *proto.ListTasksRequest)
 	// Convert models to proto
 	protoTasks := make([]*proto.Task, 0, len(tasks))
 	for _, task := range tasks {
-		protoTasks = append(protoTasks, convertModelTaskToProto(task))
+		protoTask := convertModelTaskToProto(task)
+		if protoTask.CurrentRequestId == "" {
+			protoTask.CurrentRequestId = s.tasksService.CurrentRequestID(task.ID)
+		}
+		protoTasks = append(protoTasks, protoTask)
 	}
 
 	return &proto.ListTasksResponse{
