@@ -38,6 +38,16 @@ Replay-window state belongs here, not in the maintained observability contract.
 - `CancelRequest` stops one request without changing provider ownership globally.
 - `DrainMachine` stops new routing to one provider while preserving in-flight completion behavior.
 
+### MCP Facade
+
+`toolplane-mcp-gateway` is a stateless MCP 2026-07-28 facade in front of the gRPC backend. Treat it as a translation layer, not a state owner:
+
+- `/health` on the gateway reports transport connectivity to the backend (`ok` or `degraded`); it does not require an API key.
+- A task handle returned by `tools/call` is a Toolplane request ID. Inspect it with the standard `GetRequest` / `GetRequestChunks` calls above; `tasks/get` reads the same records.
+- MCP `tasks/cancel` maps onto `CancelRequest`; native cancellation semantics and limits apply.
+- The gateway forwards `Authorization` / `X-API-Key` and valid W3C `traceparent`/`tracestate` headers to the backend, so policy denial and trace correlation follow the normal server-side rules.
+- If MCP clients see `task not found`, confirm the session binding (`dev.toolplane/session_id`) and that the request exists for that session; the gateway does not hold task state of its own.
+
 ## Stable Correlation Model
 
 - Start with `requestId` or `taskId` for a specific execution problem.

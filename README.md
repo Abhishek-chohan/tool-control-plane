@@ -61,6 +61,7 @@ A strong first offload candidate is one sandboxed code-execution worker. It runs
 | Python client | Primary maintained SDK | Richest end-to-end surface across gRPC and the maintained HTTP gateway |
 | Go client | Supported secondary SDK | Maintained gRPC lifecycle, request, and task helpers; no provider runtime harness |
 | TypeScript client | Supported secondary SDK | Maintained JavaScript-family gRPC client with an explicit `ProviderRuntime`; repository-internal HTTP adapters remain conformance-only |
+| MCP gateway (`toolplane-mcp-gateway`) | Supported edge facade | Stateless MCP 2026-07-28 JSON-RPC endpoint exposing tools plus the Tasks extension over the gRPC backend |
 | TypeScript MCP adapter | Optional ecosystem adapter | Stdio adapter for one Toolplane session with tool and resource access |
 
 ## Agent-Runtime Seam
@@ -73,6 +74,26 @@ Toolplane keeps external runtime integrations on a stable four-layer seam so ada
 - Layer 4: edge adapters bind one explicit Toolplane session and translate foreign discovery, invocation, and inspection shapes without redefining lifecycle semantics.
 
 See `server/docs/agent-runtime-integration-seam.md` for the full seam model, minimal adapter contract, current gap caveats, and the reference edge pattern.
+
+## Use with MCP clients
+
+`toolplane-mcp-gateway` is a stateless facade that lets any MCP client speak to Toolplane using the 2026-07-28 protocol. It is a thin JSON-RPC translator in front of the gRPC backend — it holds no request state of its own, so any number of gateway instances can serve any request.
+
+- **Endpoint:** `POST /mcp` (Streamable HTTP). Health is `GET /health`.
+- **Auth:** forward your Toolplane API key as `Authorization` or `X-API-Key`; the gateway passes it to the backend's existing authorizer unchanged.
+- **Session binding:** set `dev.toolplane/session_id` in each request's `_meta` to target an existing Toolplane session. Omit it and the gateway provisions one session per API key.
+- **Discovery:** `server/discover` advertises the supported protocol version, the `tools` capability, and the `io.modelcontextprotocol/tasks` extension.
+- **Tools:** `tools/list` mirrors the session's registered tools; `tools/call` enqueues a durable request that a provider machine claims and executes.
+- **Tasks extension:** clients that advertise `io.modelcontextprotocol/tasks` get a task handle from `tools/call` and poll it with `tasks/get` (including retained chunk-window replay behind a `dev.toolplane/last_seq` cursor), cancel it with `tasks/cancel`, and can replay after reconnecting. Clients that do not advertise the extension are served synchronously.
+- **Trace context:** W3C `traceparent`/`tracestate` headers are validated and propagated to the backend as gRPC metadata.
+
+Run it beside the server (the reference compose stack includes an `mcp-gateway` service):
+
+```bash
+toolplane-mcp-gateway --listen :8081 --backend localhost:9001
+```
+
+Point an MCP client at `http://<host>:8081/mcp` with your API key. The maintained validation path is the `mcp` transport in the Python conformance suite (`TOOLPLANE_CONFORMANCE_MCP=1`).
 
 ## Reliability Proof
 
@@ -110,6 +131,7 @@ That case is intentionally narrow. The control-plane layer is justified only whe
 - `server/docs/local-development.md`: explicit local bootstrap path with env-based auth, storage, and proxy settings.
 - `SDK_MAP.md`: per-RPC parity plus support-tier caveats.
 - `clients/typescript-mcp-adapter/README.md`: optional stdio adapter usage, session binding, and validation path.
+- MCP gateway: see "Use with MCP clients" above for the stateless 2026-07-28 facade, Tasks extension, and conformance validation path.
 
 ## Local Development
 

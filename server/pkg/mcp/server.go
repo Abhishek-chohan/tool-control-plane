@@ -188,6 +188,11 @@ func authMetadata(r *http.Request) metadata.MD {
 	if header := r.Header.Get("X-API-Key"); header != "" {
 		md.Set("api_key", header)
 	}
+	// Propagate W3C Trace Context (SEP-414) so distributed traces continue
+	// across the gateway into the backend.
+	for key, value := range traceMetadata(r) {
+		md.Set(key, value)
+	}
 	return md
 }
 
