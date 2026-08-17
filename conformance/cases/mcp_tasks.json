@@ -1,0 +1,27 @@
+{
+  "id": "mcp_tasks_lifecycle",
+  "feature": "mcp_tasks",
+  "description": "Call a slow streaming tool through the MCP facade with the Tasks extension: expect an immediate task handle, observe the chunk cursor window on tasks/get, reach completed with the tool result, and cancel a second in-flight task.",
+  "request": {
+    "tool_name": "conformance_mcp_stream_echo",
+    "tool_description": "Slow streaming echo tool for MCP tasks conformance",
+    "params": {
+      "message": "mcp-task-chunk",
+      "count": 4,
+      "delay_ms": 1200
+    }
+  },
+  "expected": {
+    "handle_status": "working",
+    "chunk_cursor_observed": true,
+    "terminal_status": "completed",
+    "result_equals": [
+      "mcp-task-chunk-1",
+      "mcp-task-chunk-2",
+      "mcp-task-chunk-3",
+      "mcp-task-chunk-4"
+    ],
+    "cancel_status": "cancelled"
+  },
+  "tags": ["core", "mcp", "tasks"]
+}

@@ -1,4 +1,4 @@
-export type Transport = 'http' | 'grpc';
+export type Transport = 'http' | 'grpc' | 'mcp';
 
 export type SupportedFeature =
   | 'session_create'
@@ -12,7 +12,8 @@ export type SupportedFeature =
   | 'api_key_lifecycle'
   | 'machine_lifecycle'
   | 'provider_runtime'
-  | 'multi_instance';
+  | 'multi_instance'
+  | 'mcp_tasks';
 
 export interface ConformanceCase {
   id: string;

@@ -730,6 +730,13 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
       return;
     }
 
+    // The mcp_tasks feature runs against the Go MCP facade and is exercised by
+    // the Python conformance suite (mcp transport). The TypeScript runner does
+    // not speak the MCP JSON-RPC facade yet, so skip it the same way.
+    if (feature === 'mcp_tasks') {
+      return;
+    }
+
     throw new Error(`[${transport}] ${caseId}: unsupported feature ${feature}`);
   } finally {
     await adapter.close();

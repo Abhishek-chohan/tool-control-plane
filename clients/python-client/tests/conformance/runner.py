@@ -18,6 +18,7 @@ _ensure_python_client_on_path()
 
 from .adapters.grpc_adapter import GrpcConformanceAdapter
 from .adapters.http_adapter import HttpConformanceAdapter
+from .adapters.mcp_adapter import McpConformanceAdapter
 from .assertions import (
     assert_api_key_capabilities_equal,
     assert_api_key_field_equals,
@@ -69,6 +70,16 @@ SUPPORTED_FEATURES = {
     "machine_lifecycle",
     "provider_runtime",
     "multi_instance",
+    "mcp_tasks",
+}
+
+# Features the MCP transport can exercise: tool-plane operations only. The
+# management-plane fixtures (sessions, machines, API keys, request recovery)
+# stay on the grpc/http transports.
+MCP_TRANSPORT_FEATURES = {
+    "invoke_unary",
+    "invoke_stream",
+    "mcp_tasks",
 }
 
 
@@ -375,6 +386,24 @@ def _adapter_for_transport(transport: str, user_id: str):
         host = os.getenv("TOOLPLANE_CONFORMANCE_HTTP_HOST", "localhost")
         port = int(os.getenv("TOOLPLANE_CONFORMANCE_HTTP_PORT", "8080"))
         return HttpConformanceAdapter(host=host, port=port, user_id=user_id, api_key=api_key)
+    if transport == "mcp":
+        if not os.getenv("TOOLPLANE_CONFORMANCE_MCP_PORT"):
+            raise RuntimeError(
+                "TOOLPLANE_CONFORMANCE_MCP_PORT not set; mcp conformance requires "
+                "TOOLPLANE_CONFORMANCE_MCP=1 so the bootstrap boots cmd/mcp-gateway"
+            )
+        mcp_host = os.getenv("TOOLPLANE_CONFORMANCE_MCP_HOST", "localhost")
+        mcp_port = int(os.getenv("TOOLPLANE_CONFORMANCE_MCP_PORT", "8081"))
+        proxy_host = os.getenv("TOOLPLANE_CONFORMANCE_HTTP_HOST", "localhost")
+        proxy_port = int(os.getenv("TOOLPLANE_CONFORMANCE_HTTP_PORT", "8080"))
+        return McpConformanceAdapter(
+            mcp_host=mcp_host,
+            mcp_port=mcp_port,
+            proxy_host=proxy_host,
+            proxy_port=proxy_port,
+            user_id=user_id,
+            api_key=api_key,
+        )
     raise ValueError(f"Unsupported transport: {transport}")
 
 
@@ -406,6 +435,116 @@ def _adapter_for_instance(transport: str, user_id: str, instance: str):
         f"Multi-instance conformance targets gRPC server instances directly; "
         f"transport {transport!r} is not supported for instance targeting"
     )
+
+
+def _execute_mcp_tasks_case(
+    adapter,
+    session_id: str,
+    request: Dict[str, Any],
+    expected: Dict[str, Any],
+    case_id: str,
+    transport: str,
+) -> None:
+    """Exercise the MCP Tasks extension end to end through the facade.
+
+    Flow: register a slow streaming tool, start the provider runtime, then
+    1) tools/call with the Tasks capability advertised must return an
+       immediate task handle (resultType "task", status working);
+    2) tasks/get must surface the running task and, while chunks are being
+       appended, the dev.toolplane/chunks cursor window; replaying with
+       last_seq must not redeliver already-seen chunks;
+    3) the task must reach the expected terminal status with the tool result
+       embedded as a CallToolResult;
+    4) a second in-flight task cancelled via tasks/cancel must reach the
+       cancelled state.
+    """
+    from .adapters.mcp_adapter import CHUNKS_META_KEY
+
+    tool_name = str(request["tool_name"])
+    params = request.get("params", {})
+
+    adapter.register_tasks_tool(
+        session_id,
+        tool_name,
+        request.get("tool_description", "MCP tasks conformance tool"),
+    )
+    adapter.start_provider_runtime(session_id)
+
+    handle = adapter.mcp_call_tool(session_id, tool_name, params, with_tasks=True)
+    if handle.get("resultType") != "task":
+        raise AssertionError(
+            f"[{transport}] {case_id}: expected resultType 'task', got {handle.get('resultType')!r}"
+        )
+    task_id = str(handle.get("taskId", ""))
+    if not task_id:
+        raise AssertionError(f"[{transport}] {case_id}: task handle missing taskId")
+    if handle.get("status") != expected.get("handle_status", "working"):
+        raise AssertionError(
+            f"[{transport}] {case_id}: handle status {handle.get('status')!r} "
+            f"!= expected {expected.get('handle_status')!r}"
+        )
+
+    # Poll while the task is in flight, watching for the chunk cursor window.
+    saw_chunk_window = False
+    deadline = time.time() + 30.0
+    snapshot: Dict[str, Any] = {}
+    while time.time() < deadline:
+        snapshot = adapter.mcp_tasks_get(session_id, task_id)
+        status = snapshot.get("status")
+        chunks_meta = (snapshot.get("_meta") or {}).get(CHUNKS_META_KEY) or {}
+        window_chunks = list(chunks_meta.get("chunks") or [])
+        if window_chunks:
+            saw_chunk_window = True
+            next_seq = int(chunks_meta.get("nextSeq", 0))
+            replay = adapter.mcp_tasks_get(session_id, task_id, last_seq=next_seq)
+            replay_chunks = list(
+                ((replay.get("_meta") or {}).get(CHUNKS_META_KEY) or {}).get("chunks") or []
+            )
+            redelivered = [chunk for chunk in replay_chunks if chunk in window_chunks]
+            if redelivered:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: replay from last_seq={next_seq} "
+                    f"redelivered chunks {redelivered}"
+                )
+        if status in {"completed", "failed", "cancelled"}:
+            break
+        time.sleep(0.2)
+
+    final = adapter.tasks_poll_until_terminal(session_id, task_id)
+    terminal_status = final.get("status")
+    if terminal_status != expected.get("terminal_status", "completed"):
+        raise AssertionError(
+            f"[{transport}] {case_id}: terminal status {terminal_status!r} "
+            f"!= expected {expected.get('terminal_status')!r}"
+        )
+    if expected.get("chunk_cursor_observed", False) and not saw_chunk_window:
+        raise AssertionError(
+            f"[{transport}] {case_id}: never observed a chunk window on tasks/get"
+        )
+
+    if terminal_status == "completed":
+        result = final.get("result") or {}
+        structured = result.get("structuredContent")
+        expected_result = expected.get("result_equals")
+        if expected_result is not None and structured != expected_result:
+            raise AssertionError(
+                f"[{transport}] {case_id}: task result {structured!r} != expected {expected_result!r}"
+            )
+
+    # Cancellation path: start a second task and cancel it mid-flight.
+    cancel_handle = adapter.mcp_call_tool(session_id, tool_name, params, with_tasks=True)
+    cancel_task_id = str(cancel_handle.get("taskId", ""))
+    ack = adapter.mcp_tasks_cancel(session_id, cancel_task_id)
+    if ack.get("resultType") != "complete":
+        raise AssertionError(
+            f"[{transport}] {case_id}: tasks/cancel ack resultType {ack.get('resultType')!r}"
+        )
+    cancelled = adapter.tasks_poll_until_terminal(session_id, cancel_task_id)
+    if cancelled.get("status") != expected.get("cancel_status", "cancelled"):
+        raise AssertionError(
+            f"[{transport}] {case_id}: cancelled task status {cancelled.get('status')!r} "
+            f"!= expected {expected.get('cancel_status')!r}"
+        )
 
 
 def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
@@ -948,6 +1087,10 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
             _execute_multi_instance_case(
                 case_id, request, expected, transport, user_id
             )
+            return
+
+        if feature == "mcp_tasks":
+            _execute_mcp_tasks_case(adapter, session_id, request, expected, case_id, transport)
             return
 
         raise ValueError(f"[{transport}] {case_id}: unsupported feature {feature}")
