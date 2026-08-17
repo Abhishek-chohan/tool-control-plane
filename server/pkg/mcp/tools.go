@@ -11,9 +11,10 @@ import (
 )
 
 const serverInstructions = "Toolplane MCP gateway: durable tool execution backed by a Postgres-persisted " +
-	"queue. Tool calls are executed as Toolplane tasks with retries and a retained streaming chunk " +
-	"window. Clients that advertise the io.modelcontextprotocol/tasks extension receive a task handle " +
-	"from tools/call and poll it with tasks/get; other clients are served synchronously."
+	"queue. A tools/call enqueues a durable request that a provider machine claims and executes, with " +
+	"retries and a retained streaming chunk window. Clients that advertise the " +
+	"io.modelcontextprotocol/tasks extension receive a task handle from tools/call and poll it with " +
+	"tasks/get; other clients are served synchronously."
 
 // handleDiscover implements server/discover, the required stateless
 // advertisement of supported versions and capabilities.
@@ -113,81 +114,79 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 		return nil, errInvalidParams("tool arguments must be JSON-serializable: " + err.Error())
 	}
 
-	task, err := s.tasks.CreateTask(ctx, &gw.CreateTaskRequest{
+	// Create a request in the pending state so a provider machine can claim and
+	// execute it. Claiming it here (as the task execution path does) would hold
+	// the lease and block the polling provider until lease expiry, so tool calls
+	// must enter the queue the same way provider-driven invocations do.
+	request, err := s.requests.CreateRequest(ctx, &gw.CreateRequestRequest{
 		SessionId: sessionID,
 		ToolName:  params.Name,
 		Input:     string(input),
 	})
 	if err != nil {
-		return nil, backendError("create task for tool "+params.Name, err)
+		return nil, backendError("create request for tool "+params.Name, err)
 	}
 
 	if meta.clientSupportsTasks() {
-		return createTaskResult(task), nil
+		return createTaskResult(request), nil
 	}
-	return s.awaitSyncResult(ctx, sessionID, task.Id)
+	return s.awaitSyncResult(ctx, sessionID, request.Id)
 }
 
 // awaitSyncResult serves clients that did not advertise the Tasks extension:
-// poll the task until it reaches a terminal state or the sync timeout elapses,
-// aggregating streaming chunks from the underlying request into one MCP
-// CallToolResult. If the caller's context already carries an earlier deadline,
-// it naturally bounds the wait through the ctx.Done select.
-func (s *Server) awaitSyncResult(ctx context.Context, sessionID, taskID string) (any, *Error) {
+// poll the request until it reaches a terminal state or the sync timeout
+// elapses, then aggregate any streaming chunks into one MCP CallToolResult. If
+// the caller's context already carries an earlier deadline, it naturally bounds
+// the wait through the ctx.Done select.
+func (s *Server) awaitSyncResult(ctx context.Context, sessionID, requestID string) (any, *Error) {
 	deadline := time.Now().Add(s.syncTimeout)
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
 
-	var lastRequestID string
 	for {
-		task, err := s.tasks.GetTask(ctx, &gw.GetTaskRequest{SessionId: sessionID, TaskId: taskID})
+		request, err := s.requests.GetRequest(ctx, &gw.GetRequestRequest{SessionId: sessionID, RequestId: requestID})
 		if err != nil {
-			return nil, backendError("poll task "+taskID, err)
+			return nil, backendError("poll request "+requestID, err)
 		}
-		if task.CurrentRequestId != "" {
-			lastRequestID = task.CurrentRequestId
-		}
-		if isTerminalStatus(mapTaskStatus(task.Status)) {
-			return s.buildSyncCallToolResult(ctx, sessionID, task, lastRequestID), nil
+		if isTerminalStatus(requestTaskStatus(request)) {
+			return s.buildSyncCallToolResult(ctx, sessionID, request), nil
 		}
 		if time.Now().After(deadline) {
 			return nil, errInternal(
-				fmt.Sprintf("tool call did not complete within %s; the task is still running", s.syncTimeout),
-				map[string]any{TaskIDDataKey: taskID},
+				fmt.Sprintf("tool call did not complete within %s; the request is still running", s.syncTimeout),
+				map[string]any{TaskIDDataKey: requestID},
 			)
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return nil, errInternal("request cancelled while waiting for tool execution", map[string]any{TaskIDDataKey: taskID})
+			return nil, errInternal("request cancelled while waiting for tool execution", map[string]any{TaskIDDataKey: requestID})
 		}
 	}
 }
 
-// buildSyncCallToolResult renders the terminal task as a CallToolResult with
-// the underlying request's retained chunks surfaced as leading text blocks.
-// The exact chunk sequence is also carried in _meta so clients can assert
-// ordering and completeness without parsing content blocks.
-func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, task *gw.Task, requestID string) any {
-	result := callToolResultFromTask(task)
-	meta := metaMap{TaskIDDataKey: task.Id}
-	if requestID != "" {
-		if window, err := s.requests.GetRequestChunks(ctx, &gw.GetRequestChunksRequest{
-			SessionId: sessionID,
-			RequestId: requestID,
-		}); err == nil {
-			content, _ := result["content"].([]any)
-			chunkBlocks := make([]any, 0, len(window.Chunks))
-			for _, chunk := range window.Chunks {
-				chunkBlocks = append(chunkBlocks, textBlock(chunk))
-			}
-			result["content"] = append(chunkBlocks, content...)
-			meta[ChunksMetaKey] = map[string]any{
-				"requestId": requestID,
-				"startSeq":  window.StartSeq,
-				"nextSeq":   window.NextSeq,
-				"chunks":    window.Chunks,
-			}
+// buildSyncCallToolResult renders the terminal request as a CallToolResult with
+// the request's retained chunks surfaced as leading text blocks. The exact chunk
+// sequence is also carried in _meta so clients can assert ordering and
+// completeness without parsing content blocks.
+func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, request *gw.Request) any {
+	result := callToolResultFromRequest(request)
+	meta := metaMap{TaskIDDataKey: request.Id}
+	if window, err := s.requests.GetRequestChunks(ctx, &gw.GetRequestChunksRequest{
+		SessionId: sessionID,
+		RequestId: request.Id,
+	}); err == nil && len(window.Chunks) > 0 {
+		content, _ := result["content"].([]any)
+		chunkBlocks := make([]any, 0, len(window.Chunks))
+		for _, chunk := range window.Chunks {
+			chunkBlocks = append(chunkBlocks, textBlock(chunk))
+		}
+		result["content"] = append(chunkBlocks, content...)
+		meta[ChunksMetaKey] = map[string]any{
+			"requestId": request.Id,
+			"startSeq":  window.StartSeq,
+			"nextSeq":   window.NextSeq,
+			"chunks":    window.Chunks,
 		}
 	}
 	result["_meta"] = meta

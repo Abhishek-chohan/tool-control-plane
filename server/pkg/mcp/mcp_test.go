@@ -23,6 +23,50 @@ import (
 	"toolplane/pkg/trace"
 )
 
+// serveBackend registers the Toolplane gRPC services on a bufconn listener and
+// returns a dialed client connection.
+func serveBackend(
+	t *testing.T,
+	toolService *service.ToolService,
+	sessionService *service.SessionsService,
+	machineService *service.MachinesService,
+	requestService *service.RequestsService,
+	tasksService *service.TasksService,
+) *grpc.ClientConn {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	listener := bufconn.Listen(1024 * 1024)
+	grpcServer := grpc.NewServer()
+	backend := service.NewGRPCServer(toolService, sessionService, machineService, requestService, tasksService)
+	gw.RegisterToolServiceServer(grpcServer, backend)
+	gw.RegisterSessionsServiceServer(grpcServer, backend)
+	gw.RegisterMachinesServiceServer(grpcServer, backend)
+	gw.RegisterRequestsServiceServer(grpcServer, backend)
+	gw.RegisterTasksServiceServer(grpcServer, backend)
+	go func() {
+		if err := grpcServer.Serve(listener); err != nil && ctx.Err() == nil {
+			t.Errorf("bufconn serve failed: %v", err)
+		}
+	}()
+	t.Cleanup(func() {
+		cancel()
+		grpcServer.Stop()
+	})
+
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return listener.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("dial bufconn: %v", err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
 // startBackend boots an in-memory Toolplane gRPC server behind a bufconn and
 // returns a dialed connection plus the raw services for test fixture setup.
 func startBackend(t *testing.T) (*grpc.ClientConn, *service.SessionsService, *service.MachinesService) {
@@ -39,32 +83,7 @@ func startBackend(t *testing.T) (*grpc.ClientConn, *service.SessionsService, *se
 	requestService := service.NewRequestsService(ctx, toolService, machineService, tracer, store)
 	tasksService := service.NewTasksService(ctx, toolService, machineService, requestService, tracer, store)
 
-	listener := bufconn.Listen(1024 * 1024)
-	grpcServer := grpc.NewServer()
-	backend := service.NewGRPCServer(toolService, sessionService, machineService, requestService, tasksService)
-	gw.RegisterToolServiceServer(grpcServer, backend)
-	gw.RegisterSessionsServiceServer(grpcServer, backend)
-	gw.RegisterMachinesServiceServer(grpcServer, backend)
-	gw.RegisterRequestsServiceServer(grpcServer, backend)
-	gw.RegisterTasksServiceServer(grpcServer, backend)
-	go func() {
-		if err := grpcServer.Serve(listener); err != nil && ctx.Err() == nil {
-			t.Errorf("bufconn serve failed: %v", err)
-		}
-	}()
-	t.Cleanup(grpcServer.Stop)
-
-	conn, err := grpc.NewClient("passthrough:///bufnet",
-		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			return listener.DialContext(ctx)
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		t.Fatalf("dial bufconn: %v", err)
-	}
-	t.Cleanup(func() { conn.Close() })
-
+	conn := serveBackend(t, toolService, sessionService, machineService, requestService, tasksService)
 	return conn, sessionService, machineService
 }
 
