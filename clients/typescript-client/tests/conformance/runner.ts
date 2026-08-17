@@ -54,6 +54,7 @@ export const SUPPORTED_FEATURES = new Set<SupportedFeature>([
   'machine_lifecycle',
   'provider_runtime',
   'multi_instance',
+  'mcp_tasks',
 ]);
 
 function sleep(ms: number): Promise<void> {
