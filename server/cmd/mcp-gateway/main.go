@@ -126,8 +126,17 @@ func main() {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		conn.Connect()
-		for conn.GetState() != connectivity.Ready {
-			if !conn.WaitForStateChange(ctx, conn.GetState()) {
+		for {
+			// Capture the state once per iteration so WaitForStateChange waits
+			// for a change *from* that observed state. Re-reading GetState()
+			// between the check and the wait could otherwise pass READY into
+			// WaitForStateChange and block until the connection leaves READY,
+			// needlessly delaying an already-ready backend.
+			state := conn.GetState()
+			if state == connectivity.Ready {
+				break
+			}
+			if !conn.WaitForStateChange(ctx, state) {
 				break // context expired before the connection became READY
 			}
 		}

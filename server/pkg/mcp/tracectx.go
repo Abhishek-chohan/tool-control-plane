@@ -46,7 +46,9 @@ func parseTraceparent(value string) string {
 	}
 	version, traceID, parentID, flags := fields[0], fields[1], fields[2], fields[3]
 
-	if !isHex(version) || version == "ff" {
+	// The version field is exactly two hex digits; "ff" (in any case) is
+	// reserved/invalid per W3C Trace Context.
+	if len(version) != 2 || !isHex(version) || strings.EqualFold(version, "ff") {
 		return ""
 	}
 	// Version 00 must have exactly four fields; later versions may extend.
