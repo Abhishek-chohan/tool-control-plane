@@ -119,17 +119,28 @@ func main() {
 	root := http.NewServeMux()
 	root.Handle("/", corsMiddleware(cfg, facade.Handler()))
 	// Health probes transport-level connectivity only: backend RPCs require API
-	// keys, which an unauthenticated health check does not carry.
+	// keys, which an unauthenticated health check does not carry. The probe
+	// waits up to its deadline for the (lazily established) gRPC connection to
+	// reach READY so an idle-but-healthy backend is not reported as degraded.
 	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
-		state := conn.GetState()
-		if state != connectivity.Ready {
-			conn.Connect()
-			conn.WaitForStateChange(ctx, state)
-			state = conn.GetState()
+		conn.Connect()
+		for {
+			// Capture the state once per iteration so WaitForStateChange waits
+			// for a change *from* that observed state. Re-reading GetState()
+			// between the check and the wait could otherwise pass READY into
+			// WaitForStateChange and block until the connection leaves READY,
+			// needlessly delaying an already-ready backend.
+			state := conn.GetState()
+			if state == connectivity.Ready {
+				break
+			}
+			if !conn.WaitForStateChange(ctx, state) {
+				break // context expired before the connection became READY
+			}
 		}
-		if state == connectivity.Ready {
+		if conn.GetState() == connectivity.Ready {
 			writeHealth(w, "ok", *grpcEndpoint, http.StatusOK)
 			return
 		}
