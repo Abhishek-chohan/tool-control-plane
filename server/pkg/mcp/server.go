@@ -31,7 +31,6 @@ const DefaultUserID = "mcp-gateway"
 type Server struct {
 	tools    gw.ToolServiceClient
 	sessions gw.SessionsServiceClient
-	tasks    gw.TasksServiceClient
 	requests gw.RequestsServiceClient
 
 	syncTimeout   time.Duration
@@ -80,7 +79,6 @@ func NewServer(conn grpc.ClientConnInterface, opts ...Option) *Server {
 	server := &Server{
 		tools:         gw.NewToolServiceClient(conn),
 		sessions:      gw.NewSessionsServiceClient(conn),
-		tasks:         gw.NewTasksServiceClient(conn),
 		requests:      gw.NewRequestsServiceClient(conn),
 		syncTimeout:   60 * time.Second,
 		pollInterval:  250 * time.Millisecond,
@@ -256,7 +254,7 @@ func (s *Server) handleTasksGet(ctx context.Context, req *Request, meta requestM
 		return nil, errInternal("session resolution failed: "+err.Error(), nil)
 	}
 
-	task, err := s.tasks.GetTask(ctx, &gw.GetTaskRequest{SessionId: sessionID, TaskId: params.TaskID})
+	request, err := s.requests.GetRequest(ctx, &gw.GetRequestRequest{SessionId: sessionID, RequestId: params.TaskID})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil, errInvalidParams("task not found: " + params.TaskID)
@@ -264,9 +262,9 @@ func (s *Server) handleTasksGet(ctx context.Context, req *Request, meta requestM
 		return nil, backendError("get task "+params.TaskID, err)
 	}
 
-	payload := detailedTask(task)
-	if !isTerminalStatus(payload.Status) && task.CurrentRequestId != "" {
-		if chunksMeta := s.readChunkWindow(ctx, sessionID, task.CurrentRequestId, meta); chunksMeta != nil {
+	payload := detailedTask(request)
+	if !isTerminalStatus(payload.Status) {
+		if chunksMeta := s.readChunkWindow(ctx, sessionID, request.Id, meta); chunksMeta != nil {
 			payload.Meta = chunksMeta
 		}
 	}
@@ -326,7 +324,7 @@ func (s *Server) handleTasksCancel(ctx context.Context, req *Request, meta reque
 		return nil, errInternal("session resolution failed: "+err.Error(), nil)
 	}
 
-	task, err := s.tasks.GetTask(ctx, &gw.GetTaskRequest{SessionId: sessionID, TaskId: params.TaskID})
+	request, err := s.requests.GetRequest(ctx, &gw.GetRequestRequest{SessionId: sessionID, RequestId: params.TaskID})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
 			return nil, errInvalidParams("task not found: " + params.TaskID)
@@ -334,13 +332,13 @@ func (s *Server) handleTasksCancel(ctx context.Context, req *Request, meta reque
 		return nil, backendError("get task "+params.TaskID, err)
 	}
 
-	// Cancellation is cooperative: a task already in a terminal state is
+	// Cancellation is cooperative: a request already in a terminal state is
 	// acknowledged rather than rejected.
-	if isTerminalStatus(mapTaskStatus(task.Status)) {
+	if isTerminalStatus(requestTaskStatus(request)) {
 		return ackResult(), nil
 	}
 
-	if _, err := s.tasks.CancelTask(ctx, &gw.CancelTaskRequest{SessionId: sessionID, TaskId: params.TaskID}); err != nil {
+	if _, err := s.requests.CancelRequest(ctx, &gw.CancelRequestRequest{SessionId: sessionID, RequestId: params.TaskID}); err != nil {
 		return nil, backendError("cancel task "+params.TaskID, err)
 	}
 	return ackResult(), nil

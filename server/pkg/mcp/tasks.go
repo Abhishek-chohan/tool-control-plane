@@ -7,13 +7,20 @@ import (
 	gw "toolplane/proto"
 )
 
-// taskPollIntervalMs is the polling interval suggested to MCP clients in
-// every task payload.
+// taskPollIntervalMs is the polling interval suggested to MCP clients in every
+// task payload.
 const taskPollIntervalMs = 500
+
+// requestCancelledError is the exact error marker CancelRequest records on a
+// cancelled request; it distinguishes user cancellation from other failures,
+// which all surface as the generic failure status.
+const requestCancelledError = "Request was cancelled"
 
 // taskPayload is the wire shape shared by CreateTaskResult (resultType "task",
 // flat Result & Task) and the DetailedTask variants returned by tasks/get
-// (resultType "complete"). Field names follow the Tasks extension schema.
+// (resultType "complete"). Field names follow the Tasks extension schema. The
+// task identifier is a Toolplane request ID: requests are the durable units
+// that provider machines claim and execute.
 type taskPayload struct {
 	ResultType     string  `json:"resultType"`
 	TaskID         string  `json:"taskId"`
@@ -30,18 +37,20 @@ type taskPayload struct {
 
 type metaMap map[string]any
 
-// mapTaskStatus translates a Toolplane task status into an MCP Tasks status.
-// Toolplane's pending and running states both mean work is in flight; MCP has
-// a single working state. Toolplane never reports input_required.
-func mapTaskStatus(status string) string {
-	switch status {
-	case "completed":
+// requestTaskStatus maps a Toolplane request status to an MCP Tasks status.
+// pending/claimed/running/stalled all mean work is in flight; MCP has a
+// single working state. A failure caused by CancelRequest maps to cancelled;
+// every other failure maps to failed.
+func requestTaskStatus(request *gw.Request) string {
+	switch request.Status {
+	case "done":
 		return TaskStatusCompleted
-	case "failed":
+	case "failure":
+		if request.Error == requestCancelledError {
+			return TaskStatusCancelled
+		}
 		return TaskStatusFailed
-	case "cancelled":
-		return TaskStatusCancelled
-	default: // pending, running, and any future in-flight state
+	default:
 		return TaskStatusWorking
 	}
 }
@@ -57,30 +66,31 @@ func isTerminalStatus(status string) bool {
 }
 
 // baseTaskPayload fills the fields every task payload carries. Toolplane
-// retains tasks indefinitely, so ttlMs is null (unlimited).
-func baseTaskPayload(task *gw.Task) taskPayload {
+// retains requests indefinitely, so ttlMs is null (unlimited).
+func baseTaskPayload(request *gw.Request) taskPayload {
 	return taskPayload{
-		TaskID:         task.Id,
-		Status:         mapTaskStatus(task.Status),
-		StatusMessage:  statusMessageFor(task),
-		CreatedAt:      task.CreatedAt,
-		LastUpdatedAt:  task.UpdatedAt,
+		TaskID:         request.Id,
+		Status:         requestTaskStatus(request),
+		StatusMessage:  statusMessageForRequest(request),
+		CreatedAt:      request.CreatedAt,
+		LastUpdatedAt:  request.UpdatedAt,
 		TTLMs:          nil,
 		PollIntervalMs: taskPollIntervalMs,
 	}
 }
 
-func statusMessageFor(task *gw.Task) string {
-	switch task.Status {
+func statusMessageForRequest(request *gw.Request) string {
+	switch request.Status {
 	case "pending":
 		return "queued for execution"
-	case "running":
-		if task.CurrentRequestId != "" {
-			return "executing"
-		}
-		return "running"
-	case "failed", "cancelled":
-		return firstNonEmpty(task.Error, task.ResultType)
+	case "claimed", "running":
+		return "executing"
+	case "stalled":
+		return "stalled, awaiting lease reclaim"
+	case "failure":
+		return firstNonEmpty(request.Error, request.ResultType)
+	case "cancelled":
+		return requestCancelledError
 	default:
 		return ""
 	}
@@ -97,51 +107,53 @@ func firstNonEmpty(values ...string) string {
 
 // createTaskResult builds the flat CreateTaskResult returned by tools/call
 // when the client advertised the Tasks extension.
-func createTaskResult(task *gw.Task) taskPayload {
-	payload := baseTaskPayload(task)
+func createTaskResult(request *gw.Request) taskPayload {
+	payload := baseTaskPayload(request)
 	payload.ResultType = ResultTypeTask
 	return payload
 }
 
-// detailedTask builds the tasks/get payload for the task's current status,
+// detailedTask builds the tasks/get payload for the request's current status,
 // embedding the CallToolResult-shaped final result on completion and a
-// JSON-RPC error object on failure, per the extension schema.
-func detailedTask(task *gw.Task) taskPayload {
-	payload := baseTaskPayload(task)
+// JSON-RPC error object on failure, per the extension schema. Cancelled tasks
+// carry their reason in statusMessage only (the schema gives CancelledTask no
+// error field).
+func detailedTask(request *gw.Request) taskPayload {
+	payload := baseTaskPayload(request)
 	payload.ResultType = ResultTypeComplete
 	switch payload.Status {
 	case TaskStatusCompleted:
-		payload.Result = callToolResultFromTask(task)
+		payload.Result = callToolResultFromRequest(request)
 	case TaskStatusFailed:
 		payload.Error = &Error{
 			Code:    CodeInternalError,
-			Message: firstNonEmpty(task.Error, "task failed"),
-			Data:    map[string]any{TaskIDDataKey: task.Id},
+			Message: firstNonEmpty(request.Error, "tool execution failed"),
+			Data:    map[string]any{TaskIDDataKey: request.Id},
 		}
 	}
 	return payload
 }
 
-// callToolResultFromTask renders the terminal task outcome as an MCP
+// callToolResultFromRequest renders the terminal request outcome as an MCP
 // CallToolResult: content blocks plus optional structuredContent, with
 // isError set for failures and cancellations.
-func callToolResultFromTask(task *gw.Task) map[string]any {
+func callToolResultFromRequest(request *gw.Request) map[string]any {
 	result := map[string]any{
 		"resultType": ResultTypeComplete,
 		"content":    []any{},
 	}
 
 	content := []any{}
-	if task.Status == "completed" {
-		if text := strings.TrimSpace(task.Result); text != "" {
+	if request.Status == "done" {
+		if text := strings.TrimSpace(request.Result); text != "" {
 			content = append(content, textBlock(text))
 		}
-		if structured := parseJSONValue(task.Result); structured != nil {
+		if structured := parseJSONValue(request.Result); structured != nil {
 			result["structuredContent"] = structured
 		}
 	} else {
-		message := firstNonEmpty(task.Error, "task "+task.Status)
-		content = append(content, textBlock("tool call "+task.Status+": "+message))
+		message := firstNonEmpty(request.Error, "tool call "+request.Status)
+		content = append(content, textBlock("tool call failed: "+message))
 		result["isError"] = true
 	}
 	result["content"] = content
