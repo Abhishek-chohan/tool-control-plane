@@ -231,9 +231,63 @@ def conformance_environment():
             f"Conformance bootstrap failed: HTTP gateway did not become ready on {http_port}. Check {proxy_log_path}"
         )
 
+    # Optional MCP facade (toolplane-mcp-gateway) for the mcp transport. It is
+    # a thin stateless JSON-RPC layer over the same gRPC backend, so it boots
+    # against the primary server instance. Enabled behind
+    # TOOLPLANE_CONFORMANCE_MCP=1; when off the mcp transport is skipped.
+    mcp_enabled = os.getenv("TOOLPLANE_CONFORMANCE_MCP", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    mcp_process = None
+    mcp_log_handle = None
+    if mcp_enabled:
+        mcp_port = _find_free_port()
+        os.environ["TOOLPLANE_CONFORMANCE_MCP_HOST"] = "localhost"
+        os.environ["TOOLPLANE_CONFORMANCE_MCP_PORT"] = str(mcp_port)
+        os.environ.setdefault("TOOLPLANE_MCP_ALLOW_INSECURE_BACKEND", "1")
+
+        mcp_log_path = log_dir / "mcp_gateway.log"
+        mcp_log_handle = open(mcp_log_path, "w", encoding="utf-8")
+
+        mcp_process = subprocess.Popen(
+            [
+                "go",
+                "run",
+                "./cmd/mcp-gateway",
+                "--listen",
+                f":{mcp_port}",
+                "--backend",
+                f"localhost:{grpc_port}",
+            ],
+            cwd=_server_root(),
+            stdout=mcp_log_handle,
+            stderr=subprocess.STDOUT,
+            env=os.environ.copy(),
+        )
+
+        mcp_health_url = f"http://127.0.0.1:{mcp_port}/health"
+        if not _wait_for_http_health(mcp_health_url, timeout_seconds=BOOTSTRAP_READINESS_TIMEOUT_SECONDS):
+            _terminate_process(mcp_process)
+            _terminate_process(proxy_process)
+            _terminate_process(server_process)
+            if server_b_process is not None:
+                _terminate_process(server_b_process)
+            server_log_handle.close()
+            proxy_log_handle.close()
+            if server_b_log_handle:
+                server_b_log_handle.close()
+            mcp_log_handle.close()
+            pytest.skip(
+                f"Conformance bootstrap failed: MCP gateway did not become ready on {mcp_port}. Check {mcp_log_path}"
+            )
+
     try:
         yield
     finally:
+        if mcp_process is not None:
+            _terminate_process(mcp_process)
         _terminate_process(proxy_process)
         _terminate_process(server_process)
         if server_b_process is not None:
@@ -242,3 +296,5 @@ def conformance_environment():
         proxy_log_handle.close()
         if server_b_log_handle:
             server_b_log_handle.close()
+        if mcp_log_handle is not None:
+            mcp_log_handle.close()
