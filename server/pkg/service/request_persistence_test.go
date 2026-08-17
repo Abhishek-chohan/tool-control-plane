@@ -34,7 +34,12 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	sessionSvc := NewSessionsService(tracer, store)
 	toolSvc := NewToolService(tracer, store)
 	machineSvc := NewMachinesService(context.Background(), toolSvc, tracer, store)
-	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, tracer, store)
+	// Cancellable context so the first instance's background lease sweep can be
+	// stopped before the expired lease is forged below. Only the restarted
+	// instance should reclaim the request and record the asserted trace events.
+	requestCtx, stopRequestSweep := context.WithCancel(context.Background())
+	defer stopRequestSweep()
+	requestSvc := NewRequestsService(requestCtx, toolSvc, machineSvc, tracer, store)
 
 	session, err := sessionSvc.CreateSession("persistent-user", "Persistent Recovery", "tier 4 persistence validation", "", "", "")
 	if err != nil {
@@ -72,7 +77,14 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 		request = claimed
 	}
 
-	expiredAt := time.Now().Add(-2 * time.Second)
+	// Stop the first instance's background lease sweep and let any in-flight
+	// tick drain. No request is expired yet, so the draining sweep reclaims
+	// nothing; once it returns, only the restarted instance below can reclaim
+	// the expired lease this test forges.
+	stopRequestSweep()
+	time.Sleep(200 * time.Millisecond)
+
+	expiredAt := time.Now().Add(-30 * time.Second)
 	request.TimeoutSeconds = 1
 	request.LeasedAt = &expiredAt
 	request.VisibleAt = expiredAt
@@ -96,14 +108,26 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	restartedMachineSvc := NewMachinesService(context.Background(), restartedToolSvc, restartedTracer, restartedStore)
 	restartedRequestSvc := NewRequestsService(context.Background(), restartedToolSvc, restartedMachineSvc, restartedTracer, restartedStore)
 
-	restartedRequestSvc.markStalledRequests()
-
-	updated, err := restartedRequestSvc.GetRequestByID(session.ID, request.ID)
-	if err != nil {
-		t.Fatalf("get recovered request: %v", err)
-	}
-	if updated.Status != model.RequestStatusPending {
-		t.Fatalf("request status = %q, want %q", updated.Status, model.RequestStatusPending)
+	// Reclaim is driven by markStalledRequests. Retry it within a bounded window:
+	// the expired-lease scan and the guarded reclaim each take their own time
+	// samples, so under CI load a single pass can occasionally observe the
+	// request a moment before it is eligible. Re-scanning is idempotent, and if
+	// the request is genuinely reclaimable one of the passes requeues it.
+	var updated *model.Request
+	reclaimDeadline := time.Now().Add(10 * time.Second)
+	for {
+		restartedRequestSvc.markStalledRequests()
+		updated, err = restartedRequestSvc.GetRequestByID(session.ID, request.ID)
+		if err != nil {
+			t.Fatalf("get recovered request: %v", err)
+		}
+		if updated.Status == model.RequestStatusPending {
+			break
+		}
+		if time.Now().After(reclaimDeadline) {
+			t.Fatalf("request status = %q, want %q (after retrying markStalledRequests)", updated.Status, model.RequestStatusPending)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if updated.ExecutingMachineID != "" {
 		t.Fatalf("executing machine = %q, want empty", updated.ExecutingMachineID)

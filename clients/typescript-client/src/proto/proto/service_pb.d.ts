@@ -1764,6 +1764,8 @@ export class Task extends jspb.Message {
     setUpdatedAt(value: string): Task;
     getCompletedAt(): string;
     setCompletedAt(value: string): Task;
+    getCurrentRequestId(): string;
+    setCurrentRequestId(value: string): Task;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): Task.AsObject;
@@ -1788,6 +1790,7 @@ export namespace Task {
         createdAt: string,
         updatedAt: string,
         completedAt: string,
+        currentRequestId: string,
     }
 }
 

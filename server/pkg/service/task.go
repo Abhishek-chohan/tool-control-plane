@@ -360,7 +360,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		return err
 	}
 	s.setTaskRequestID(task.ID, request.ID)
-	defer s.setTaskRequestID(task.ID, "")
+	s.setCurrentRequestID(task, request.ID)
+	defer func() {
+		s.setTaskRequestID(task.ID, "")
+		s.setCurrentRequestID(task, "")
+	}()
 	s.recordTaskEvent(task, trace.EventTaskExecutionStarted, map[string]any{
 		"machineID": machine.ID,
 		"requestID": request.ID,
@@ -473,6 +477,31 @@ func (s *TasksService) setTaskRequestID(taskID, requestID string) {
 	if execution, ok := s.executions[taskID]; ok {
 		execution.requestID = requestID
 	}
+}
+
+// CurrentRequestID returns the ID of the request executing the task's current
+// attempt, or "" when no attempt is in flight. The durable copy lives on the
+// task record itself (model.Task.CurrentRequestID) and is authoritative across
+// replicas; this live lookup covers the brief window before the attempt's
+// first persist on this instance.
+func (s *TasksService) CurrentRequestID(taskID string) string {
+	requestID, _ := s.taskExecutionSnapshot(taskID)
+	return requestID
+}
+
+// setCurrentRequestID records (or clears) the request executing the task's
+// current attempt on the durable task record, so any replica can serve
+// chunk-replay reads for a running task — not just the replica executing it.
+func (s *TasksService) setCurrentRequestID(task *model.Task, requestID string) {
+	s.tasksMutex.Lock()
+	if task.Status == model.StatusCancelled {
+		s.tasksMutex.Unlock()
+		return
+	}
+	task.CurrentRequestID = requestID
+	task.UpdatedAt = time.Now()
+	s.tasksMutex.Unlock()
+	s.persistTask(task)
 }
 
 func (s *TasksService) taskExecutionSnapshot(taskID string) (string, context.CancelFunc) {

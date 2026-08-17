@@ -105,6 +105,13 @@ conformance-python-grpc:
 conformance-python-http:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k http -q
 
+# MCP facade conformance: boots toolplane-mcp-gateway (via the shared-fixture
+# bootstrap, enabled by TOOLPLANE_CONFORMANCE_MCP=1) and runs the tool-plane
+# features plus the mcp_tasks lifecycle case over the MCP JSON-RPC transport.
+conformance-python-mcp:
+	TOOLPLANE_CONFORMANCE_MCP=1 $(RELEASE_GATE_ENV) \
+		python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k mcp -q
+
 # Authoritative release gate: proves the maintained architecture end to end.
 # See server/docs/release-gate.md for the scenario description.
 release-gate:
