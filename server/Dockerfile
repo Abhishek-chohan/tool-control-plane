@@ -22,7 +22,8 @@ ENV CGO_ENABLED=0 GOOS=linux
 # Build the server and gateway binaries without launching the local dev stack.
 RUN mkdir -p bin \
 	&& go build -v -o bin/server ./cmd/server \
-	&& go build -v -o bin/toolplane-gateway ./cmd/proxy
+	&& go build -v -o bin/toolplane-gateway ./cmd/proxy \
+	&& go build -v -o bin/toolplane-mcp-gateway ./cmd/mcp-gateway
 
 # Create a smaller final image
 FROM alpine:latest
@@ -32,6 +33,7 @@ WORKDIR /app
 # Copy the built binaries from the builder stage
 COPY --from=builder /app/bin/server /app/server
 COPY --from=builder /app/bin/toolplane-gateway /app/toolplane-gateway
+COPY --from=builder /app/bin/toolplane-mcp-gateway /app/toolplane-mcp-gateway
 
 # Copy the entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
@@ -40,6 +42,7 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 # Expose the ports
 EXPOSE 9001
 EXPOSE 8080
+EXPOSE 8081
 EXPOSE 9102
 
 ENV TOOLPLANE_DATABASE_URL=postgres://user:password@localhost:5432/user?sslmode=disable

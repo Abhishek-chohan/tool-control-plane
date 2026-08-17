@@ -32,6 +32,7 @@ These categories are the maintained platform boundary: consumer flows invoke and
 - `clients/typescript-client/` is the maintained JavaScript-family parity surface. Its HTTP adapter under `tests/conformance/` exists only to exercise the maintained HTTP gateway against shared fixtures; it is not a public HTTP SDK surface.
 - `/rpc` remains a server-side removal-path surface documented in `server/docs/rpc-retirement.md`; it stays outside maintained SDK support and parity.
 - `clients/typescript-mcp-adapter/` is an optional stdio adapter for one Toolplane session. Keep it outside the SDK parity tables.
+- `server/cmd/mcp-gateway/` (`toolplane-mcp-gateway`) is a stateless MCP 2026-07-28 facade over the gRPC backend, exposing tools plus the Tasks extension. It is an edge facade, not an SDK, so it stays outside the SDK parity tables; its validation path is the `mcp` conformance transport.
 - Treat this map as a guide to the maintained durable-remote-tool surface, not as a generic wrapper inventory.
 
 ## Integration Seam Layers
