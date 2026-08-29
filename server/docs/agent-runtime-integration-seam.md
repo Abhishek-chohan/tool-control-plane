@@ -67,7 +67,6 @@ An edge adapter should answer these questions without owning core runtime semant
 - `ResumeStream` and `GetRequestChunks` exist at the server contract level, but they are not exposed as maintained public wrappers across every SDK projection.
 - TypeScript provider mode is maintained, but the broader TypeScript public surface remains narrower than Python.
 - The TypeScript MCP adapter is a useful edge example, not proof of general SDK parity.
-- The current MCP adapter maps `tools/list`, `tools/call`, and read-only inspection resources, but it does not currently expose a separate MCP-native cancellation or replay surface.
 
 ## Reference Integration Pattern
 
@@ -83,10 +82,11 @@ An edge adapter should answer these questions without owning core runtime semant
 The optional TypeScript MCP adapter is the repo's reference Layer 4 example.
 
 - It binds one MCP stdio server process to one Toolplane session.
-- It translates MCP `tools/list` to session-scoped native tool discovery.
-- It translates MCP `tools/call` to request-backed execution and waits for a terminal native request state.
+- It translates MCP `tools/list` to session-scoped native tool discovery, and advertises itself through `server/discover`.
+- It translates MCP `tools/call` to request-backed execution. Clients speaking MCP 2026-07-28 with the Tasks extension receive a task handle (the native request ID) and poll `tasks/get`, with chunk replay honored through the retained window cursor; other clients are served synchronously after a terminal native request state.
+- It maps MCP Tasks cancellation onto native `CancelRequest`, so `tasks/cancel` reuses control-plane records.
 - It exposes read-only resources for the bound session, a concept map, and recent translated request records.
-- It aggregates native stream chunks because MCP stdio tool calls do not expose the same long-lived request lifecycle as native Toolplane streams.
+- It aggregates native stream chunks for synchronous callers because legacy MCP stdio tool calls do not expose the same long-lived request lifecycle as native Toolplane streams.
 
 This is intentionally an edge translation layer. The source of truth stays in the native control plane and maintained SDK surfaces below it.
 

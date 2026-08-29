@@ -78,7 +78,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | Surface | Path | Support label | Notes |
 | --- | --- | --- | --- |
-| TypeScript MCP adapter | `clients/typescript-mcp-adapter/` | `full` | Optional stdio adapter that exposes MCP `tools/list`, `tools/call`, `resources/list`, and `resources/read` for one Toolplane session. Keep it outside the SDK parity tables. |
+| TypeScript MCP adapter | `clients/typescript-mcp-adapter/` | `full` | Optional stdio adapter for one Toolplane session: MCP 2026-07-28 stateless surface with the Tasks extension (`server/discover`, task handles, `tasks/get` chunk replay, `tasks/cancel`) plus the legacy initialize-based surface for pre-2026 clients. Keep it outside the SDK parity tables. |
 
 ## ToolService
 

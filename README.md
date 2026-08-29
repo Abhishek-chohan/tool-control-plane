@@ -62,7 +62,7 @@ A strong first offload candidate is one sandboxed code-execution worker. It runs
 | Go client | Supported secondary SDK | Maintained gRPC lifecycle, request, and task helpers; no provider runtime harness |
 | TypeScript client | Supported secondary SDK | Maintained JavaScript-family gRPC client with an explicit `ProviderRuntime`; repository-internal HTTP adapters remain conformance-only |
 | MCP gateway (`toolplane-mcp-gateway`) | Supported edge facade | Stateless MCP 2026-07-28 JSON-RPC endpoint exposing tools plus the Tasks extension over the gRPC backend |
-| TypeScript MCP adapter | Optional ecosystem adapter | Stdio adapter for one Toolplane session with tool and resource access |
+| TypeScript MCP adapter | Optional ecosystem adapter | Stdio adapter for one Toolplane session exposing the MCP 2026-07-28 stateless surface with the Tasks extension, alongside the legacy protocol for pre-2026 clients |
 
 ## Agent-Runtime Seam
 
