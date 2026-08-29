@@ -54,6 +54,8 @@ import {
   GetToolByNameRequest as GetToolByNameMessage,
   GetToolResponse as GetToolResponseMessage,
   GetTaskRequest as GetTaskMessage,
+  GetRequestChunksRequest as GetRequestChunksMessage,
+  GetRequestChunksResponse as GetRequestChunksResponseMessage,
   GetRequestRequest,
   GetSessionRequest,
   HealthCheckRequest,
@@ -723,6 +725,29 @@ export class ToolplaneClient {
     );
 
     return this.normalizeRequest(response);
+  }
+
+  async getRequestChunksWindow(requestId: string): Promise<{
+    chunks: unknown[];
+    startSeq: number;
+    nextSeq: number;
+  }> {
+    this.ensureGRPCConnected('request chunks retrieval');
+
+    const request = new GetRequestChunksMessage();
+    request.setSessionId(this.getRequiredSessionId('request chunks retrieval'));
+    request.setRequestId(requestId);
+
+    const response = await this.invokeGRPCUnary<GetRequestChunksResponseMessage>(
+      (metadata, options, callback) => this.requestsClient!.getRequestChunks(request, metadata, options, callback),
+      `failed to fetch chunks for request ${requestId}`,
+    );
+
+    return {
+      chunks: response.getChunksList().map((chunk) => this.parseResultPayload(chunk)),
+      startSeq: response.getStartSeq(),
+      nextSeq: response.getNextSeq(),
+    };
   }
 
   async listRequests(options: {
