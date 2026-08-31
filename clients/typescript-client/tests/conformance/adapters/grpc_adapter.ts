@@ -349,13 +349,13 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
 
   async startRequestProcessing(sessionId: string, requestId: string): Promise<void> {
     void requestId;
-    void this.getRuntime(sessionId).pollOnce();
+    this.triggerPoll(sessionId);
   }
 
   async startStreamingRequest(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<string> {
     const requestId = await this.createRequest(sessionId, toolName, params);
     await this.startProviderRuntime(sessionId);
-    void this.getRuntime(sessionId).pollOnce();
+    this.triggerPoll(sessionId);
     return requestId;
   }
 
@@ -607,7 +607,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       throw new Error('No request ID returned from ExecuteTool');
     }
 
-    void this.getRuntime(sessionId).pollOnce();
+    this.triggerPoll(sessionId);
     const status = await this.waitForRequestCompletion(sessionId, requestId);
     return status.result;
   }
@@ -626,7 +626,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return new Promise<[unknown[], boolean]>((resolve, reject) => {
       let settled = false;
 
-      void this.getRuntime(sessionId).pollOnce();
+      this.triggerPoll(sessionId);
 
       stream.on('data', (chunk) => {
         if (settled) {
@@ -704,6 +704,16 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
 
     this.runtimes.set(sessionId, runtime);
     return runtime;
+  }
+
+  /**
+   * Fire-and-forget poll trigger. Request-level failures — for example a
+   * provider submitting the final result of a request that a client cancelled
+   * mid-flight — are expected races reflected in request state, so they are
+   * swallowed here just as the provider runtime's own runLoop swallows them.
+   */
+  private triggerPoll(sessionId: string): void {
+    this.getRuntime(sessionId).pollOnce().catch(() => undefined);
   }
 
   private normalizeSession(session: ProtoSession): Record<string, unknown> {

@@ -78,7 +78,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | Surface | Path | Support label | Notes |
 | --- | --- | --- | --- |
-| TypeScript MCP adapter | `clients/typescript-mcp-adapter/` | `full` | Optional stdio adapter that exposes MCP `tools/list`, `tools/call`, `resources/list`, and `resources/read` for one Toolplane session. Keep it outside the SDK parity tables. |
+| TypeScript MCP adapter | `clients/typescript-mcp-adapter/` | `full` | Optional stdio adapter for one Toolplane session: MCP 2026-07-28 stateless surface with the Tasks extension (`server/discover`, task handles, `tasks/get` chunk replay, `tasks/cancel`) plus the legacy initialize-based surface for pre-2026 clients. Keep it outside the SDK parity tables. |
 
 ## ToolService
 
@@ -136,7 +136,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `CancelRequest` | `full`: `cancel_request()` | `full`: `CancelRequest()` | `full`: `cancelRequest()` | Public across Python, Go, and TypeScript |
 | `SubmitRequestResult` | `partial`: explicit provider result submission | `unsupported` | `full`: `submitRequestResult()` plus `ProviderRuntime` | TypeScript now exposes the final provider result RPC directly and uses it in the maintained runtime |
 | `AppendRequestChunks` | `partial`: explicit streaming result submission | `unsupported` | `full`: `appendRequestChunks()` plus `ProviderRuntime` | TypeScript now exposes streaming chunk submission directly and uses it in the maintained runtime |
-| `GetRequestChunks` | `unsupported` | `unsupported` | `unsupported` | No current wrapper; the server returns retained chunks plus `start_seq` / `next_seq` metadata for the bounded replay window |
+| `GetRequestChunks` | `partial`: internal HTTP chunk-window fetch inside `get_request_status()` | `unsupported` | `full`: `getRequestChunksWindow()` | Python folds retained chunks into status responses without a standalone wrapper; TypeScript exposes the window directly. The server returns retained chunks plus `start_seq` / `next_seq` metadata for the bounded replay window |
 
 ## TasksService
 
@@ -163,6 +163,13 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `provider_runtime_unary_claim_submit` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |
 | `provider_runtime_stream_append_chunks` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.AppendRequestChunks`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |
 | `provider_runtime_drain_under_load` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `ProviderRuntime`, `create_request()`, and `drain_machine()`, plus TypeScript `ProviderRuntime`, `createRequest()`, and `drainMachine()` |
+| `machine_lifecycle_drain_under_load` | `MachinesService.RegisterMachine`, `MachinesService.ListMachines`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `drain_machine()` plus `invoke()`, Go `DrainMachine()`, TypeScript `drainMachine()` plus `invoke()` |
+| `request_recovery_chunk_window` | `RequestsService.CreateRequest`, `RequestsService.GetRequest`, `RequestsService.GetRequestChunks` | Python provider-runtime streaming plus `get_request_status()`, TypeScript `getRequest()` plus `getRequestChunksWindow()` |
+| `request_recovery_resume_from_last_seq` | `RequestsService.GetRequestChunks`, server `ResumeStream` replay from the last acknowledged sequence | Exercised through the conformance adapters' replay path; no public `ResumeStream` wrapper exists in any SDK yet |
+| `request_recovery_resume_expired_window` | `RequestsService.GetRequestChunks`, canonical gRPC `OUT_OF_RANGE` replay failure | Exercised through the conformance adapters' replay path; no public `ResumeStream` wrapper exists in any SDK yet |
+| `request_recovery_resume_trimmed_window` | `RequestsService.GetRequestChunks`, replay from inside a trimmed retained window | Exercised through the conformance adapters' replay path; no public `ResumeStream` wrapper exists in any SDK yet |
+| `mcp_tasks_lifecycle` | MCP facade `tools/call` task handles, `tasks/get` chunk cursor, `tasks/cancel` | Go `toolplane-mcp-gateway` and the TypeScript MCP adapter; validated through the `mcp` conformance transport (Python runner today) |
+| `multi_instance_claim_cross_visibility` | Cross-replica `RequestsService.CreateRequest` and `GetRequest` visibility over one shared Postgres store | Server-level store-first behavior; exercised on the gRPC transport behind `TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1` |
 
 ## Navigation Order For Contract Work
 
