@@ -2,9 +2,10 @@ name: SDK Conformance & Verification
 
 # Cross-SDK shared-fixture verification for the maintained public surface.
 # This workflow runs Python shared-fixture conformance, TypeScript shared-fixture
-# conformance, the optional TypeScript MCP adapter integration suite, and Go
-# client unit tests. It is the primary CI signal that maintained SDK behavior
-# and the translated adapter boundary still match the repo's validation story.
+# conformance, the optional TypeScript MCP adapter integration suite, Go
+# client unit tests, and the full Go server test suite. It is the primary CI
+# signal that maintained SDK behavior and the translated adapter boundary still
+# match the repo's validation story.
 # See conformance/README.md
 # for the fixture semantics and conformance/ARCHITECTURE.md for coverage model.
 #
@@ -107,6 +108,44 @@ jobs:
       - name: Run Go client tests
         working-directory: clients/go-client
         run: go test ./...
+
+  server-tests:
+    name: Server Tests (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-server-${{ hashFiles('server/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-server-
+
+      - name: Download Go server modules
+        working-directory: server
+        run: go mod download
+
+      # Enforces the focused test packages the maintained docs cite as proof
+      # (pkg/mcp, cmd/proxy, pkg/observability, cmd/server/auth) alongside the
+      # rest of the server suite. Runs in memory-storage mode: Postgres-backed
+      # variants stay with the release gate's focused runtime slice and skip
+      # here without TOOLPLANE_DATABASE_URL.
+      - name: Run Go server tests
+        working-directory: server
+        run: go test ./... -count=1
 
   typescript-client:
     name: TypeScript Client

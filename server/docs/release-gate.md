@@ -146,7 +146,7 @@ The `.github/workflows/release-gate.yml` workflow runs the same `make release-ga
 | Workflow | Role |
 | --- | --- |
 | `release-gate.yml` | Authoritative release gate: one canonical secure end-to-end scenario |
-| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript |
+| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript, plus the full Go server test suite (`go test ./...`) on every pull request and push to `main` |
 
 The release gate remains intentionally narrow and fast. Shared conformance is broader and verifies parity across SDKs. Both must pass before a release is trusted.
 
