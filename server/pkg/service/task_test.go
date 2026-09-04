@@ -44,7 +44,13 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCancelled, time.Second)
 	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusFailed, time.Second)
 
-	if err := requestService.SubmitRequestResult(sessionID, requestID, map[string]string{"echo": "late"}, model.ResultTypeResolution, nil); err == nil {
+	// Present the cancelled request's own lease grant: even a correctly-fenced
+	// late submission must be rejected once the request is terminal.
+	cancelledReq, err := requestService.GetRequestByID(sessionID, requestID)
+	if err != nil {
+		t.Fatalf("get cancelled request: %v", err)
+	}
+	if err := requestService.SubmitRequestResult(sessionID, requestID, machineID, cancelledReq.LeaseEpoch, map[string]string{"echo": "late"}, model.ResultTypeResolution, nil); err == nil {
 		t.Fatal("expected late request completion to be rejected after task cancellation")
 	}
 

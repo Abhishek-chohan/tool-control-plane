@@ -1455,6 +1455,11 @@ class RequestsServiceStub(object):
                 request_serializer=proto_dot_service__pb2.GetRequestChunksRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetRequestChunksResponse.FromString,
                 _registered_method=True)
+        self.RenewRequestLease = channel.unary_unary(
+                '/api.RequestsService/RenewRequestLease',
+                request_serializer=proto_dot_service__pb2.RenewRequestLeaseRequest.SerializeToString,
+                response_deserializer=proto_dot_service__pb2.Request.FromString,
+                _registered_method=True)
 
 
 class RequestsServiceServicer(object):
@@ -1518,6 +1523,19 @@ class RequestsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def RenewRequestLease(self, request, context):
+        """RenewRequestLease extends the execution lease of a claimed/running request
+        so long-running tools are not reclaimed mid-flight. Only the current lease
+        holder may renew: machine_id and lease_epoch must match the request's
+        current lease grant. Renewal moves the lease deadline (visible_at) forward
+        but never past the request's absolute timeout (leased_at + timeout_seconds).
+        The server rejects renewals with FAILED_PRECONDITION when the lease is
+        stale, reclaimed, or expired.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RequestsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1565,6 +1583,11 @@ def add_RequestsServiceServicer_to_server(servicer, server):
                     servicer.GetRequestChunks,
                     request_deserializer=proto_dot_service__pb2.GetRequestChunksRequest.FromString,
                     response_serializer=proto_dot_service__pb2.GetRequestChunksResponse.SerializeToString,
+            ),
+            'RenewRequestLease': grpc.unary_unary_rpc_method_handler(
+                    servicer.RenewRequestLease,
+                    request_deserializer=proto_dot_service__pb2.RenewRequestLeaseRequest.FromString,
+                    response_serializer=proto_dot_service__pb2.Request.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1813,6 +1836,33 @@ class RequestsService(object):
             '/api.RequestsService/GetRequestChunks',
             proto_dot_service__pb2.GetRequestChunksRequest.SerializeToString,
             proto_dot_service__pb2.GetRequestChunksResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RenewRequestLease(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/api.RequestsService/RenewRequestLease',
+            proto_dot_service__pb2.RenewRequestLeaseRequest.SerializeToString,
+            proto_dot_service__pb2.Request.FromString,
             options,
             channel_credentials,
             insecure,

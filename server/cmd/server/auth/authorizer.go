@@ -336,6 +336,7 @@ var methodPolicies = map[string]MethodPolicy{
 	"/api.RequestsService/SubmitRequestResult": {Capability: model.APIKeyCapabilityExecute, BindSession: true},
 	"/api.RequestsService/AppendRequestChunks": {Capability: model.APIKeyCapabilityExecute, BindSession: true},
 	"/api.RequestsService/GetRequestChunks":    {Capability: model.APIKeyCapabilityRead, BindSession: true},
+	"/api.RequestsService/RenewRequestLease":   {Capability: model.APIKeyCapabilityExecute, BindSession: true},
 	"/api.TasksService/CreateTask":             {Capability: model.APIKeyCapabilityExecute, BindSession: true},
 	"/api.TasksService/GetTask":                {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.TasksService/ListTasks":              {Capability: model.APIKeyCapabilityRead, BindSession: true},

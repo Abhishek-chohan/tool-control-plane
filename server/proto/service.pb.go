@@ -603,8 +603,17 @@ type Request struct {
 	UpdatedAt          string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ExecutingMachineId string                 `protobuf:"bytes,11,opt,name=executing_machine_id,json=executingMachineId,proto3" json:"executing_machine_id,omitempty"`
 	StreamResults      []string               `protobuf:"bytes,12,rep,name=stream_results,json=streamResults,proto3" json:"stream_results,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Lease metadata for the current execution attempt. lease_epoch identifies
+	// the claim grant and must be echoed by the lease holder on fenced provider
+	// writes (UpdateRequest, SubmitRequestResult, AppendRequestChunks,
+	// RenewRequestLease). lease_expires_at is RFC3339 and empty when the request
+	// has no active lease.
+	LeasedBy       string `protobuf:"bytes,13,opt,name=leased_by,json=leasedBy,proto3" json:"leased_by,omitempty"`
+	LeaseEpoch     int64  `protobuf:"varint,14,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
+	LeaseExpiresAt string `protobuf:"bytes,15,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	TimeoutSeconds int32  `protobuf:"varint,16,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
@@ -719,6 +728,34 @@ func (x *Request) GetStreamResults() []string {
 		return x.StreamResults
 	}
 	return nil
+}
+
+func (x *Request) GetLeasedBy() string {
+	if x != nil {
+		return x.LeasedBy
+	}
+	return ""
+}
+
+func (x *Request) GetLeaseEpoch() int64 {
+	if x != nil {
+		return x.LeaseEpoch
+	}
+	return 0
+}
+
+func (x *Request) GetLeaseExpiresAt() string {
+	if x != nil {
+		return x.LeaseExpiresAt
+	}
+	return ""
+}
+
+func (x *Request) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
 }
 
 // RegisterToolRequest
@@ -2848,12 +2885,16 @@ func (x *UnregisterMachineResponse) GetSuccess() bool {
 
 // ExecuteToolRequest for tool execution
 type ExecuteToolRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input         string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolName  string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input     string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
+	// Optional absolute execution timeout in seconds for the created request.
+	// Zero or negative uses the server default; values above the server maximum
+	// are rejected.
+	TimeoutSeconds int32 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ExecuteToolRequest) Reset() {
@@ -2905,6 +2946,13 @@ func (x *ExecuteToolRequest) GetInput() string {
 		return x.Input
 	}
 	return ""
+}
+
+func (x *ExecuteToolRequest) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
 }
 
 // ExecuteToolResponse
@@ -3065,12 +3113,16 @@ func (x *ExecuteToolChunk) GetError() string {
 
 // CreateRequestRequest
 type CreateRequestRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input         string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolName  string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input     string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
+	// Optional absolute execution timeout in seconds for the request.
+	// Zero or negative uses the server default; values above the server maximum
+	// are rejected.
+	TimeoutSeconds int32 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateRequestRequest) Reset() {
@@ -3122,6 +3174,13 @@ func (x *CreateRequestRequest) GetInput() string {
 		return x.Input
 	}
 	return ""
+}
+
+func (x *CreateRequestRequest) GetTimeoutSeconds() int32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
 }
 
 // GetRequestRequest
@@ -3299,7 +3358,9 @@ func (x *ListRequestsResponse) GetRequests() []*Request {
 	return nil
 }
 
-// UpdateRequestRequest
+// UpdateRequestRequest is a fenced provider write: machine_id and lease_epoch
+// must match the request's current lease grant, otherwise the server rejects
+// the update with FAILED_PRECONDITION.
 type UpdateRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -3307,6 +3368,8 @@ type UpdateRequestRequest struct {
 	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
 	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	ResultType    string                 `protobuf:"bytes,5,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
+	MachineId     string                 `protobuf:"bytes,6,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	LeaseEpoch    int64                  `protobuf:"varint,7,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3374,6 +3437,20 @@ func (x *UpdateRequestRequest) GetResultType() string {
 		return x.ResultType
 	}
 	return ""
+}
+
+func (x *UpdateRequestRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *UpdateRequestRequest) GetLeaseEpoch() int64 {
+	if x != nil {
+		return x.LeaseEpoch
+	}
+	return 0
 }
 
 // ClaimRequestRequest
@@ -3535,7 +3612,10 @@ func (x *CancelRequestResponse) GetSuccess() bool {
 	return false
 }
 
-// SubmitRequestResultRequest
+// SubmitRequestResultRequest is a fenced provider write: machine_id and
+// lease_epoch must match the request's current lease grant (epoch alone is
+// sufficient for the terminal streaming-append case), otherwise the server
+// rejects the submission with FAILED_PRECONDITION.
 type SubmitRequestResultRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -3543,6 +3623,8 @@ type SubmitRequestResultRequest struct {
 	Result        string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 	ResultType    string                 `protobuf:"bytes,4,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
 	Meta          map[string]string      `protobuf:"bytes,5,rep,name=meta,proto3" json:"meta,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	MachineId     string                 `protobuf:"bytes,6,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	LeaseEpoch    int64                  `protobuf:"varint,7,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3612,6 +3694,20 @@ func (x *SubmitRequestResultRequest) GetMeta() map[string]string {
 	return nil
 }
 
+func (x *SubmitRequestResultRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *SubmitRequestResultRequest) GetLeaseEpoch() int64 {
+	if x != nil {
+		return x.LeaseEpoch
+	}
+	return 0
+}
+
 // SubmitRequestResultResponse
 type SubmitRequestResultResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3657,13 +3753,17 @@ func (x *SubmitRequestResultResponse) GetSuccess() bool {
 	return false
 }
 
-// AppendRequestChunksRequest
+// AppendRequestChunksRequest is a fenced provider write: machine_id and
+// lease_epoch must match the request's current lease grant, otherwise the
+// server rejects the append with FAILED_PRECONDITION.
 type AppendRequestChunksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	Chunks        []string               `protobuf:"bytes,3,rep,name=chunks,proto3" json:"chunks,omitempty"`
 	ResultType    string                 `protobuf:"bytes,4,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
+	MachineId     string                 `protobuf:"bytes,5,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	LeaseEpoch    int64                  `protobuf:"varint,6,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3724,6 +3824,20 @@ func (x *AppendRequestChunksRequest) GetResultType() string {
 		return x.ResultType
 	}
 	return ""
+}
+
+func (x *AppendRequestChunksRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *AppendRequestChunksRequest) GetLeaseEpoch() int64 {
+	if x != nil {
+		return x.LeaseEpoch
+	}
+	return 0
 }
 
 // AppendRequestChunksResponse
@@ -3885,6 +3999,78 @@ func (x *GetRequestChunksResponse) GetNextSeq() int32 {
 	return 0
 }
 
+// RenewRequestLeaseRequest asks the server to extend the execution lease of a
+// claimed/running request. The caller must be the current lease holder:
+// machine_id and lease_epoch must match the lease grant returned by
+// ClaimRequest (and exposed on Request).
+type RenewRequestLeaseRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	MachineId     string                 `protobuf:"bytes,3,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	LeaseEpoch    int64                  `protobuf:"varint,4,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RenewRequestLeaseRequest) Reset() {
+	*x = RenewRequestLeaseRequest{}
+	mi := &file_proto_service_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RenewRequestLeaseRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RenewRequestLeaseRequest) ProtoMessage() {}
+
+func (x *RenewRequestLeaseRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RenewRequestLeaseRequest.ProtoReflect.Descriptor instead.
+func (*RenewRequestLeaseRequest) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *RenewRequestLeaseRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RenewRequestLeaseRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *RenewRequestLeaseRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *RenewRequestLeaseRequest) GetLeaseEpoch() int64 {
+	if x != nil {
+		return x.LeaseEpoch
+	}
+	return 0
+}
+
 // Health check
 type HealthCheckRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3894,7 +4080,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3906,7 +4092,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3919,7 +4105,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{65}
+	return file_proto_service_proto_rawDescGZIP(), []int{66}
 }
 
 type HealthCheckResponse struct {
@@ -3932,7 +4118,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3944,7 +4130,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3957,7 +4143,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{66}
+	return file_proto_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *HealthCheckResponse) GetStatus() string {
@@ -3995,7 +4181,7 @@ type Task struct {
 
 func (x *Task) Reset() {
 	*x = Task{}
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4007,7 +4193,7 @@ func (x *Task) String() string {
 func (*Task) ProtoMessage() {}
 
 func (x *Task) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4020,7 +4206,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{67}
+	return file_proto_service_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *Task) GetId() string {
@@ -4119,7 +4305,7 @@ type CreateTaskRequest struct {
 
 func (x *CreateTaskRequest) Reset() {
 	*x = CreateTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4131,7 +4317,7 @@ func (x *CreateTaskRequest) String() string {
 func (*CreateTaskRequest) ProtoMessage() {}
 
 func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4144,7 +4330,7 @@ func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
 func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{68}
+	return file_proto_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *CreateTaskRequest) GetSessionId() string {
@@ -4179,7 +4365,7 @@ type GetTaskRequest struct {
 
 func (x *GetTaskRequest) Reset() {
 	*x = GetTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4191,7 +4377,7 @@ func (x *GetTaskRequest) String() string {
 func (*GetTaskRequest) ProtoMessage() {}
 
 func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4204,7 +4390,7 @@ func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{69}
+	return file_proto_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetTaskRequest) GetSessionId() string {
@@ -4231,7 +4417,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4243,7 +4429,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4256,7 +4442,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{70}
+	return file_proto_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ListTasksRequest) GetSessionId() string {
@@ -4276,7 +4462,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4288,7 +4474,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4301,7 +4487,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{71}
+	return file_proto_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListTasksResponse) GetTasks() []*Task {
@@ -4322,7 +4508,7 @@ type CancelTaskRequest struct {
 
 func (x *CancelTaskRequest) Reset() {
 	*x = CancelTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4334,7 +4520,7 @@ func (x *CancelTaskRequest) String() string {
 func (*CancelTaskRequest) ProtoMessage() {}
 
 func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4347,7 +4533,7 @@ func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskRequest.ProtoReflect.Descriptor instead.
 func (*CancelTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{72}
+	return file_proto_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *CancelTaskRequest) GetSessionId() string {
@@ -4374,7 +4560,7 @@ type CancelTaskResponse struct {
 
 func (x *CancelTaskResponse) Reset() {
 	*x = CancelTaskResponse{}
-	mi := &file_proto_service_proto_msgTypes[73]
+	mi := &file_proto_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4386,7 +4572,7 @@ func (x *CancelTaskResponse) String() string {
 func (*CancelTaskResponse) ProtoMessage() {}
 
 func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[73]
+	mi := &file_proto_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4399,7 +4585,7 @@ func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskResponse.ProtoReflect.Descriptor instead.
 func (*CancelTaskResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{73}
+	return file_proto_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *CancelTaskResponse) GetSuccess() bool {
@@ -4480,7 +4666,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12 \n" +
 	"\flast_ping_at\x18\a \x01(\tR\n" +
-	"lastPingAt\"\xe9\x02\n" +
+	"lastPingAt\"\xfa\x03\n" +
 	"\aRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4498,7 +4684,12 @@ const file_proto_service_proto_rawDesc = "" +
 	"updated_at\x18\n" +
 	" \x01(\tR\tupdatedAt\x120\n" +
 	"\x14executing_machine_id\x18\v \x01(\tR\x12executingMachineId\x12%\n" +
-	"\x0estream_results\x18\f \x03(\tR\rstreamResults\"\xae\x02\n" +
+	"\x0estream_results\x18\f \x03(\tR\rstreamResults\x12\x1b\n" +
+	"\tleased_by\x18\r \x01(\tR\bleasedBy\x12\x1f\n" +
+	"\vlease_epoch\x18\x0e \x01(\x03R\n" +
+	"leaseEpoch\x12(\n" +
+	"\x10lease_expires_at\x18\x0f \x01(\tR\x0eleaseExpiresAt\x12'\n" +
+	"\x0ftimeout_seconds\x18\x10 \x01(\x05R\x0etimeoutSeconds\"\xae\x02\n" +
 	"\x13RegisterToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4651,12 +4842,13 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\"5\n" +
 	"\x19UnregisterMachineResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"f\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x8f\x01\n" +
 	"\x12ExecuteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05input\x18\x03 \x01(\tR\x05input\"\x9b\x01\n" +
+	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\"\x9b\x01\n" +
 	"\x13ExecuteToolResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
@@ -4671,12 +4863,13 @@ const file_proto_service_proto_rawDesc = "" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x14\n" +
 	"\x05chunk\x18\x03 \x01(\tR\x05chunk\x12\x19\n" +
 	"\bis_final\x18\x04 \x01(\bR\aisFinal\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"h\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\x91\x01\n" +
 	"\x14CreateRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05input\x18\x03 \x01(\tR\x05input\"Q\n" +
+	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\"Q\n" +
 	"\x11GetRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4690,7 +4883,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x05 \x01(\x05R\x06offset\"@\n" +
 	"\x14ListRequestsResponse\x12(\n" +
-	"\brequests\x18\x01 \x03(\v2\f.api.RequestR\brequests\"\xa5\x01\n" +
+	"\brequests\x18\x01 \x03(\v2\f.api.RequestR\brequests\"\xe5\x01\n" +
 	"\x14UpdateRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4699,7 +4892,11 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\x05 \x01(\tR\n" +
-	"resultType\"r\n" +
+	"resultType\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x06 \x01(\tR\tmachineId\x12\x1f\n" +
+	"\vlease_epoch\x18\a \x01(\x03R\n" +
+	"leaseEpoch\"r\n" +
 	"\x13ClaimRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4713,7 +4910,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\"1\n" +
 	"\x15CancelRequestResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x8b\x02\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xcb\x02\n" +
 	"\x1aSubmitRequestResultRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4722,12 +4919,16 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x06result\x18\x03 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\x04 \x01(\tR\n" +
 	"resultType\x12=\n" +
-	"\x04meta\x18\x05 \x03(\v2).api.SubmitRequestResultRequest.MetaEntryR\x04meta\x1a7\n" +
+	"\x04meta\x18\x05 \x03(\v2).api.SubmitRequestResultRequest.MetaEntryR\x04meta\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x06 \x01(\tR\tmachineId\x12\x1f\n" +
+	"\vlease_epoch\x18\a \x01(\x03R\n" +
+	"leaseEpoch\x1a7\n" +
 	"\tMetaEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"7\n" +
 	"\x1bSubmitRequestResultResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x93\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xd3\x01\n" +
 	"\x1aAppendRequestChunksRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4735,7 +4936,11 @@ const file_proto_service_proto_rawDesc = "" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x16\n" +
 	"\x06chunks\x18\x03 \x03(\tR\x06chunks\x12\x1f\n" +
 	"\vresult_type\x18\x04 \x01(\tR\n" +
-	"resultType\"7\n" +
+	"resultType\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x05 \x01(\tR\tmachineId\x12\x1f\n" +
+	"\vlease_epoch\x18\x06 \x01(\x03R\n" +
+	"leaseEpoch\"7\n" +
 	"\x1bAppendRequestChunksResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\"W\n" +
 	"\x17GetRequestChunksRequest\x12\x1d\n" +
@@ -4746,7 +4951,16 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x18GetRequestChunksResponse\x12\x16\n" +
 	"\x06chunks\x18\x01 \x03(\tR\x06chunks\x12\x1b\n" +
 	"\tstart_seq\x18\x02 \x01(\x05R\bstartSeq\x12\x19\n" +
-	"\bnext_seq\x18\x03 \x01(\x05R\anextSeq\"\x14\n" +
+	"\bnext_seq\x18\x03 \x01(\x05R\anextSeq\"\x98\x01\n" +
+	"\x18RenewRequestLeaseRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\x12\x1f\n" +
+	"\vlease_epoch\x18\x04 \x01(\x03R\n" +
+	"leaseEpoch\"\x14\n" +
 	"\x12HealthCheckRequest\"G\n" +
 	"\x13HealthCheckResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
@@ -4824,7 +5038,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"GetMachine\x12\x16.api.GetMachineRequest\x1a\f.api.Machine\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/GetMachine\x12c\n" +
 	"\x11UpdateMachinePing\x12\x1d.api.UpdateMachinePingRequest\x1a\f.api.Machine\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/UpdateMachinePing\x12u\n" +
 	"\x11UnregisterMachine\x12\x1d.api.UnregisterMachineRequest\x1a\x1e.api.UnregisterMachineResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/UnregisterMachine\x12a\n" +
-	"\fDrainMachine\x12\x18.api.DrainMachineRequest\x1a\x19.api.DrainMachineResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/DrainMachine2\xa4\a\n" +
+	"\fDrainMachine\x12\x18.api.DrainMachineRequest\x1a\x19.api.DrainMachineResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/DrainMachine2\x89\b\n" +
 	"\x0fRequestsService\x12W\n" +
 	"\rCreateRequest\x12\x19.api.CreateRequestRequest\x1a\f.api.Request\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/CreateRequest\x12N\n" +
 	"\n" +
@@ -4835,7 +5049,8 @@ const file_proto_service_proto_rawDesc = "" +
 	"\rCancelRequest\x12\x19.api.CancelRequestRequest\x1a\x1a.api.CancelRequestResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/CancelRequest\x12}\n" +
 	"\x13SubmitRequestResult\x12\x1f.api.SubmitRequestResultRequest\x1a .api.SubmitRequestResultResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/SubmitRequestResult\x12}\n" +
 	"\x13AppendRequestChunks\x12\x1f.api.AppendRequestChunksRequest\x1a .api.AppendRequestChunksResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/AppendRequestChunks\x12q\n" +
-	"\x10GetRequestChunks\x12\x1c.api.GetRequestChunksRequest\x1a\x1d.api.GetRequestChunksResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/GetRequestChunks2\xd1\x02\n" +
+	"\x10GetRequestChunks\x12\x1c.api.GetRequestChunksRequest\x1a\x1d.api.GetRequestChunksResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/GetRequestChunks\x12c\n" +
+	"\x11RenewRequestLease\x12\x1d.api.RenewRequestLeaseRequest\x1a\f.api.Request\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/RenewRequestLease2\xd1\x02\n" +
 	"\fTasksService\x12K\n" +
 	"\n" +
 	"CreateTask\x12\x16.api.CreateTaskRequest\x1a\t.api.Task\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/CreateTask\x12B\n" +
@@ -4856,7 +5071,7 @@ func file_proto_service_proto_rawDescGZIP() []byte {
 	return file_proto_service_proto_rawDescData
 }
 
-var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 77)
+var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
 var file_proto_service_proto_goTypes = []any{
 	(*ResumeStreamRequest)(nil),         // 0: api.ResumeStreamRequest
 	(*DrainMachineRequest)(nil),         // 1: api.DrainMachineRequest
@@ -4923,22 +5138,23 @@ var file_proto_service_proto_goTypes = []any{
 	(*AppendRequestChunksResponse)(nil), // 62: api.AppendRequestChunksResponse
 	(*GetRequestChunksRequest)(nil),     // 63: api.GetRequestChunksRequest
 	(*GetRequestChunksResponse)(nil),    // 64: api.GetRequestChunksResponse
-	(*HealthCheckRequest)(nil),          // 65: api.HealthCheckRequest
-	(*HealthCheckResponse)(nil),         // 66: api.HealthCheckResponse
-	(*Task)(nil),                        // 67: api.Task
-	(*CreateTaskRequest)(nil),           // 68: api.CreateTaskRequest
-	(*GetTaskRequest)(nil),              // 69: api.GetTaskRequest
-	(*ListTasksRequest)(nil),            // 70: api.ListTasksRequest
-	(*ListTasksResponse)(nil),           // 71: api.ListTasksResponse
-	(*CancelTaskRequest)(nil),           // 72: api.CancelTaskRequest
-	(*CancelTaskResponse)(nil),          // 73: api.CancelTaskResponse
-	nil,                                 // 74: api.Tool.ConfigEntry
-	nil,                                 // 75: api.RegisterToolRequest.ConfigEntry
-	nil,                                 // 76: api.SubmitRequestResultRequest.MetaEntry
+	(*RenewRequestLeaseRequest)(nil),    // 65: api.RenewRequestLeaseRequest
+	(*HealthCheckRequest)(nil),          // 66: api.HealthCheckRequest
+	(*HealthCheckResponse)(nil),         // 67: api.HealthCheckResponse
+	(*Task)(nil),                        // 68: api.Task
+	(*CreateTaskRequest)(nil),           // 69: api.CreateTaskRequest
+	(*GetTaskRequest)(nil),              // 70: api.GetTaskRequest
+	(*ListTasksRequest)(nil),            // 71: api.ListTasksRequest
+	(*ListTasksResponse)(nil),           // 72: api.ListTasksResponse
+	(*CancelTaskRequest)(nil),           // 73: api.CancelTaskRequest
+	(*CancelTaskResponse)(nil),          // 74: api.CancelTaskResponse
+	nil,                                 // 75: api.Tool.ConfigEntry
+	nil,                                 // 76: api.RegisterToolRequest.ConfigEntry
+	nil,                                 // 77: api.SubmitRequestResultRequest.MetaEntry
 }
 var file_proto_service_proto_depIdxs = []int32{
-	74, // 0: api.Tool.config:type_name -> api.Tool.ConfigEntry
-	75, // 1: api.RegisterToolRequest.config:type_name -> api.RegisterToolRequest.ConfigEntry
+	75, // 0: api.Tool.config:type_name -> api.Tool.ConfigEntry
+	76, // 1: api.RegisterToolRequest.config:type_name -> api.RegisterToolRequest.ConfigEntry
 	3,  // 2: api.RegisterToolResponse.tool:type_name -> api.Tool
 	3,  // 3: api.ListToolsResponse.tools:type_name -> api.Tool
 	3,  // 4: api.GetToolResponse.tool:type_name -> api.Tool
@@ -4949,8 +5165,8 @@ var file_proto_service_proto_depIdxs = []int32{
 	8,  // 9: api.RegisterMachineRequest.tools:type_name -> api.RegisterToolRequest
 	6,  // 10: api.ListMachinesResponse.machines:type_name -> api.Machine
 	7,  // 11: api.ListRequestsResponse.requests:type_name -> api.Request
-	76, // 12: api.SubmitRequestResultRequest.meta:type_name -> api.SubmitRequestResultRequest.MetaEntry
-	67, // 13: api.ListTasksResponse.tasks:type_name -> api.Task
+	77, // 12: api.SubmitRequestResultRequest.meta:type_name -> api.SubmitRequestResultRequest.MetaEntry
+	68, // 13: api.ListTasksResponse.tasks:type_name -> api.Task
 	8,  // 14: api.ToolService.RegisterTool:input_type -> api.RegisterToolRequest
 	10, // 15: api.ToolService.ListTools:input_type -> api.ListToolsRequest
 	12, // 16: api.ToolService.GetToolById:input_type -> api.GetToolByIdRequest
@@ -4960,7 +5176,7 @@ var file_proto_service_proto_depIdxs = []int32{
 	48, // 20: api.ToolService.StreamExecuteTool:input_type -> api.ExecuteToolRequest
 	0,  // 21: api.ToolService.ResumeStream:input_type -> api.ResumeStreamRequest
 	48, // 22: api.ToolService.ExecuteTool:input_type -> api.ExecuteToolRequest
-	65, // 23: api.ToolService.HealthCheck:input_type -> api.HealthCheckRequest
+	66, // 23: api.ToolService.HealthCheck:input_type -> api.HealthCheckRequest
 	18, // 24: api.SessionsService.CreateSession:input_type -> api.CreateSessionRequest
 	20, // 25: api.SessionsService.GetSession:input_type -> api.GetSessionRequest
 	21, // 26: api.SessionsService.ListSessions:input_type -> api.ListSessionsRequest
@@ -4989,54 +5205,56 @@ var file_proto_service_proto_depIdxs = []int32{
 	59, // 49: api.RequestsService.SubmitRequestResult:input_type -> api.SubmitRequestResultRequest
 	61, // 50: api.RequestsService.AppendRequestChunks:input_type -> api.AppendRequestChunksRequest
 	63, // 51: api.RequestsService.GetRequestChunks:input_type -> api.GetRequestChunksRequest
-	68, // 52: api.TasksService.CreateTask:input_type -> api.CreateTaskRequest
-	69, // 53: api.TasksService.GetTask:input_type -> api.GetTaskRequest
-	70, // 54: api.TasksService.ListTasks:input_type -> api.ListTasksRequest
-	72, // 55: api.TasksService.CancelTask:input_type -> api.CancelTaskRequest
-	9,  // 56: api.ToolService.RegisterTool:output_type -> api.RegisterToolResponse
-	11, // 57: api.ToolService.ListTools:output_type -> api.ListToolsResponse
-	14, // 58: api.ToolService.GetToolById:output_type -> api.GetToolResponse
-	14, // 59: api.ToolService.GetToolByName:output_type -> api.GetToolResponse
-	16, // 60: api.ToolService.DeleteTool:output_type -> api.DeleteToolResponse
-	3,  // 61: api.ToolService.UpdateToolPing:output_type -> api.Tool
-	50, // 62: api.ToolService.StreamExecuteTool:output_type -> api.ExecuteToolChunk
-	50, // 63: api.ToolService.ResumeStream:output_type -> api.ExecuteToolChunk
-	49, // 64: api.ToolService.ExecuteTool:output_type -> api.ExecuteToolResponse
-	66, // 65: api.ToolService.HealthCheck:output_type -> api.HealthCheckResponse
-	19, // 66: api.SessionsService.CreateSession:output_type -> api.CreateSessionResponse
-	4,  // 67: api.SessionsService.GetSession:output_type -> api.Session
-	22, // 68: api.SessionsService.ListSessions:output_type -> api.ListSessionsResponse
-	4,  // 69: api.SessionsService.UpdateSession:output_type -> api.Session
-	35, // 70: api.SessionsService.DeleteSession:output_type -> api.DeleteSessionResponse
-	24, // 71: api.SessionsService.ListUserSessions:output_type -> api.ListUserSessionsResponse
-	26, // 72: api.SessionsService.BulkDeleteSessions:output_type -> api.BulkDeleteSessionsResponse
-	28, // 73: api.SessionsService.GetSessionStats:output_type -> api.GetSessionStatsResponse
-	30, // 74: api.SessionsService.RefreshSessionToken:output_type -> api.RefreshSessionTokenResponse
-	32, // 75: api.SessionsService.InvalidateSession:output_type -> api.InvalidateSessionResponse
-	5,  // 76: api.SessionsService.CreateApiKey:output_type -> api.ApiKey
-	38, // 77: api.SessionsService.ListApiKeys:output_type -> api.ListApiKeysResponse
-	40, // 78: api.SessionsService.RevokeApiKey:output_type -> api.RevokeApiKeyResponse
-	6,  // 79: api.MachinesService.RegisterMachine:output_type -> api.Machine
-	43, // 80: api.MachinesService.ListMachines:output_type -> api.ListMachinesResponse
-	6,  // 81: api.MachinesService.GetMachine:output_type -> api.Machine
-	6,  // 82: api.MachinesService.UpdateMachinePing:output_type -> api.Machine
-	47, // 83: api.MachinesService.UnregisterMachine:output_type -> api.UnregisterMachineResponse
-	2,  // 84: api.MachinesService.DrainMachine:output_type -> api.DrainMachineResponse
-	7,  // 85: api.RequestsService.CreateRequest:output_type -> api.Request
-	7,  // 86: api.RequestsService.GetRequest:output_type -> api.Request
-	54, // 87: api.RequestsService.ListRequests:output_type -> api.ListRequestsResponse
-	7,  // 88: api.RequestsService.UpdateRequest:output_type -> api.Request
-	7,  // 89: api.RequestsService.ClaimRequest:output_type -> api.Request
-	58, // 90: api.RequestsService.CancelRequest:output_type -> api.CancelRequestResponse
-	60, // 91: api.RequestsService.SubmitRequestResult:output_type -> api.SubmitRequestResultResponse
-	62, // 92: api.RequestsService.AppendRequestChunks:output_type -> api.AppendRequestChunksResponse
-	64, // 93: api.RequestsService.GetRequestChunks:output_type -> api.GetRequestChunksResponse
-	67, // 94: api.TasksService.CreateTask:output_type -> api.Task
-	67, // 95: api.TasksService.GetTask:output_type -> api.Task
-	71, // 96: api.TasksService.ListTasks:output_type -> api.ListTasksResponse
-	73, // 97: api.TasksService.CancelTask:output_type -> api.CancelTaskResponse
-	56, // [56:98] is the sub-list for method output_type
-	14, // [14:56] is the sub-list for method input_type
+	65, // 52: api.RequestsService.RenewRequestLease:input_type -> api.RenewRequestLeaseRequest
+	69, // 53: api.TasksService.CreateTask:input_type -> api.CreateTaskRequest
+	70, // 54: api.TasksService.GetTask:input_type -> api.GetTaskRequest
+	71, // 55: api.TasksService.ListTasks:input_type -> api.ListTasksRequest
+	73, // 56: api.TasksService.CancelTask:input_type -> api.CancelTaskRequest
+	9,  // 57: api.ToolService.RegisterTool:output_type -> api.RegisterToolResponse
+	11, // 58: api.ToolService.ListTools:output_type -> api.ListToolsResponse
+	14, // 59: api.ToolService.GetToolById:output_type -> api.GetToolResponse
+	14, // 60: api.ToolService.GetToolByName:output_type -> api.GetToolResponse
+	16, // 61: api.ToolService.DeleteTool:output_type -> api.DeleteToolResponse
+	3,  // 62: api.ToolService.UpdateToolPing:output_type -> api.Tool
+	50, // 63: api.ToolService.StreamExecuteTool:output_type -> api.ExecuteToolChunk
+	50, // 64: api.ToolService.ResumeStream:output_type -> api.ExecuteToolChunk
+	49, // 65: api.ToolService.ExecuteTool:output_type -> api.ExecuteToolResponse
+	67, // 66: api.ToolService.HealthCheck:output_type -> api.HealthCheckResponse
+	19, // 67: api.SessionsService.CreateSession:output_type -> api.CreateSessionResponse
+	4,  // 68: api.SessionsService.GetSession:output_type -> api.Session
+	22, // 69: api.SessionsService.ListSessions:output_type -> api.ListSessionsResponse
+	4,  // 70: api.SessionsService.UpdateSession:output_type -> api.Session
+	35, // 71: api.SessionsService.DeleteSession:output_type -> api.DeleteSessionResponse
+	24, // 72: api.SessionsService.ListUserSessions:output_type -> api.ListUserSessionsResponse
+	26, // 73: api.SessionsService.BulkDeleteSessions:output_type -> api.BulkDeleteSessionsResponse
+	28, // 74: api.SessionsService.GetSessionStats:output_type -> api.GetSessionStatsResponse
+	30, // 75: api.SessionsService.RefreshSessionToken:output_type -> api.RefreshSessionTokenResponse
+	32, // 76: api.SessionsService.InvalidateSession:output_type -> api.InvalidateSessionResponse
+	5,  // 77: api.SessionsService.CreateApiKey:output_type -> api.ApiKey
+	38, // 78: api.SessionsService.ListApiKeys:output_type -> api.ListApiKeysResponse
+	40, // 79: api.SessionsService.RevokeApiKey:output_type -> api.RevokeApiKeyResponse
+	6,  // 80: api.MachinesService.RegisterMachine:output_type -> api.Machine
+	43, // 81: api.MachinesService.ListMachines:output_type -> api.ListMachinesResponse
+	6,  // 82: api.MachinesService.GetMachine:output_type -> api.Machine
+	6,  // 83: api.MachinesService.UpdateMachinePing:output_type -> api.Machine
+	47, // 84: api.MachinesService.UnregisterMachine:output_type -> api.UnregisterMachineResponse
+	2,  // 85: api.MachinesService.DrainMachine:output_type -> api.DrainMachineResponse
+	7,  // 86: api.RequestsService.CreateRequest:output_type -> api.Request
+	7,  // 87: api.RequestsService.GetRequest:output_type -> api.Request
+	54, // 88: api.RequestsService.ListRequests:output_type -> api.ListRequestsResponse
+	7,  // 89: api.RequestsService.UpdateRequest:output_type -> api.Request
+	7,  // 90: api.RequestsService.ClaimRequest:output_type -> api.Request
+	58, // 91: api.RequestsService.CancelRequest:output_type -> api.CancelRequestResponse
+	60, // 92: api.RequestsService.SubmitRequestResult:output_type -> api.SubmitRequestResultResponse
+	62, // 93: api.RequestsService.AppendRequestChunks:output_type -> api.AppendRequestChunksResponse
+	64, // 94: api.RequestsService.GetRequestChunks:output_type -> api.GetRequestChunksResponse
+	7,  // 95: api.RequestsService.RenewRequestLease:output_type -> api.Request
+	68, // 96: api.TasksService.CreateTask:output_type -> api.Task
+	68, // 97: api.TasksService.GetTask:output_type -> api.Task
+	72, // 98: api.TasksService.ListTasks:output_type -> api.ListTasksResponse
+	74, // 99: api.TasksService.CancelTask:output_type -> api.CancelTaskResponse
+	57, // [57:100] is the sub-list for method output_type
+	14, // [14:57] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
 	14, // [14:14] is the sub-list for extension extendee
 	0,  // [0:14] is the sub-list for field type_name
@@ -5053,7 +5271,7 @@ func file_proto_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_service_proto_rawDesc), len(file_proto_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   77,
+			NumMessages:   78,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

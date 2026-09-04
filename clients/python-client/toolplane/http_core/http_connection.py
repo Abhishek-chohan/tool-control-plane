@@ -284,6 +284,20 @@ class HTTPConnectionManager:
             "api/GetRequestChunks", {"sessionId": session_id, "requestId": request_id}
         )
 
+    def renew_request_lease(
+        self, session_id: str, request_id: str, machine_id: str, lease_epoch: int
+    ):
+        """Renew the execution lease for a claimed/running request."""
+        return self._post(
+            "api/RenewRequestLease",
+            {
+                "sessionId": session_id,
+                "requestId": request_id,
+                "machineId": machine_id,
+                "leaseEpoch": lease_epoch,
+            },
+        )
+
     # Task endpoints
     def create_task(self, payload: Dict):
         """Create a task."""

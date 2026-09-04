@@ -13,6 +13,11 @@ interface ProviderState {
   tools: Map<string, ProviderTool>;
 }
 
+interface LeaseGrant {
+  machineId: string;
+  leaseEpoch: number;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -73,6 +78,12 @@ function normalizeGatewayErrorCode(payload: unknown): string {
     const code = payloadObject.code;
     if (code === 11) {
       return 'out_of_range';
+    }
+    if (code === 9) {
+      return 'failed_precondition';
+    }
+    if (code === 5) {
+      return 'not_found';
     }
     if (typeof code === 'string') {
       const normalized = code.trim().toLowerCase().replace(/[-\s]+/g, '_');
@@ -566,6 +577,108 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       .map((entry) => this.normalizeMachine(entry));
   }
 
+  async getProviderMachineId(sessionId: string): Promise<string> {
+    const state = await this.ensureMachine(sessionId);
+    return state.machineId;
+  }
+
+  async claimRequestForFencing(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+  ): Promise<Record<string, unknown>> {
+    const settled = await this.postSettled('api/ClaimRequest', {
+      sessionId,
+      requestId,
+      machineId,
+    });
+    if (settled.errorCode || !settled.body) {
+      return { errorCode: settled.errorCode ?? '', errorMessage: settled.errorMessage ?? '' };
+    }
+    return this.normalizeLeasedRequest(settled.body);
+  }
+
+  async submitFencedResult(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+    result: unknown,
+  ): Promise<Record<string, unknown>> {
+    const settled = await this.postSettled('api/SubmitRequestResult', {
+      sessionId,
+      requestId,
+      result: JSON.stringify(result),
+      resultType: 'resolution',
+      meta: {},
+      machineId,
+      leaseEpoch,
+    });
+    if (settled.errorCode) {
+      return { errorCode: settled.errorCode, errorMessage: settled.errorMessage ?? '' };
+    }
+    return { success: true };
+  }
+
+  async renewRequestLease(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+  ): Promise<Record<string, unknown>> {
+    const settled = await this.postSettled('api/RenewRequestLease', {
+      sessionId,
+      requestId,
+      machineId,
+      leaseEpoch,
+    });
+    if (settled.errorCode || !settled.body) {
+      return { errorCode: settled.errorCode ?? '', errorMessage: settled.errorMessage ?? '' };
+    }
+    return this.normalizeLeasedRequest(settled.body);
+  }
+
+  private normalizeLeasedRequest(body: Record<string, unknown>): Record<string, unknown> {
+    const leasedBy = body.leasedBy ?? body.leased_by ?? '';
+    const leaseEpoch = numberValue(body.leaseEpoch ?? body.lease_epoch, 0);
+    const leaseExpiresAt = body.leaseExpiresAt ?? body.lease_expires_at ?? '';
+    return {
+      id: body.id,
+      status: body.status,
+      leasedBy,
+      leaseEpoch,
+      leaseExpiresAt,
+    };
+  }
+
+  private async postSettled(
+    path: string,
+    payload: Record<string, unknown> = {},
+  ): Promise<{ body?: Record<string, unknown>; errorCode?: string; errorMessage?: string }> {
+    try {
+      const response = await this.client.post<Record<string, unknown>>(`/${path}`, payload);
+      return { body: response.data };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const body = (error.response?.data as Record<string, unknown> | undefined) ?? undefined;
+        let code = normalizeGatewayErrorCode(body ?? '');
+        if (!code) {
+          const status = error.response?.status;
+          if (status === 400) {
+            code = 'failed_precondition';
+          } else if (status === 404) {
+            code = 'not_found';
+          }
+        }
+        return {
+          errorCode: code,
+          errorMessage: body ? JSON.stringify(body) : error.message,
+        };
+      }
+      return { errorCode: '', errorMessage: String(error) };
+    }
+  }
+
   async getMachine(sessionId: string, machineId: string): Promise<Record<string, unknown>> {
     const response = await this.post<Record<string, unknown>>('api/GetMachine', {
       sessionId,
@@ -774,16 +887,24 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
         continue;
       }
 
-      await this.post('api/ClaimRequest', {
+      // The claim response carries the lease grant; every fenced provider
+      // write below must present it.
+      const claimResponse = await this.post<Record<string, unknown>>('api/ClaimRequest', {
         sessionId,
         requestId: targetRequestId,
         machineId: state.machineId,
       });
+      const lease: LeaseGrant = {
+        machineId: String(claimResponse.leasedBy ?? state.machineId),
+        leaseEpoch: numberValue(claimResponse.leaseEpoch, 0),
+      };
 
       await this.post('api/UpdateRequest', {
         sessionId,
         requestId: targetRequestId,
         status: 'running',
+        machineId: lease.machineId,
+        leaseEpoch: lease.leaseEpoch,
       });
 
       const normalized = this.normalizeRequest(target);
@@ -791,14 +912,14 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       const params = this.parseRequestParams(normalized.input);
 
       if (!tool) {
-        await this.submitResult(sessionId, targetRequestId, JSON.stringify({ error: 'tool not found' }), 'rejection');
+        await this.submitResult(sessionId, targetRequestId, JSON.stringify({ error: 'tool not found' }), 'rejection', lease);
         return;
       }
 
       if (tool.stream) {
-        await this.fulfillStreamingRequest(sessionId, targetRequestId, params);
+        await this.fulfillStreamingRequest(sessionId, targetRequestId, params, lease);
       } else {
-        await this.fulfillUnaryRequest(sessionId, targetRequestId, params);
+        await this.fulfillUnaryRequest(sessionId, targetRequestId, params, lease);
       }
       return;
     }
@@ -806,16 +927,26 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     throw new Error(`Timed out waiting to claim request ${targetRequestId}`);
   }
 
-  private async fulfillUnaryRequest(sessionId: string, requestId: string, params: Record<string, unknown>): Promise<void> {
+  private async fulfillUnaryRequest(
+    sessionId: string,
+    requestId: string,
+    params: Record<string, unknown>,
+    lease: LeaseGrant,
+  ): Promise<void> {
     const message = typeof params.message === 'string' ? params.message : String(params.message ?? '');
     const delayMs = numberValue(params.delay_ms, 0);
     if (delayMs > 0) {
       await sleep(delayMs);
     }
-    await this.submitResult(sessionId, requestId, JSON.stringify({ echo: message }), 'resolution');
+    await this.submitResult(sessionId, requestId, JSON.stringify({ echo: message }), 'resolution', lease);
   }
 
-  private async fulfillStreamingRequest(sessionId: string, requestId: string, params: Record<string, unknown>): Promise<void> {
+  private async fulfillStreamingRequest(
+    sessionId: string,
+    requestId: string,
+    params: Record<string, unknown>,
+    lease: LeaseGrant,
+  ): Promise<void> {
     const prefix = typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : 'chunk';
     const count = numberValue(params.count, 5);
     const chunks: string[] = [];
@@ -829,15 +960,23 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
         requestId,
         chunks: [value],
         resultType: 'streaming',
+        machineId: lease.machineId,
+        leaseEpoch: lease.leaseEpoch,
       });
 
       await sleep(250);
     }
 
-    await this.submitResult(sessionId, requestId, JSON.stringify(chunks), 'resolution');
+    await this.submitResult(sessionId, requestId, JSON.stringify(chunks), 'resolution', lease);
   }
 
-  private async submitResult(sessionId: string, requestId: string, result: string, resultType: string): Promise<void> {
+  private async submitResult(
+    sessionId: string,
+    requestId: string,
+    result: string,
+    resultType: string,
+    lease: LeaseGrant,
+  ): Promise<void> {
     await this.post('api/SubmitRequestResult', {
       sessionId,
       requestId,
@@ -846,6 +985,8 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       meta: {
         handled_by: 'typescript-conformance',
       },
+      machineId: lease.machineId,
+      leaseEpoch: lease.leaseEpoch,
     });
   }
 

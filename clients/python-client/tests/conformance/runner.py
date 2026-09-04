@@ -975,6 +975,102 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                     )
                 return
 
+            if mode == "fenced":
+                # Lease fencing proof: claim manually (no runtime polling),
+                # reject forged writes, renew the lease, then submit with the
+                # real grant.
+                adapter.register_unary_echo_tool(
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    description=request.get(
+                        "tool_description", "conformance fenced provider tool"
+                    ),
+                )
+                machine_id = adapter.get_provider_machine_id(session_id)
+                request_id = adapter.create_request(
+                    session_id, tool_name, request.get("params", {})
+                )
+                if expected.get("request_id_non_empty", False):
+                    assert_request_id_non_empty(request_id, case_id, transport)
+
+                claimed = adapter.claim_request(session_id, request_id, machine_id)
+                if claimed.get("errorCode"):
+                    raise AssertionError(
+                        f"[{case_id}][{transport}] claim failed: "
+                        f"{claimed.get('errorCode')} {claimed.get('errorMessage')}"
+                    )
+                lease_epoch = int(claimed.get("leaseEpoch", 0))
+                if lease_epoch <= 0:
+                    raise AssertionError(
+                        f"[{case_id}][{transport}] claim did not grant a lease epoch"
+                    )
+
+                forged_submit = adapter.submit_fenced_result(
+                    session_id, request_id, machine_id, lease_epoch + 41, {"forged": True}
+                )
+                if "forged_submit_error_code" in expected:
+                    assert_error_code_equals(
+                        forged_submit,
+                        expected["forged_submit_error_code"],
+                        case_id,
+                        transport,
+                    )
+
+                forged_renew = adapter.renew_request_lease(
+                    session_id, request_id, machine_id, lease_epoch + 41
+                )
+                if "forged_renew_error_code" in expected:
+                    assert_error_code_equals(
+                        forged_renew,
+                        expected["forged_renew_error_code"],
+                        case_id,
+                        transport,
+                    )
+
+                renewed = adapter.renew_request_lease(
+                    session_id, request_id, machine_id, lease_epoch
+                )
+                if renewed.get("errorCode"):
+                    raise AssertionError(
+                        f"[{case_id}][{transport}] holder renewal failed: "
+                        f"{renewed.get('errorCode')} {renewed.get('errorMessage')}"
+                    )
+                if expected.get("renewed_lease_expires_non_empty", False):
+                    assert_request_field_non_empty(
+                        renewed, "leaseExpiresAt", case_id, transport
+                    )
+                assert_request_field_equals(
+                    renewed, "leaseEpoch", lease_epoch, case_id, transport
+                )
+
+                holder_submit = adapter.submit_fenced_result(
+                    session_id,
+                    request_id,
+                    machine_id,
+                    lease_epoch,
+                    expected.get("submit_result", {"echo": "fenced"}),
+                )
+                if holder_submit.get("errorCode"):
+                    raise AssertionError(
+                        f"[{case_id}][{transport}] holder submit failed: "
+                        f"{holder_submit.get('errorCode')} "
+                        f"{holder_submit.get('errorMessage')}"
+                    )
+
+                request_status = adapter.get_request_status(session_id, request_id)
+                if "status_equals" in expected:
+                    assert_request_status(
+                        request_status, expected["status_equals"], case_id, transport
+                    )
+                if "result_equals" in expected:
+                    assert_unary_result(
+                        request_status.get("result"),
+                        expected["result_equals"],
+                        case_id,
+                        transport,
+                    )
+                return
+
             if mode == "stream":
                 adapter.register_stream_tool(
                     session_id=session_id,

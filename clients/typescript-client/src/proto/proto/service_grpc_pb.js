@@ -659,6 +659,17 @@ function deserialize_api_RegisterToolResponse(buffer_arg) {
   return proto_service_pb.RegisterToolResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
+function serialize_api_RenewRequestLeaseRequest(arg) {
+  if (!(arg instanceof proto_service_pb.RenewRequestLeaseRequest)) {
+    throw new Error('Expected argument of type api.RenewRequestLeaseRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_api_RenewRequestLeaseRequest(buffer_arg) {
+  return proto_service_pb.RenewRequestLeaseRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
 function serialize_api_Request(arg) {
   if (!(arg instanceof proto_service_pb.Request)) {
     throw new Error('Expected argument of type api.Request');
@@ -1280,6 +1291,24 @@ createRequest: {
     requestDeserialize: deserialize_api_GetRequestChunksRequest,
     responseSerialize: serialize_api_GetRequestChunksResponse,
     responseDeserialize: deserialize_api_GetRequestChunksResponse,
+  },
+  // RenewRequestLease extends the execution lease of a claimed/running request
+// so long-running tools are not reclaimed mid-flight. Only the current lease
+// holder may renew: machine_id and lease_epoch must match the request's
+// current lease grant. Renewal moves the lease deadline (visible_at) forward
+// but never past the request's absolute timeout (leased_at + timeout_seconds).
+// The server rejects renewals with FAILED_PRECONDITION when the lease is
+// stale, reclaimed, or expired.
+renewRequestLease: {
+    path: '/api.RequestsService/RenewRequestLease',
+    requestStream: false,
+    responseStream: false,
+    requestType: proto_service_pb.RenewRequestLeaseRequest,
+    responseType: proto_service_pb.Request,
+    requestSerialize: serialize_api_RenewRequestLeaseRequest,
+    requestDeserialize: deserialize_api_RenewRequestLeaseRequest,
+    responseSerialize: serialize_api_Request,
+    responseDeserialize: deserialize_api_Request,
   },
 };
 

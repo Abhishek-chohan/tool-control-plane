@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"toolplane/cmd/server/auth"
 	"toolplane/pkg/model"
+	"toolplane/pkg/storage"
 	proto "toolplane/proto"
 )
 
@@ -482,8 +483,11 @@ func (s *GRPCServer) UnregisterMachine(ctx context.Context, req *proto.Unregiste
 // CreateRequest implements the gRPC CreateRequest method
 func (s *GRPCServer) CreateRequest(ctx context.Context, req *proto.CreateRequestRequest) (*proto.Request, error) {
 	// Create request
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input)
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
+		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
+			return nil, status.Errorf(codes.InvalidArgument, "failed to create request: %v", err)
+		}
 		return nil, status.Errorf(codes.Internal, "failed to create request: %v", err)
 	}
 
@@ -541,12 +545,14 @@ func (s *GRPCServer) UpdateRequest(ctx context.Context, req *proto.UpdateRequest
 	request, err := s.requestService.UpdateRequest(
 		req.SessionId,
 		req.RequestId,
+		req.MachineId,
+		req.LeaseEpoch,
 		model.RequestStatus(req.Status),
 		result,
 		model.ResultType(req.ResultType),
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to update request: %v", err)
+		return nil, fencedWriteStatusError("update request", err)
 	}
 
 	return convertModelRequestToProto(request), nil
@@ -597,12 +603,14 @@ func (s *GRPCServer) SubmitRequestResult(ctx context.Context, req *proto.SubmitR
 	err := s.requestService.SubmitRequestResult(
 		req.SessionId,
 		req.RequestId,
+		req.MachineId,
+		req.LeaseEpoch,
 		result,
 		model.ResultType(req.ResultType),
 		meta,
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to submit request result: %v", err)
+		return nil, fencedWriteStatusError("submit request result", err)
 	}
 
 	return &proto.SubmitRequestResultResponse{
@@ -616,16 +624,43 @@ func (s *GRPCServer) AppendRequestChunks(ctx context.Context, req *proto.AppendR
 	err := s.requestService.AppendRequestChunks(
 		req.SessionId,
 		req.RequestId,
+		req.MachineId,
+		req.LeaseEpoch,
 		req.Chunks,
 		model.ResultType(req.ResultType),
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to append request chunks: %v", err)
+		return nil, fencedWriteStatusError("append request chunks", err)
 	}
 
 	return &proto.AppendRequestChunksResponse{
 		Success: true,
 	}, nil
+}
+
+// RenewRequestLease implements the gRPC RenewRequestLease method
+func (s *GRPCServer) RenewRequestLease(ctx context.Context, req *proto.RenewRequestLeaseRequest) (*proto.Request, error) {
+	renewed, err := s.requestService.RenewRequestLease(
+		req.SessionId,
+		req.RequestId,
+		req.MachineId,
+		req.LeaseEpoch,
+	)
+	if err != nil {
+		return nil, fencedWriteStatusError("renew request lease", err)
+	}
+
+	return convertModelRequestToProto(renewed), nil
+}
+
+// fencedWriteStatusError maps fenced provider-write failures to gRPC codes:
+// a rejected lease grant is FAILED_PRECONDITION (typed and actionable), while
+// lookup failures keep the historical NOT_FOUND mapping.
+func fencedWriteStatusError(action string, err error) error {
+	if errors.Is(err, storage.ErrLeaseConflict) {
+		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
+	}
+	return status.Errorf(codes.NotFound, "failed to %s: %v", action, err)
 }
 
 // GetRequestChunks implements the gRPC GetRequestChunks method
@@ -702,8 +737,11 @@ func requestReplayStatusError(action string, err error) error {
 // ExecuteTool implements the gRPC ExecuteTool method
 func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequest) (*proto.ExecuteToolResponse, error) {
 	// Create a request for the tool execution
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input)
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
+		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
+			return nil, status.Errorf(codes.InvalidArgument, "tool execution failed: %v", err)
+		}
 		return nil, status.Errorf(codes.NotFound, "tool execution failed: %v", err)
 	}
 
@@ -721,8 +759,11 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 	}
 
 	// Create a request for the tool execution
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input)
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
+		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
+			return status.Errorf(codes.InvalidArgument, "tool execution failed: %v", err)
+		}
 		return status.Errorf(codes.NotFound, "tool execution failed: %v", err)
 	}
 

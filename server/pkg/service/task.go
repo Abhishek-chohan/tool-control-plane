@@ -355,7 +355,10 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		return err
 	}
 
-	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input)
+	// Give the underlying request the same absolute timeout as the task
+	// attempt so the lease reaper does not reclaim the request before the task
+	// deadline is reached (0 keeps the server default).
+	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input, task.TimeoutSeconds)
 	if err != nil {
 		return err
 	}
