@@ -288,6 +288,19 @@ service RequestsService {
       body: "*";
     };
   }
+  // RenewRequestLease extends the execution lease of a claimed/running request
+  // so long-running tools are not reclaimed mid-flight. Only the current lease
+  // holder may renew: machine_id and lease_epoch must match the request's
+  // current lease grant. Renewal moves the lease deadline (visible_at) forward
+  // but never past the request's absolute timeout (leased_at + timeout_seconds).
+  // The server rejects renewals with FAILED_PRECONDITION when the lease is
+  // stale, reclaimed, or expired.
+  rpc RenewRequestLease(RenewRequestLeaseRequest) returns (Request) {
+    option (google.api.http) = {
+      post: "/api/RenewRequestLease";
+      body: "*";
+    };
+  }
 }
 
 // ======================
@@ -388,6 +401,15 @@ message Request {
   string updated_at = 10;
   string executing_machine_id = 11;
   repeated string stream_results = 12;
+  // Lease metadata for the current execution attempt. lease_epoch identifies
+  // the claim grant and must be echoed by the lease holder on fenced provider
+  // writes (UpdateRequest, SubmitRequestResult, AppendRequestChunks,
+  // RenewRequestLease). lease_expires_at is RFC3339 and empty when the request
+  // has no active lease.
+  string leased_by = 13;
+  int64 lease_epoch = 14;
+  string lease_expires_at = 15;
+  int32 timeout_seconds = 16;
 }
 
 // RegisterToolRequest
@@ -640,6 +662,10 @@ message ExecuteToolRequest {
   string session_id = 1;
   string tool_name = 2;
   string input = 3;  // JSON input as string
+  // Optional absolute execution timeout in seconds for the created request.
+  // Zero or negative uses the server default; values above the server maximum
+  // are rejected.
+  int32 timeout_seconds = 4;
 }
 
 // ExecuteToolResponse
@@ -667,6 +693,10 @@ message CreateRequestRequest {
   string session_id = 1;
   string tool_name = 2;
   string input = 3;  // JSON input as string
+  // Optional absolute execution timeout in seconds for the request.
+  // Zero or negative uses the server default; values above the server maximum
+  // are rejected.
+  int32 timeout_seconds = 4;
 }
 
 // GetRequestRequest
@@ -689,13 +719,17 @@ message ListRequestsResponse {
   repeated Request requests = 1;
 }
 
-// UpdateRequestRequest
+// UpdateRequestRequest is a fenced provider write: machine_id and lease_epoch
+// must match the request's current lease grant, otherwise the server rejects
+// the update with FAILED_PRECONDITION.
 message UpdateRequestRequest {
   string session_id = 1;
   string request_id = 2;
   string status = 3;
   string result = 4;
   string result_type = 5;
+  string machine_id = 6;
+  int64 lease_epoch = 7;
 }
 
 // ClaimRequestRequest
@@ -716,13 +750,18 @@ message CancelRequestResponse {
   bool success = 1;
 }
 
-// SubmitRequestResultRequest
+// SubmitRequestResultRequest is a fenced provider write: machine_id and
+// lease_epoch must match the request's current lease grant (epoch alone is
+// sufficient for the terminal streaming-append case), otherwise the server
+// rejects the submission with FAILED_PRECONDITION.
 message SubmitRequestResultRequest {
   string session_id = 1;
   string request_id = 2;
   string result = 3;
   string result_type = 4;
   map<string, string> meta = 5;
+  string machine_id = 6;
+  int64 lease_epoch = 7;
 }
 
 // SubmitRequestResultResponse
@@ -730,12 +769,16 @@ message SubmitRequestResultResponse {
   bool success = 1;
 }
 
-// AppendRequestChunksRequest
+// AppendRequestChunksRequest is a fenced provider write: machine_id and
+// lease_epoch must match the request's current lease grant, otherwise the
+// server rejects the append with FAILED_PRECONDITION.
 message AppendRequestChunksRequest {
   string session_id = 1;
   string request_id = 2;
   repeated string chunks = 3;
   string result_type = 4;
+  string machine_id = 5;
+  int64 lease_epoch = 6;
 }
 
 // AppendRequestChunksResponse
@@ -754,6 +797,17 @@ message GetRequestChunksResponse {
   repeated string chunks = 1;
   int32 start_seq = 2;  // absolute sequence number of chunks[0], or next_seq when empty
   int32 next_seq = 3;   // next absolute chunk sequence number; terminal marker uses this seq
+}
+
+// RenewRequestLeaseRequest asks the server to extend the execution lease of a
+// claimed/running request. The caller must be the current lease holder:
+// machine_id and lease_epoch must match the lease grant returned by
+// ClaimRequest (and exposed on Request).
+message RenewRequestLeaseRequest {
+  string session_id = 1;
+  string request_id = 2;
+  string machine_id = 3;
+  int64 lease_epoch = 4;
 }
 
 // Health check

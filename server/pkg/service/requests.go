@@ -111,8 +111,10 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 	return service
 }
 
-// CreateRequest creates a new tool execution request
-func (s *RequestsService) CreateRequest(sessionID, toolName, input string) (*model.Request, error) {
+// CreateRequest creates a new tool execution request. timeoutSeconds overrides
+// the absolute per-attempt execution timeout; values <= 0 use the server
+// default, values above maxRequestTimeout are rejected.
+func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeoutSeconds int) (*model.Request, error) {
 	// Check if tool exists
 	_, err := s.toolService.GetToolByName(sessionID, toolName)
 	if err != nil {
@@ -129,10 +131,18 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string) (*mod
 		return nil, fmt.Errorf("no machines available for tool %s", toolName)
 	}
 
+	resolvedTimeout := requestTimeout
+	if timeoutSeconds > 0 {
+		resolvedTimeout = time.Duration(timeoutSeconds) * time.Second
+		if resolvedTimeout > maxRequestTimeout {
+			return nil, fmt.Errorf("%w: %d exceeds maximum %d", ErrRequestTimeoutOutOfRange, timeoutSeconds, int(maxRequestTimeout.Seconds()))
+		}
+	}
+
 	// Create a new request
 	request := model.NewRequest(sessionID, toolName, input)
 	s.ensureRequestDefaults(request)
-	request.TimeoutSeconds = int(requestTimeout.Seconds())
+	request.TimeoutSeconds = int(resolvedTimeout.Seconds())
 	request.BackoffSeconds = int(s.retryBackoff.Seconds())
 	request.VisibleAt = time.Now()
 
@@ -309,9 +319,13 @@ func (s *RequestsService) ListRequests(
 	return filtered[offset:end], nil
 }
 
-// UpdateRequest updates a request's status, result, and result type
+// UpdateRequest is a fenced provider write: it updates a request's status,
+// result, and result type on behalf of the machine that currently holds the
+// request's lease. machineID and leaseEpoch must identify the current lease
+// grant; mismatches fail with storage.ErrLeaseConflict.
 func (s *RequestsService) UpdateRequest(
-	sessionID, requestID string,
+	sessionID, requestID, machineID string,
+	leaseEpoch int64,
 	status model.RequestStatus,
 	result interface{},
 	resultType model.ResultType,
@@ -319,15 +333,20 @@ func (s *RequestsService) UpdateRequest(
 	s.requestsMutex.Lock()
 	defer s.requestsMutex.Unlock()
 
-	// Check if session exists
-	if _, ok := s.requests[sessionID]; !ok {
-		return nil, fmt.Errorf("no requests found for session %s", sessionID)
+	if s.store != nil {
+		return s.updateRequestViaStore(sessionID, requestID, machineID, leaseEpoch, status, result, resultType)
 	}
 
-	// Get request
-	request, ok := s.requests[sessionID][requestID]
-	if !ok {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+	// In-memory path (dev/test only when no store is configured).
+	request, err := s.getRequestLocked(sessionID, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if err := storage.CheckLeaseFence(request, machineID, leaseEpoch); err != nil {
+		return nil, err
+	}
+	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+		return nil, fmt.Errorf("request %s is already in state %s", requestID, request.Status)
 	}
 
 	prevStatus := request.Status
@@ -337,7 +356,6 @@ func (s *RequestsService) UpdateRequest(
 		s.ensureRequestDefaults(request)
 		switch status {
 		case model.RequestStatusRunning:
-			machineID := request.ExecutingMachineID
 			if machineID != "" {
 				if !s.machineService.ReserveMachineSlot(sessionID, machineID) {
 					retryAt := now.Add(s.retryBackoff)
@@ -350,11 +368,6 @@ func (s *RequestsService) UpdateRequest(
 					request.Error = "machine at capacity"
 					request.LastError = request.Error
 					request.UpdatedAt = now
-					if s.store != nil {
-						ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-						_ = s.store.SaveRequest(ctx, request)
-						cancel()
-					}
 					s.recordRequestEvent(request, trace.EventRequestRequeued, machineID, map[string]any{
 						"reason": "machine_at_capacity",
 					})
@@ -364,11 +377,14 @@ func (s *RequestsService) UpdateRequest(
 				reservedSlot = true
 			}
 			request.Status = status
+			request.ExecutingMachineID = machineID
 			request.LeasedBy = machineID
 			leaseTime := now
 			request.LeasedAt = &leaseTime
-			request.TimeoutSeconds = int(requestTimeout.Seconds())
-			request.VisibleAt = leaseTime.Add(requestTimeout)
+			// The running transition refreshes the lease deadline without
+			// clobbering the request's own absolute timeout, so a
+			// caller-supplied timeout_seconds survives into execution.
+			request.VisibleAt = leaseTime.Add(s.leaseDuration)
 			request.NextAttemptAt = nil
 			request.Error = ""
 			request.LastError = ""
@@ -396,17 +412,6 @@ func (s *RequestsService) UpdateRequest(
 
 	request.UpdatedAt = now
 
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
-			if reservedSlot && request.ExecutingMachineID != "" {
-				s.machineService.ReleaseMachineSlot(sessionID, request.ExecutingMachineID)
-			}
-			return nil, fmt.Errorf("persist request update failed: %w", err)
-		}
-	}
-
 	if status != "" {
 		switch status {
 		case model.RequestStatusRunning:
@@ -428,6 +433,91 @@ func (s *RequestsService) UpdateRequest(
 	s.notifyRequestUpdate(request.ID)
 
 	return request, nil
+}
+
+// updateRequestViaStore is the store-backed fenced UpdateRequest path: capacity
+// reservation stays in the service, while the fenced row mutation happens
+// atomically in the store (check lease grant and persist in one transaction).
+// Callers must hold s.requestsMutex.
+func (s *RequestsService) updateRequestViaStore(
+	sessionID, requestID, machineID string,
+	leaseEpoch int64,
+	status model.RequestStatus,
+	result interface{},
+	resultType model.ResultType,
+) (*model.Request, error) {
+	prevStatus := model.RequestStatus("")
+	if sessionRequests, ok := s.requests[sessionID]; ok {
+		if cached, ok := sessionRequests[requestID]; ok {
+			prevStatus = cached.Status
+		}
+	}
+
+	reservedSlot := false
+	if status == model.RequestStatusRunning && machineID != "" {
+		if !s.machineService.ReserveMachineSlot(sessionID, machineID) {
+			// The lease holder's machine is at capacity: fenced requeue back
+			// to pending so another provider can take the work.
+			ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+			requeued, err := s.store.RequeueRequestFenced(ctx, sessionID, requestID, machineID, leaseEpoch, "machine at capacity", s.retryBackoff)
+			cancel()
+			if err != nil {
+				return nil, err
+			}
+			s.mirrorRequestLocked(requeued)
+			s.recordRequestEvent(requeued, trace.EventRequestRequeued, machineID, map[string]any{
+				"reason": "machine_at_capacity",
+			})
+			s.notifyRequestUpdate(requeued.ID)
+			return nil, fmt.Errorf("machine %s at capacity", machineID)
+		}
+		reservedSlot = true
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+	updated, err := s.store.UpdateRequestFenced(ctx, sessionID, requestID, machineID, leaseEpoch, status, result, resultType, s.leaseDuration)
+	cancel()
+	if err != nil {
+		if reservedSlot {
+			s.machineService.ReleaseMachineSlot(sessionID, machineID)
+		}
+		return nil, err
+	}
+
+	s.mirrorRequestLocked(updated)
+
+	if status != "" {
+		switch status {
+		case model.RequestStatusRunning:
+			s.recordRequestEvent(updated, trace.EventRequestExecutionStarted, updated.ExecutingMachineID, nil)
+		case model.RequestStatusDone:
+			s.recordRequestEvent(updated, trace.EventRequestExecutionCompleted, updated.ExecutingMachineID, map[string]any{"source": "update_request"})
+		case model.RequestStatusFailed:
+			s.recordRequestEvent(updated, trace.EventRequestExecutionFailed, updated.ExecutingMachineID, map[string]any{"source": "update_request"})
+		}
+
+		if (status == model.RequestStatusDone || status == model.RequestStatusFailed) && updated.ExecutingMachineID != "" {
+			s.machineService.ReleaseMachineSlot(sessionID, updated.ExecutingMachineID)
+		} else if status == model.RequestStatusRunning && !reservedSlot && prevStatus == model.RequestStatusRunning && updated.ExecutingMachineID != "" {
+			s.machineService.ReserveMachineSlot(sessionID, updated.ExecutingMachineID)
+		}
+	}
+
+	s.notifyRequestUpdate(updated.ID)
+
+	return updated, nil
+}
+
+// mirrorRequestLocked replaces the cached copy of a request after an
+// authoritative store write. Callers must hold s.requestsMutex.
+func (s *RequestsService) mirrorRequestLocked(request *model.Request) {
+	if request == nil {
+		return
+	}
+	if _, exists := s.requests[request.SessionID]; !exists {
+		s.requests[request.SessionID] = make(map[string]*model.Request)
+	}
+	s.requests[request.SessionID][request.ID] = request
 }
 
 // ClaimRequest marks a request as claimed by a machine
@@ -490,6 +580,9 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 	if request.Attempts < request.MaxAttempts {
 		request.Attempts++
 	}
+	// Each successful claim grants a fresh lease epoch: the fencing token that
+	// fenced writes (update/submit/append/renew) must echo.
+	request.LeaseEpoch++
 	request.LeasedBy = machineID
 	request.LeasedAt = &now
 	request.VisibleAt = now.Add(s.leaseDuration)
@@ -575,6 +668,8 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 	if oldestRequest.Attempts < oldestRequest.MaxAttempts {
 		oldestRequest.Attempts++
 	}
+	// Each successful claim grants a fresh lease epoch (fencing token).
+	oldestRequest.LeaseEpoch++
 	oldestRequest.LeasedBy = machineID
 	oldestRequest.LeasedAt = &now
 	oldestRequest.VisibleAt = now.Add(s.leaseDuration)
@@ -598,9 +693,13 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 	return oldestRequest, nil
 }
 
-// SubmitRequestResult submits a result for a request
+// SubmitRequestResult is a fenced provider write: it submits the terminal
+// result for a request on behalf of the machine that holds the request's
+// lease. machineID and leaseEpoch must identify the current lease grant;
+// mismatches fail with storage.ErrLeaseConflict.
 func (s *RequestsService) SubmitRequestResult(
-	sessionID, requestID string,
+	sessionID, requestID, machineID string,
+	leaseEpoch int64,
 	result interface{},
 	resultType model.ResultType,
 	meta map[string]string,
@@ -608,40 +707,41 @@ func (s *RequestsService) SubmitRequestResult(
 	s.requestsMutex.Lock()
 	defer s.requestsMutex.Unlock()
 
-	// Check if session exists
-	if _, ok := s.requests[sessionID]; !ok {
-		return fmt.Errorf("no requests found for session %s", sessionID)
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		submitted, err := s.store.SubmitRequestResultFenced(ctx, sessionID, requestID, machineID, leaseEpoch, result, resultType, meta)
+		cancel()
+		if err != nil {
+			return err
+		}
+		s.mirrorRequestLocked(submitted)
+		s.recordSubmitEvents(submitted, resultType)
+		s.notifyRequestUpdate(submitted.ID)
+		return nil
 	}
 
-	// Get request
-	request, ok := s.requests[sessionID][requestID]
-	if !ok {
-		return fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+	// In-memory path (dev/test only when no store is configured).
+	request, err := s.getRequestLocked(sessionID, requestID)
+	if err != nil {
+		return err
+	}
+	if err := storage.CheckLeaseFence(request, machineID, leaseEpoch); err != nil {
+		return err
 	}
 
 	// Special handling for streaming updates to allow continued updates
 	if resultType == model.ResultTypeStreaming {
-		// For streaming updates, handle differently
 		if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
-			// For completed requests, add to stream results
 			if resultStr, ok := result.(string); ok {
 				request.AddStreamChunk(resultStr)
-				if s.store != nil {
-					ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-					defer cancel()
-					if err := s.store.SaveRequest(ctx, request); err != nil {
-						return fmt.Errorf("persist request streaming append failed: %w", err)
-					}
-				}
-				s.notifyRequestUpdate(request.ID)
 			}
+			s.notifyRequestUpdate(request.ID)
 			return nil
 		}
 	}
 
 	// Don't update already completed requests unless streaming
-	if (request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed) &&
-		resultType != model.ResultTypeStreaming {
+	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
 		return fmt.Errorf("request %s is already in state %s", requestID, request.Status)
 	}
 
@@ -676,14 +776,15 @@ func (s *RequestsService) SubmitRequestResult(
 	}
 	request.DeadLetter = false
 
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
-			return fmt.Errorf("persist request result failed: %w", err)
-		}
-	}
+	s.recordSubmitEvents(request, resultType)
+	s.notifyRequestUpdate(request.ID)
 
+	return nil
+}
+
+// recordSubmitEvents records the terminal trace event and releases the machine
+// slot for a submitted result. Callers must hold s.requestsMutex.
+func (s *RequestsService) recordSubmitEvents(request *model.Request, resultType model.ResultType) {
 	resultEvent := trace.EventRequestExecutionCompleted
 	if resultType == model.ResultTypeRejection {
 		resultEvent = trace.EventRequestExecutionFailed
@@ -693,12 +794,8 @@ func (s *RequestsService) SubmitRequestResult(
 	})
 
 	if request.ExecutingMachineID != "" {
-		s.machineService.ReleaseMachineSlot(sessionID, request.ExecutingMachineID)
+		s.machineService.ReleaseMachineSlot(request.SessionID, request.ExecutingMachineID)
 	}
-
-	s.notifyRequestUpdate(request.ID)
-
-	return nil
 }
 
 // CancelRequest cancels a request
@@ -746,37 +843,48 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 	return nil
 }
 
-// AppendRequestChunks appends chunks to a request's streaming results
+// AppendRequestChunks is a fenced provider write: it appends chunks to a
+// request's streaming results on behalf of the machine that holds the
+// request's lease. machineID and leaseEpoch must identify the current lease
+// grant; mismatches fail with storage.ErrLeaseConflict. resultType is accepted
+// for wire compatibility but does not affect the append.
 func (s *RequestsService) AppendRequestChunks(
-	sessionID, requestID string,
+	sessionID, requestID, machineID string,
+	leaseEpoch int64,
 	chunks []string,
 	resultType model.ResultType,
 ) error {
 	s.requestsMutex.Lock()
 	defer s.requestsMutex.Unlock()
 
-	// Check if session exists
-	if _, ok := s.requests[sessionID]; !ok {
-		return fmt.Errorf("no requests found for session %s", sessionID)
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		updated, err := s.store.AppendRequestChunksFenced(ctx, sessionID, requestID, machineID, leaseEpoch, chunks)
+		cancel()
+		if err != nil {
+			return err
+		}
+		s.mirrorRequestLocked(updated)
+		s.recordRequestEvent(updated, trace.EventRequestChunksAppended, updated.ExecutingMachineID, map[string]any{
+			"chunkCount": len(chunks),
+			"nextSeq":    updated.NextStreamSeq,
+		})
+		s.notifyRequestUpdate(updated.ID)
+		return nil
 	}
 
-	// Get request
-	request, ok := s.requests[sessionID][requestID]
-	if !ok {
-		return fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+	// In-memory path (dev/test only when no store is configured).
+	request, err := s.getRequestLocked(sessionID, requestID)
+	if err != nil {
+		return err
+	}
+	if err := storage.CheckLeaseFence(request, machineID, leaseEpoch); err != nil {
+		return err
 	}
 
 	// Add chunks to request
 	for _, chunk := range chunks {
 		request.AddStreamChunk(chunk)
-	}
-
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
-			return fmt.Errorf("persist request append chunks failed: %w", err)
-		}
 	}
 
 	s.recordRequestEvent(request, trace.EventRequestChunksAppended, request.ExecutingMachineID, map[string]any{
@@ -787,6 +895,72 @@ func (s *RequestsService) AppendRequestChunks(
 	s.notifyRequestUpdate(request.ID)
 
 	return nil
+}
+
+// RenewRequestLease is a fenced provider write: it extends the lease deadline
+// of a claimed/running request so long-running executions are not reclaimed
+// mid-flight. Only the current lease holder may renew; stale or mismatched
+// grants fail with storage.ErrLeaseConflict. Renewal moves the lease deadline
+// forward but never past the request's absolute timeout.
+func (s *RequestsService) RenewRequestLease(
+	sessionID, requestID, machineID string,
+	leaseEpoch int64,
+) (*model.Request, error) {
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
+
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		renewed, err := s.store.RenewRequestLease(ctx, sessionID, requestID, machineID, leaseEpoch, s.leaseDuration)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		s.mirrorRequestLocked(renewed)
+		s.recordRequestEvent(renewed, trace.EventRequestLeaseRenewed, machineID, map[string]any{
+			"leaseEpoch":   renewed.LeaseEpoch,
+			"visibleAt":    renewed.VisibleAt,
+			"leaseExpires": renewed.VisibleAt,
+		})
+		s.notifyRequestUpdate(renewed.ID)
+		return renewed, nil
+	}
+
+	// In-memory path (dev/test only when no store is configured).
+	request, err := s.getRequestLocked(sessionID, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if request.Status != model.RequestStatusClaimed && request.Status != model.RequestStatusRunning {
+		return nil, fmt.Errorf("%w: request %s is in state %s and has no renewable lease", storage.ErrLeaseConflict, requestID, request.Status)
+	}
+	if err := storage.CheckLeaseFence(request, machineID, leaseEpoch); err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	if !request.VisibleAt.After(now) {
+		return nil, fmt.Errorf("%w: lease deadline already passed for request %s", storage.ErrLeaseConflict, requestID)
+	}
+	newVisible := now.Add(s.leaseDuration)
+	if request.LeasedAt != nil {
+		absoluteDeadline := request.LeasedAt.Add(time.Duration(request.TimeoutSeconds) * time.Second)
+		if newVisible.After(absoluteDeadline) {
+			newVisible = absoluteDeadline
+		}
+	}
+	if !newVisible.After(now) {
+		return nil, fmt.Errorf("%w: renewal cannot extend request %s past its absolute timeout", storage.ErrLeaseConflict, requestID)
+	}
+	request.VisibleAt = newVisible
+	request.UpdatedAt = now
+
+	s.recordRequestEvent(request, trace.EventRequestLeaseRenewed, machineID, map[string]any{
+		"leaseEpoch": request.LeaseEpoch,
+		"visibleAt":  request.VisibleAt,
+	})
+	s.notifyRequestUpdate(request.ID)
+
+	return request, nil
 }
 
 // GetRequestChunks gets the current retained chunk window for a request.
@@ -940,8 +1114,11 @@ func (s *RequestsService) markStalledRequests() {
 	for _, requests := range s.requests {
 		for _, request := range requests {
 			s.ensureRequestDefaults(request)
+			// Reclaim when the lease deadline passed without a renewal, or
+			// when the absolute per-attempt timeout was exceeded (renewal
+			// moves the lease deadline but never the absolute timeout).
 			if (request.Status == model.RequestStatusClaimed || request.Status == model.RequestStatusRunning) &&
-				!request.VisibleAt.IsZero() && !request.VisibleAt.After(now) {
+				(request.LeaseExpired(now) || request.HasTimedOut(now)) {
 				expired = append(expired, request)
 			}
 		}
@@ -965,9 +1142,6 @@ func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*mo
 	if machineID != "" {
 		s.machineService.ReleaseMachineSlot(req.SessionID, machineID)
 	}
-	s.recordRequestEvent(req, trace.EventRequestLeaseExpired, machineID, map[string]any{
-		"visibleAt": req.VisibleAt,
-	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 	defer cancel()
@@ -975,6 +1149,11 @@ func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*mo
 	if err != nil || !ok {
 		return nil, false, err
 	}
+	// Record the expiry only once this replica knows it won the guarded
+	// reclaim; losing replicas stay silent so the event is not duplicated.
+	s.recordRequestEvent(reclaimed, trace.EventRequestLeaseExpired, machineID, map[string]any{
+		"visibleAt": req.VisibleAt,
+	})
 	if reclaimed.DeadLetter {
 		s.recordRequestEvent(reclaimed, trace.EventRequestDeadLettered, machineID, map[string]any{
 			"reason": reclaimed.LastError,
@@ -990,8 +1169,8 @@ func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*mo
 
 // ExecuteTool executes a tool on a specific machine
 func (s *RequestsService) ExecuteTool(sessionID, machineID, toolName, input string) (*model.ToolResult, error) {
-	// Create a new request
-	request, err := s.CreateRequest(sessionID, toolName, input)
+	// Create a new request with the default absolute timeout.
+	request, err := s.CreateRequest(sessionID, toolName, input, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -1017,13 +1196,14 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 	}
 
 	// Claim the request for the specified machine
-	_, err := s.ClaimRequest(sessionID, requestID, machineID)
+	claimed, err := s.ClaimRequest(sessionID, requestID, machineID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to claim request: %v", err)
 	}
 
-	// Update request status to running
-	_, err = s.UpdateRequest(sessionID, requestID, model.RequestStatusRunning, nil, "")
+	// Update request status to running, presenting the lease grant from the
+	// claim so the fenced write is accepted.
+	_, err = s.UpdateRequest(sessionID, requestID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to update request status: %v", err)
 	}

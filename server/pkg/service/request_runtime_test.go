@@ -59,14 +59,15 @@ func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) 
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"lease"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"lease"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
-	if _, err := requestService.ClaimRequest(sessionID, request.ID, machineID); err != nil {
+	claimed, err := requestService.ClaimRequest(sessionID, request.ID, machineID)
+	if err != nil {
 		t.Fatalf("claim request: %v", err)
 	}
-	if _, err := requestService.UpdateRequest(sessionID, request.ID, model.RequestStatusRunning, nil, ""); err != nil {
+	if _, err := requestService.UpdateRequest(sessionID, request.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 		t.Fatalf("mark running: %v", err)
 	}
 
@@ -113,20 +114,21 @@ func TestRequestsServiceRecordsProviderLifecycleEvents(t *testing.T) {
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trace"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trace"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
-	if _, err := requestService.ClaimRequest(sessionID, request.ID, machineID); err != nil {
+	claimed, err := requestService.ClaimRequest(sessionID, request.ID, machineID)
+	if err != nil {
 		t.Fatalf("claim request: %v", err)
 	}
-	if _, err := requestService.UpdateRequest(sessionID, request.ID, model.RequestStatusRunning, nil, ""); err != nil {
+	if _, err := requestService.UpdateRequest(sessionID, request.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 		t.Fatalf("mark running: %v", err)
 	}
-	if err := requestService.AppendRequestChunks(sessionID, request.ID, []string{"chunk-1", "chunk-2"}, model.ResultTypeStreaming); err != nil {
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, machineID, claimed.LeaseEpoch, []string{"chunk-1", "chunk-2"}, model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
-	if err := requestService.SubmitRequestResult(sessionID, request.ID, map[string]string{"echo": "trace"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, request.ID, machineID, claimed.LeaseEpoch, map[string]string{"echo": "trace"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit request result: %v", err)
 	}
 

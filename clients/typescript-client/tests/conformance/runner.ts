@@ -614,6 +614,93 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
         return;
       }
 
+      if (mode === 'fenced') {
+        // Lease fencing proof: claim manually (no runtime polling), reject
+        // forged writes, renew the lease, then submit with the real grant.
+        await adapter.registerUnaryEchoTool(
+          sessionId,
+          toolName,
+          String(request.tool_description ?? 'conformance fenced provider tool'),
+        );
+        const machineId = await adapter.getProviderMachineId(sessionId);
+        if (!machineId.trim()) {
+          throw new Error(`[${transport}] ${caseId}: no provider machine attached`);
+        }
+        const requestId = await adapter.createRequest(
+          sessionId,
+          toolName,
+          (request.params as Record<string, unknown>) ?? {},
+        );
+        if (expected.request_id_non_empty === true) {
+          assertRequestIdNonEmpty(requestId, caseId, transport);
+        }
+
+        const claimed = await adapter.claimRequestForFencing(sessionId, requestId, machineId);
+        if (typeof claimed.errorCode === 'string' && claimed.errorCode) {
+          throw new Error(
+            `[${transport}] ${caseId}: claim failed: ${claimed.errorCode} ${claimed.errorMessage ?? ''}`,
+          );
+        }
+        const leaseEpoch = Number(claimed.leaseEpoch ?? 0);
+        if (leaseEpoch <= 0) {
+          throw new Error(`[${transport}] ${caseId}: claim did not grant a lease epoch`);
+        }
+
+        const forgedSubmit = await adapter.submitFencedResult(
+          sessionId,
+          requestId,
+          machineId,
+          leaseEpoch + 41,
+          { forged: true },
+        );
+        if ('forged_submit_error_code' in expected) {
+          assertErrorCodeEquals(forgedSubmit, String(expected.forged_submit_error_code), caseId, transport);
+        }
+
+        const forgedRenew = await adapter.renewRequestLease(sessionId, requestId, machineId, leaseEpoch + 41);
+        if ('forged_renew_error_code' in expected) {
+          assertErrorCodeEquals(forgedRenew, String(expected.forged_renew_error_code), caseId, transport);
+        }
+
+        const renewed = await adapter.renewRequestLease(sessionId, requestId, machineId, leaseEpoch);
+        if (typeof renewed.errorCode === 'string' && renewed.errorCode) {
+          throw new Error(
+            `[${transport}] ${caseId}: holder renewal failed: ${renewed.errorCode} ${renewed.errorMessage ?? ''}`,
+          );
+        }
+        if (expected.renewed_lease_expires_non_empty === true) {
+          assertRequestFieldNonEmpty(renewed, 'leaseExpiresAt', caseId, transport);
+        }
+        assertRequestFieldEquals(renewed, 'leaseEpoch', leaseEpoch, caseId, transport);
+
+        const holderSubmit = await adapter.submitFencedResult(
+          sessionId,
+          requestId,
+          machineId,
+          leaseEpoch,
+          (expected.submit_result as Record<string, unknown>) ?? { echo: 'fenced' },
+        );
+        if (typeof holderSubmit.errorCode === 'string' && holderSubmit.errorCode) {
+          throw new Error(
+            `[${transport}] ${caseId}: holder submit failed: ${holderSubmit.errorCode} ${holderSubmit.errorMessage ?? ''}`,
+          );
+        }
+
+        const requestStatus = await adapter.getRequestStatus(sessionId, requestId);
+        if ('status_equals' in expected) {
+          assertRequestStatus(requestStatus, String(expected.status_equals), caseId, transport);
+        }
+        if ('result_equals' in expected) {
+          assertUnaryResult(
+            requestStatus.result,
+            (expected.result_equals as Record<string, unknown>) ?? {},
+            caseId,
+            transport,
+          );
+        }
+        return;
+      }
+
       if (mode === 'stream') {
         await adapter.registerStreamTool(
           sessionId,

@@ -22,6 +22,16 @@ var ErrConfigMissing = errors.New("storage: TOOLPLANE_DATABASE_URL not set")
 var ErrExplicitInMemoryMode = errors.New("storage: explicit in-memory mode")
 var ErrToolOwnershipConflict = errors.New("storage: tool ownership conflict with active machine")
 
+// ErrLeaseConflict reports that a fenced write (update/submit/append/renew)
+// was rejected because the caller does not hold the request's current lease
+// grant: the machine identity or lease epoch did not match, the request was
+// reclaimed, or it already reached a terminal state.
+var ErrLeaseConflict = errors.New("storage: lease conflict: caller does not hold the current lease grant")
+
+// ErrRequestTerminal reports that a fenced write targeted a request that is
+// already in a terminal state (done/failure).
+var ErrRequestTerminal = errors.New("storage: request is already in a terminal state")
+
 // Store provides persistence for core server models.
 type Store struct {
 	db     *sql.DB
@@ -66,6 +76,17 @@ type Storer interface {
 	// It supports store-backed reads when a request is not present in the local
 	// cache (multi-instance visibility).
 	GetRequest(ctx context.Context, requestID string) (*model.Request, error)
+
+	// Fenced request writes. Every method loads the authoritative row, verifies
+	// that (machineID, leaseEpoch) identify the request's current lease grant,
+	// applies its mutation, and persists atomically. Mismatched or stale lease
+	// grants fail with ErrLeaseConflict, so a reclaimed executor (or any
+	// non-holder) can no longer write results or chunks.
+	RenewRequestLease(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, leaseDuration time.Duration) (*model.Request, error)
+	SubmitRequestResultFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, result interface{}, resultType model.ResultType, meta map[string]string) (*model.Request, error)
+	AppendRequestChunksFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, chunks []string) (*model.Request, error)
+	UpdateRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, status model.RequestStatus, result interface{}, resultType model.ResultType, leaseDuration time.Duration) (*model.Request, error)
+	RequeueRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, reason string, backoff time.Duration) (*model.Request, error)
 
 	// Machines
 	AllMachines(ctx context.Context) ([]*model.Machine, error)

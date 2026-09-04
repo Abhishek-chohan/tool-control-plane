@@ -56,7 +56,7 @@ func TestActiveActive_CrossInstanceVisibility(t *testing.T) {
 		t.Fatalf("RegisterMachine on A: %v", err)
 	}
 
-	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`)
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0)
 	if err != nil {
 		t.Fatalf("CreateRequest on A: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestActiveActive_NoDoubleClaim(t *testing.T) {
 	machineB := model.NewMachine("sess-aa", "machine-b", "1.0", "go", "127.0.0.1")
 	_ = store.SaveMachine(ctx, machineB)
 
-	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`)
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0)
 	if err != nil {
 		t.Fatalf("CreateRequest on A: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestActiveActive_NoDoubleRequeue(t *testing.T) {
 	machB.setMachineCapacity("sess-aa", "machine-a", maxMachineConcurrentRequests)
 
 	// Create a request on A, then claim it so it has a lease.
-	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`)
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0)
 	if err != nil {
 		t.Fatalf("CreateRequest on A: %v", err)
 	}

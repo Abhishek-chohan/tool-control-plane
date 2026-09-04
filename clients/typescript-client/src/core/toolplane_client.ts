@@ -9,6 +9,7 @@ import {
   ConnectionStatus,
   CreateSessionRequest,
   GRPCTLSConfig,
+  LeaseContext,
   Machine,
   ProviderRuntimeOptions,
   RegisterToolOptions,
@@ -73,6 +74,7 @@ import {
   ListToolsRequest,
   ListToolsResponse as ListToolsResponseMessage,
   Machine as ProtoMachine,
+  RenewRequestLeaseRequest as RenewRequestLeaseMessage,
   RevokeApiKeyRequest as RevokeApiKeyMessage,
   RevokeApiKeyResponse as RevokeApiKeyResponseMessage,
   RegisterMachineRequest as RegisterMachineMessage,
@@ -782,6 +784,9 @@ export class ToolplaneClient {
     request.setStatus(update.status ?? '');
     request.setResult(update.result ?? '');
     request.setResultType(update.resultType ?? '');
+    // Fencing: present the lease grant for provider writes.
+    request.setMachineId(update.machineId ?? '');
+    request.setLeaseEpoch(update.leaseEpoch ?? 0);
 
     const response = await this.invokeGRPCUnary<ProtoRequest>(
       (metadata, options, callback) => this.requestsClient!.updateRequest(request, metadata, options, callback),
@@ -812,6 +817,7 @@ export class ToolplaneClient {
     requestId: string,
     chunks: unknown[],
     resultType: string = 'streaming',
+    lease?: LeaseContext,
   ): Promise<boolean> {
     this.ensureGRPCConnected('request chunk append');
 
@@ -820,6 +826,9 @@ export class ToolplaneClient {
     request.setRequestId(requestId);
     request.setChunksList(chunks.map((chunk) => this.serializePayload(chunk)));
     request.setResultType(resultType);
+    // Fencing: present the lease grant for provider writes.
+    request.setMachineId(lease?.machineId ?? '');
+    request.setLeaseEpoch(lease?.leaseEpoch ?? 0);
 
     const response = await this.invokeGRPCUnary<AppendRequestChunksResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.appendRequestChunks(request, metadata, options, callback),
@@ -834,6 +843,7 @@ export class ToolplaneClient {
     result: unknown,
     resultType: string = 'resolution',
     meta: Record<string, string> = {},
+    lease?: LeaseContext,
   ): Promise<boolean> {
     this.ensureGRPCConnected('request result submission');
 
@@ -845,6 +855,9 @@ export class ToolplaneClient {
     for (const [key, value] of Object.entries(meta)) {
       request.getMetaMap().set(key, value);
     }
+    // Fencing: present the lease grant for provider writes.
+    request.setMachineId(lease?.machineId ?? '');
+    request.setLeaseEpoch(lease?.leaseEpoch ?? 0);
 
     const response = await this.invokeGRPCUnary<SubmitRequestResultResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.submitRequestResult(request, metadata, options, callback),
@@ -852,6 +865,27 @@ export class ToolplaneClient {
     );
 
     return response.getSuccess();
+  }
+
+  async renewRequestLease(
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+  ): Promise<RequestModel> {
+    this.ensureGRPCConnected('request lease renewal');
+
+    const request = new RenewRequestLeaseMessage();
+    request.setSessionId(this.getRequiredSessionId('request lease renewal'));
+    request.setRequestId(requestId);
+    request.setMachineId(machineId);
+    request.setLeaseEpoch(leaseEpoch);
+
+    const response = await this.invokeGRPCUnary<ProtoRequest>(
+      (metadata, options, callback) => this.requestsClient!.renewRequestLease(request, metadata, options, callback),
+      `failed to renew lease for request ${requestId}`,
+    );
+
+    return this.normalizeRequest(response);
   }
 
   async cancelRequest(requestId: string): Promise<boolean> {
@@ -1217,6 +1251,10 @@ export class ToolplaneClient {
       createdAt: request.getCreatedAt(),
       updatedAt: request.getUpdatedAt(),
       executingMachineId: request.getExecutingMachineId(),
+      leasedBy: request.getLeasedBy(),
+      leaseEpoch: request.getLeaseEpoch(),
+      leaseExpiresAt: request.getLeaseExpiresAt(),
+      timeoutSeconds: request.getTimeoutSeconds(),
     };
 
     const parsedResult = this.parseResultPayload(request.getResult());

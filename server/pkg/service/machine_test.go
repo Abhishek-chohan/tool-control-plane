@@ -25,19 +25,20 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 		t.Fatalf("register machine: %v", err)
 	}
 
-	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`)
+	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0)
 	if err != nil {
 		t.Fatalf("create active request: %v", err)
 	}
-	queuedRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"queued"}`)
+	queuedRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"queued"}`, 0)
 	if err != nil {
 		t.Fatalf("create queued request: %v", err)
 	}
 
-	if _, err := requestService.ClaimRequest(sessionID, activeRequest.ID, machineID); err != nil {
+	claimedActive, err := requestService.ClaimRequest(sessionID, activeRequest.ID, machineID)
+	if err != nil {
 		t.Fatalf("claim active request: %v", err)
 	}
-	if _, err := requestService.UpdateRequest(sessionID, activeRequest.ID, model.RequestStatusRunning, nil, ""); err != nil {
+	if _, err := requestService.UpdateRequest(sessionID, activeRequest.ID, machineID, claimedActive.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 		t.Fatalf("mark active request running: %v", err)
 	}
 
@@ -58,7 +59,7 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 		t.Fatal("expected machine to be marked draining")
 	}
 
-	if _, err := requestService.CreateRequest(sessionID, "echo", `{"message":"new"}`); err == nil {
+	if _, err := requestService.CreateRequest(sessionID, "echo", `{"message":"new"}`, 0); err == nil {
 		t.Fatal("expected new requests to fail once drain starts")
 	}
 
@@ -70,7 +71,7 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 		t.Fatalf("expected draining auto-claim error, got %v", err)
 	}
 
-	if err := requestService.SubmitRequestResult(sessionID, activeRequest.ID, map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, activeRequest.ID, machineID, claimedActive.LeaseEpoch, map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit active request result: %v", err)
 	}
 
@@ -116,7 +117,7 @@ func TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeu
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"claimed"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"claimed"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

@@ -278,6 +278,89 @@ class HttpConformanceAdapter:
             offset=request.get("offset", 0),
         )
 
+    # ---------------- Fenced provider primitives ----------------
+
+    # grpc-gateway renders FAILED_PRECONDITION as HTTP 400 and NOT_FOUND as 404.
+    _GATEWAY_STATUS_TO_CODE = {
+        400: "failed_precondition",
+        404: "not_found",
+        409: "already_exists",
+    }
+
+    def _normalize_fenced_error(self, exc: Exception) -> Dict[str, Any]:
+        message = str(exc)
+        status_match = re.search(r"HTTP (\d{3})", message)
+        if status_match:
+            code = self._GATEWAY_STATUS_TO_CODE.get(int(status_match.group(1)))
+            if code:
+                return {"errorCode": code, "errorMessage": message}
+        return {
+            "errorCode": self._normalize_resume_error_code(exc),
+            "errorMessage": message,
+        }
+
+    def get_provider_machine_id(self, session_id: str) -> str:
+        context = self._ensure_context_machine(session_id)
+        return context.machine_id
+
+    def _normalize_claim_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "id": response.get("id"),
+            "status": response.get("status"),
+            "leasedBy": response.get("leasedBy", response.get("leased_by", "")),
+            "leaseEpoch": int(
+                response.get("leaseEpoch", response.get("lease_epoch", 0)) or 0
+            ),
+            "leaseExpiresAt": response.get(
+                "leaseExpiresAt", response.get("lease_expires_at", "")
+            ),
+        }
+
+    def claim_request(
+        self, session_id: str, request_id: str, machine_id: str
+    ) -> Dict[str, Any]:
+        try:
+            response = self.client.connection_manager.claim_request(
+                session_id, request_id, machine_id
+            )
+            return self._normalize_claim_response(response)
+        except Exception as exc:
+            return self._normalize_fenced_error(exc)
+
+    def submit_fenced_result(
+        self,
+        session_id: str,
+        request_id: str,
+        machine_id: str,
+        lease_epoch: int,
+        result: Any,
+    ) -> Dict[str, Any]:
+        payload = {
+            "sessionId": session_id,
+            "requestId": request_id,
+            "result": json.dumps(result),
+            "resultType": "resolution",
+            "meta": {},
+            "machineId": machine_id,
+            "leaseEpoch": lease_epoch,
+        }
+        try:
+            response = self.client.connection_manager.submit_request_result(payload)
+            return {"success": bool(response.get("success", False))}
+        except Exception as exc:
+            return self._normalize_fenced_error(exc)
+
+    def renew_request_lease(
+        self, session_id: str, request_id: str, machine_id: str, lease_epoch: int
+    ) -> Dict[str, Any]:
+        try:
+            response = self.client.connection_manager.renew_request_lease(
+                session_id, request_id, machine_id, lease_epoch
+            )
+            return self._normalize_claim_response(response)
+        except Exception as exc:
+            return self._normalize_fenced_error(exc)
+
     def register_machine(self, session_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
         context = self._get_session_context(session_id)
 

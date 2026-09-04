@@ -111,13 +111,14 @@ func TestTasksLifecycleOverRequestModel(t *testing.T) {
 	}
 
 	// 2) Act as the provider machine: claim, run, stream chunks.
-	if _, err := requestService.ClaimRequest(sessionID, taskID, machineID); err != nil {
+	claimed, err := requestService.ClaimRequest(sessionID, taskID, machineID)
+	if err != nil {
 		t.Fatalf("claim request: %v", err)
 	}
-	if _, err := requestService.UpdateRequest(sessionID, taskID, model.RequestStatusRunning, nil, ""); err != nil {
+	if _, err := requestService.UpdateRequest(sessionID, taskID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 		t.Fatalf("mark running: %v", err)
 	}
-	if err := requestService.AppendRequestChunks(sessionID, taskID, []string{"chunk-1", "chunk-2"}, model.ResultTypeStreaming); err != nil {
+	if err := requestService.AppendRequestChunks(sessionID, taskID, machineID, claimed.LeaseEpoch, []string{"chunk-1", "chunk-2"}, model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
 
@@ -151,7 +152,7 @@ func TestTasksLifecycleOverRequestModel(t *testing.T) {
 
 	// 5) Provider submits the final result; tasks/get reports completed with
 	// the CallToolResult-shaped payload.
-	if err := requestService.SubmitRequestResult(sessionID, taskID, map[string]string{"echo": "hi"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, taskID, machineID, claimed.LeaseEpoch, map[string]string{"echo": "hi"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit result: %v", err)
 	}
 	finalEnvelope := tasksGet(taskID, nil)
@@ -217,19 +218,20 @@ func TestSyncCallSurfacesChunksAndResult(t *testing.T) {
 			t.Errorf("provider never saw a pending request")
 			return
 		}
-		if _, err := requestService.ClaimRequest(sessionID, requestID, machineID); err != nil {
+		claimed, err := requestService.ClaimRequest(sessionID, requestID, machineID)
+		if err != nil {
 			t.Errorf("claim: %v", err)
 			return
 		}
-		if _, err := requestService.UpdateRequest(sessionID, requestID, model.RequestStatusRunning, nil, ""); err != nil {
+		if _, err := requestService.UpdateRequest(sessionID, requestID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 			t.Errorf("mark running: %v", err)
 			return
 		}
-		if err := requestService.AppendRequestChunks(sessionID, requestID, []string{"part-1", "part-2"}, model.ResultTypeStreaming); err != nil {
+		if err := requestService.AppendRequestChunks(sessionID, requestID, machineID, claimed.LeaseEpoch, []string{"part-1", "part-2"}, model.ResultTypeStreaming); err != nil {
 			t.Errorf("append chunks: %v", err)
 			return
 		}
-		if err := requestService.SubmitRequestResult(sessionID, requestID, map[string]string{"echo": "sync"}, model.ResultTypeResolution, nil); err != nil {
+		if err := requestService.SubmitRequestResult(sessionID, requestID, machineID, claimed.LeaseEpoch, map[string]string{"echo": "sync"}, model.ResultTypeResolution, nil); err != nil {
 			t.Errorf("submit result: %v", err)
 		}
 	}()

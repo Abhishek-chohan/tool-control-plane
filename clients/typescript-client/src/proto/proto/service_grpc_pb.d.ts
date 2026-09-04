@@ -554,6 +554,7 @@ interface IRequestsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
     submitRequestResult: IRequestsServiceService_ISubmitRequestResult;
     appendRequestChunks: IRequestsServiceService_IAppendRequestChunks;
     getRequestChunks: IRequestsServiceService_IGetRequestChunks;
+    renewRequestLease: IRequestsServiceService_IRenewRequestLease;
 }
 
 interface IRequestsServiceService_ICreateRequest extends grpc.MethodDefinition<proto_service_pb.CreateRequestRequest, proto_service_pb.Request> {
@@ -637,6 +638,15 @@ interface IRequestsServiceService_IGetRequestChunks extends grpc.MethodDefinitio
     responseSerialize: grpc.serialize<proto_service_pb.GetRequestChunksResponse>;
     responseDeserialize: grpc.deserialize<proto_service_pb.GetRequestChunksResponse>;
 }
+interface IRequestsServiceService_IRenewRequestLease extends grpc.MethodDefinition<proto_service_pb.RenewRequestLeaseRequest, proto_service_pb.Request> {
+    path: "/api.RequestsService/RenewRequestLease";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<proto_service_pb.RenewRequestLeaseRequest>;
+    requestDeserialize: grpc.deserialize<proto_service_pb.RenewRequestLeaseRequest>;
+    responseSerialize: grpc.serialize<proto_service_pb.Request>;
+    responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
+}
 
 export const RequestsServiceService: IRequestsServiceService;
 
@@ -650,6 +660,7 @@ export interface IRequestsServiceServer extends grpc.UntypedServiceImplementatio
     submitRequestResult: grpc.handleUnaryCall<proto_service_pb.SubmitRequestResultRequest, proto_service_pb.SubmitRequestResultResponse>;
     appendRequestChunks: grpc.handleUnaryCall<proto_service_pb.AppendRequestChunksRequest, proto_service_pb.AppendRequestChunksResponse>;
     getRequestChunks: grpc.handleUnaryCall<proto_service_pb.GetRequestChunksRequest, proto_service_pb.GetRequestChunksResponse>;
+    renewRequestLease: grpc.handleUnaryCall<proto_service_pb.RenewRequestLeaseRequest, proto_service_pb.Request>;
 }
 
 export interface IRequestsServiceClient {
@@ -680,6 +691,9 @@ export interface IRequestsServiceClient {
     getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
     getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
     getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
+    renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
 }
 
 export class RequestsServiceClient extends grpc.Client implements IRequestsServiceClient {
@@ -711,6 +725,9 @@ export class RequestsServiceClient extends grpc.Client implements IRequestsServi
     public getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
     public getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
     public getRequestChunks(request: proto_service_pb.GetRequestChunksRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetRequestChunksResponse) => void): grpc.ClientUnaryCall;
+    public renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    public renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    public renewRequestLease(request: proto_service_pb.RenewRequestLeaseRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
 }
 
 interface ITasksServiceService extends grpc.ServiceDefinition<grpc.UntypedServiceImplementation> {

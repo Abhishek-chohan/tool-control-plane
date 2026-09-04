@@ -102,6 +102,10 @@ func convertModelRequestToProto(in *model.Request) *proto.Request {
 			resultStr = string(bytes)
 		}
 	}
+	leaseExpiresAt := ""
+	if !in.VisibleAt.IsZero() && (in.Status == model.RequestStatusClaimed || in.Status == model.RequestStatusRunning) {
+		leaseExpiresAt = in.VisibleAt.Format(time.RFC3339)
+	}
 	out := &proto.Request{
 		Id:                 in.ID,
 		SessionId:          in.SessionID,
@@ -115,6 +119,10 @@ func convertModelRequestToProto(in *model.Request) *proto.Request {
 		UpdatedAt:          in.UpdatedAt.Format(time.RFC3339),
 		ExecutingMachineId: in.ExecutingMachineID,
 		StreamResults:      in.StreamResults,
+		LeasedBy:           in.LeasedBy,
+		LeaseEpoch:         in.LeaseEpoch,
+		LeaseExpiresAt:     leaseExpiresAt,
+		TimeoutSeconds:     int32(in.TimeoutSeconds),
 	}
 	return out
 }
