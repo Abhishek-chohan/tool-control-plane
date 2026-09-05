@@ -1,4 +1,5 @@
 import {
+  LeaseContext,
   Machine,
   ProviderRuntimeClient,
   ProviderRuntimeOptions,
@@ -15,12 +16,20 @@ import {
 
 import {
   ConnectionError,
+  ProtocolError,
   ToolplaneError,
 } from './errors';
 
 const DEFAULT_POLL_INTERVAL_MS = 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 60_000;
 const DEFAULT_SDK_VERSION = '1.0.0';
+// The server grants a 30s lease TTL by default; renewing at one third of that
+// keeps a healthy executor comfortably ahead of the reaper.
+const DEFAULT_LEASE_RENEWAL_INTERVAL_MS = 10_000;
+
+interface ActiveLease extends LeaseContext {
+  client: ProviderRuntimeSessionClient;
+}
 
 interface RegisteredProviderTool {
   name: string;
@@ -109,9 +118,14 @@ export class ProviderRuntime {
 
   private readonly activeRequests = new Map<string, Promise<void>>();
 
+  /** In-flight lease grants keyed by request ID, renewed by the run loop. */
+  private readonly activeLeases = new Map<string, ActiveLease>();
+
   private readonly pollIntervalMs: number;
 
   private readonly heartbeatIntervalMs: number;
+
+  private readonly leaseRenewalIntervalMs: number;
 
   private readonly sdkVersion: string;
 
@@ -127,6 +141,7 @@ export class ProviderRuntime {
   ) {
     this.pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+    this.leaseRenewalIntervalMs = options.leaseRenewalIntervalMs ?? DEFAULT_LEASE_RENEWAL_INTERVAL_MS;
     this.sdkVersion = options.sdkVersion ?? DEFAULT_SDK_VERSION;
   }
 
@@ -373,6 +388,7 @@ export class ProviderRuntime {
 
   private async runLoop(): Promise<void> {
     let lastHeartbeatAt = 0;
+    let lastLeaseRenewalAt = 0;
 
     while (this._running) {
       try {
@@ -380,6 +396,10 @@ export class ProviderRuntime {
         if (now - lastHeartbeatAt >= this.heartbeatIntervalMs) {
           await this.sendHeartbeats();
           lastHeartbeatAt = Date.now();
+        }
+        if (now - lastLeaseRenewalAt >= this.leaseRenewalIntervalMs) {
+          await this.renewActiveLeases();
+          lastLeaseRenewalAt = Date.now();
         }
 
         await this.pollOnce();
@@ -400,6 +420,24 @@ export class ProviderRuntime {
       Array.from(this.sessions.values())
         .filter((state) => Boolean(state.machineId))
         .map((state) => state.client.updateMachinePing(state.machineId)),
+    );
+  }
+
+  private async renewActiveLeases(): Promise<void> {
+    await Promise.allSettled(
+      Array.from(this.activeLeases.entries()).map(async ([requestId, lease]) => {
+        try {
+          await lease.client.renewRequestLease(requestId, lease.machineId, lease.leaseEpoch);
+        } catch (error) {
+          if (error instanceof ProtocolError) {
+            // FAILED_PRECONDITION: the lease was reclaimed or expired. Stop
+            // renewing; the fenced writes will surface the loss.
+            console.warn(`Lease for request ${requestId} was lost; stopping renewal.`);
+            this.activeLeases.delete(requestId);
+          }
+          // Transient transport errors keep the lease tracked for retry.
+        }
+      }),
     );
   }
 
@@ -436,66 +474,100 @@ export class ProviderRuntime {
 
   private async handleRequest(state: ManagedSessionState, request: Request): Promise<void> {
     const claimedRequest = await state.client.claimRequest(request.id, state.machineId);
-    await state.client.updateRequest(claimedRequest.id, { status: 'running' });
-
-    const tool = state.tools.get(claimedRequest.toolName);
-    if (!tool) {
-      await state.client.submitRequestResult(
-        claimedRequest.id,
-        { error: 'tool not found' },
-        'rejection',
-        { handled_by: 'typescript-provider-runtime' },
-      );
-      return;
-    }
-
-    const input = this.parseInput(claimedRequest.input);
-    const streamedChunks: unknown[] = [];
-    const context: ProviderToolContext = {
-      sessionId: state.sessionId,
-      requestId: claimedRequest.id,
-      toolName: claimedRequest.toolName,
-      machineId: state.machineId,
-      input,
-      appendChunk: async (chunk: unknown) => {
-        await state.client.appendRequestChunks(claimedRequest.id, [chunk], 'streaming');
-        streamedChunks.push(chunk);
-      },
-      heartbeat: async () => state.client.updateMachinePing(state.machineId),
+    // The claim response carries the lease grant; every fenced provider write
+    // below must present it.
+    const lease: LeaseContext = {
+      machineId: claimedRequest.leasedBy || state.machineId,
+      leaseEpoch: claimedRequest.leaseEpoch ?? 0,
     };
+    this.activeLeases.set(claimedRequest.id, { ...lease, client: state.client });
 
     try {
-      if (tool.stream) {
-        await state.client.updateRequest(claimedRequest.id, { resultType: 'streaming' });
-        const result = await tool.handler(input, context);
+      await state.client.updateRequest(claimedRequest.id, {
+        status: 'running',
+        machineId: lease.machineId,
+        leaseEpoch: lease.leaseEpoch,
+      });
 
-        for await (const chunk of toChunkStream(result)) {
-          await context.appendChunk(chunk);
-        }
-
+      const tool = state.tools.get(claimedRequest.toolName);
+      if (!tool) {
         await state.client.submitRequestResult(
           claimedRequest.id,
-          streamedChunks,
-          'resolution',
+          { error: 'tool not found' },
+          'rejection',
           { handled_by: 'typescript-provider-runtime' },
+          lease,
         );
         return;
       }
 
-      const result = await tool.handler(input, context);
-      await state.client.submitRequestResult(
-        claimedRequest.id,
-        result,
-        'resolution',
-        { handled_by: 'typescript-provider-runtime' },
-      );
-    } catch (error) {
-      await state.client.submitRequestResult(
-        claimedRequest.id,
-        { error: normalizeErrorMessage(error) },
-        'rejection',
-        { handled_by: 'typescript-provider-runtime' },
-      );
+      const input = this.parseInput(claimedRequest.input);
+      const streamedChunks: unknown[] = [];
+      const context: ProviderToolContext = {
+        sessionId: state.sessionId,
+        requestId: claimedRequest.id,
+        toolName: claimedRequest.toolName,
+        machineId: state.machineId,
+        input,
+        appendChunk: async (chunk: unknown) => {
+          await state.client.appendRequestChunks(claimedRequest.id, [chunk], 'streaming', lease);
+          streamedChunks.push(chunk);
+        },
+        heartbeat: async () => state.client.updateMachinePing(state.machineId),
+      };
+
+      try {
+        if (tool.stream) {
+          await state.client.updateRequest(claimedRequest.id, {
+            resultType: 'streaming',
+            machineId: lease.machineId,
+            leaseEpoch: lease.leaseEpoch,
+          });
+          const result = await tool.handler(input, context);
+
+          for await (const chunk of toChunkStream(result)) {
+            await context.appendChunk(chunk);
+          }
+
+          await state.client.submitRequestResult(
+            claimedRequest.id,
+            streamedChunks,
+            'resolution',
+            { handled_by: 'typescript-provider-runtime' },
+            lease,
+          );
+          return;
+        }
+
+        const result = await tool.handler(input, context);
+        await state.client.submitRequestResult(
+          claimedRequest.id,
+          result,
+          'resolution',
+          { handled_by: 'typescript-provider-runtime' },
+          lease,
+        );
+      } catch (error) {
+        try {
+          await state.client.submitRequestResult(
+            claimedRequest.id,
+            { error: normalizeErrorMessage(error) },
+            'rejection',
+            { handled_by: 'typescript-provider-runtime' },
+            lease,
+          );
+        } catch (rejectionError) {
+          if (!(rejectionError instanceof ProtocolError)) {
+            throw rejectionError;
+          }
+          // The lease was already lost; there is nothing to reject into.
+          console.warn(
+            `Could not submit rejection for request ${claimedRequest.id}: lease was lost`,
+          );
+        }
+      }
+    } finally {
+      this.activeLeases.delete(claimedRequest.id);
     }
   }
 

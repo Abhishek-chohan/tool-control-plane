@@ -6,9 +6,12 @@ import grpc
 
 from toolplane import Toolplane
 from toolplane.proto.service_pb2 import (
+    ClaimRequestRequest,
     GetRequestChunksRequest,
     RegisterMachineRequest,
+    RenewRequestLeaseRequest,
     ResumeStreamRequest,
+    SubmitRequestResultRequest,
 )
 
 
@@ -232,6 +235,90 @@ class GrpcConformanceAdapter:
             limit=request.get("limit", 10),
             offset=request.get("offset", 0),
         )
+
+    # ---------------- Fenced provider primitives ----------------
+
+    def get_provider_machine_id(self, session_id: str) -> str:
+        context = self._ensure_context_machine(session_id)
+        return context.machine_id
+
+    def claim_request(
+        self, session_id: str, request_id: str, machine_id: str
+    ) -> Dict[str, Any]:
+        request = ClaimRequestRequest(
+            session_id=session_id,
+            request_id=request_id,
+            machine_id=machine_id,
+        )
+        try:
+            response = self.client.connection_manager.requests_stub.ClaimRequest(
+                request, metadata=self.client.connection_manager.get_metadata()
+            )
+            return {
+                "id": response.id,
+                "status": response.status,
+                "leasedBy": response.leased_by,
+                "leaseEpoch": response.lease_epoch,
+                "leaseExpiresAt": response.lease_expires_at,
+            }
+        except grpc.RpcError as exc:
+            return {
+                "errorCode": _normalize_grpc_error_code(exc),
+                "errorMessage": exc.details(),
+            }
+
+    def submit_fenced_result(
+        self,
+        session_id: str,
+        request_id: str,
+        machine_id: str,
+        lease_epoch: int,
+        result: Any,
+    ) -> Dict[str, Any]:
+        request = SubmitRequestResultRequest(
+            session_id=session_id,
+            request_id=request_id,
+            result=json.dumps(result),
+            result_type="resolution",
+            machine_id=machine_id,
+            lease_epoch=lease_epoch,
+        )
+        try:
+            response = self.client.connection_manager.requests_stub.SubmitRequestResult(
+                request, metadata=self.client.connection_manager.get_metadata()
+            )
+            return {"success": bool(response.success)}
+        except grpc.RpcError as exc:
+            return {
+                "errorCode": _normalize_grpc_error_code(exc),
+                "errorMessage": exc.details(),
+            }
+
+    def renew_request_lease(
+        self, session_id: str, request_id: str, machine_id: str, lease_epoch: int
+    ) -> Dict[str, Any]:
+        request = RenewRequestLeaseRequest(
+            session_id=session_id,
+            request_id=request_id,
+            machine_id=machine_id,
+            lease_epoch=lease_epoch,
+        )
+        try:
+            response = self.client.connection_manager.requests_stub.RenewRequestLease(
+                request, metadata=self.client.connection_manager.get_metadata()
+            )
+            return {
+                "id": response.id,
+                "status": response.status,
+                "leasedBy": response.leased_by,
+                "leaseEpoch": response.lease_epoch,
+                "leaseExpiresAt": response.lease_expires_at,
+            }
+        except grpc.RpcError as exc:
+            return {
+                "errorCode": _normalize_grpc_error_code(exc),
+                "errorMessage": exc.details(),
+            }
 
     def register_machine(self, session_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
         context = self._get_session_context(session_id)

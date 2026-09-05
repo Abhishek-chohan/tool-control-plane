@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import * as grpc from '@grpc/grpc-js';
 
 import {
+  ClaimRequestRequest,
   CreateApiKeyRequest,
   CreateRequestRequest,
   CreateSessionRequest,
@@ -28,7 +29,9 @@ import {
   ListUserSessionsRequest,
   Machine as ProtoMachine,
   RegisterMachineRequest,
+  RenewRequestLeaseRequest,
   RevokeApiKeyRequest,
+  SubmitRequestResultRequest,
   UnregisterMachineRequest,
   Session as ProtoSession,
   ApiKey as ProtoApiKey,
@@ -89,6 +92,12 @@ function numberValue(value: unknown, fallback: number): number {
 function normalizeGrpcErrorCode(code: grpc.status): string {
   if (code === grpc.status.OUT_OF_RANGE) {
     return 'out_of_range';
+  }
+  if (code === grpc.status.FAILED_PRECONDITION) {
+    return 'failed_precondition';
+  }
+  if (code === grpc.status.NOT_FOUND) {
+    return 'not_found';
   }
 
   return String(code).toLowerCase();
@@ -852,5 +861,111 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
         resolve(response);
       });
     });
+  }
+
+  private callUnarySettled<T>(
+    callFactory: (
+      metadata: grpc.Metadata,
+      options: Partial<grpc.CallOptions>,
+      callback: (error: grpc.ServiceError | null, response: T) => void,
+    ) => grpc.ClientUnaryCall,
+  ): Promise<{ response?: T; errorCode?: string; errorMessage?: string }> {
+    return new Promise((resolve) => {
+      callFactory(this.createMetadata(), this.callOptions(), (error, response) => {
+        if (error) {
+          resolve({
+            errorCode: normalizeGrpcErrorCode(error.code),
+            errorMessage: error.details || error.message,
+          });
+          return;
+        }
+        resolve({ response });
+      });
+    });
+  }
+
+  async getProviderMachineId(sessionId: string): Promise<string> {
+    // Attaching the session registers the provider machine for it.
+    await this.getRuntime(sessionId).attachSession(sessionId);
+    const machines = await this.listMachines(sessionId);
+    return String(machines.at(0)?.id ?? '');
+  }
+
+  async claimRequestForFencing(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+  ): Promise<Record<string, unknown>> {
+    const request = new ClaimRequestRequest();
+    request.setSessionId(sessionId);
+    request.setRequestId(requestId);
+    request.setMachineId(machineId);
+
+    const settled = await this.callUnarySettled<ProtoRequest>(
+      (metadata, options, callback) => this.requestsClient.claimRequest(request, metadata, options, callback),
+    );
+    if (settled.errorCode || !settled.response) {
+      return { errorCode: settled.errorCode ?? '', errorMessage: settled.errorMessage ?? '' };
+    }
+    const response = settled.response;
+    return {
+      id: response.getId(),
+      status: response.getStatus(),
+      leasedBy: response.getLeasedBy(),
+      leaseEpoch: response.getLeaseEpoch(),
+      leaseExpiresAt: response.getLeaseExpiresAt(),
+    };
+  }
+
+  async submitFencedResult(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+    result: unknown,
+  ): Promise<Record<string, unknown>> {
+    const request = new SubmitRequestResultRequest();
+    request.setSessionId(sessionId);
+    request.setRequestId(requestId);
+    request.setResult(JSON.stringify(result));
+    request.setResultType('resolution');
+    request.setMachineId(machineId);
+    request.setLeaseEpoch(leaseEpoch);
+
+    const settled = await this.callUnarySettled(
+      (metadata, options, callback) => this.requestsClient.submitRequestResult(request, metadata, options, callback),
+    );
+    if (settled.errorCode) {
+      return { errorCode: settled.errorCode, errorMessage: settled.errorMessage ?? '' };
+    }
+    return { success: true };
+  }
+
+  async renewRequestLease(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+  ): Promise<Record<string, unknown>> {
+    const request = new RenewRequestLeaseRequest();
+    request.setSessionId(sessionId);
+    request.setRequestId(requestId);
+    request.setMachineId(machineId);
+    request.setLeaseEpoch(leaseEpoch);
+
+    const settled = await this.callUnarySettled<ProtoRequest>(
+      (metadata, options, callback) => this.requestsClient.renewRequestLease(request, metadata, options, callback),
+    );
+    if (settled.errorCode || !settled.response) {
+      return { errorCode: settled.errorCode ?? '', errorMessage: settled.errorMessage ?? '' };
+    }
+    const response = settled.response;
+    return {
+      id: response.getId(),
+      status: response.getStatus(),
+      leasedBy: response.getLeasedBy(),
+      leaseEpoch: response.getLeaseEpoch(),
+      leaseExpiresAt: response.getLeaseExpiresAt(),
+    };
   }
 }

@@ -16,7 +16,7 @@ func (s *Store) AllRequests(ctx context.Context) ([]*model.Request, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests`)
 	if err != nil {
 		return nil, fmt.Errorf("query requests: %w", err)
 	}
@@ -52,8 +52,8 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	leasedAtVal := nullableTime(req.LeasedAt)
 	nextAttempt := nullableTime(req.NextAttemptAt)
 	_, err := s.db.ExecContext(ctx, `
-	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             tool_name = EXCLUDED.tool_name,
@@ -74,12 +74,13 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
             next_attempt_at = EXCLUDED.next_attempt_at,
             leased_by = EXCLUDED.leased_by,
             leased_at = EXCLUDED.leased_at,
+            lease_epoch = EXCLUDED.lease_epoch,
             timeout_seconds = EXCLUDED.timeout_seconds,
             dead_letter = EXCLUDED.dead_letter,
             last_error = EXCLUDED.last_error,
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at
-	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt)
+	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("upsert request: %w", err)
 	}
@@ -95,7 +96,7 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
 		queryBuilder := strings.Builder{}
 		args := []interface{}{sessionID, string(model.RequestStatusPending)}
-		queryBuilder.WriteString(`SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW()`)
+		queryBuilder.WriteString(`SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW()`)
 
 		if len(toolNames) > 0 {
 			queryBuilder.WriteString(" AND tool_name IN (")
@@ -124,6 +125,9 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 		now := time.Now()
 		visible := now.Add(leaseDuration)
 		attempts := req.Attempts + 1
+		// Each successful claim grants a fresh lease epoch: the fencing token
+		// that fenced writes (submit/append/update/renew) must echo.
+		epoch := req.LeaseEpoch + 1
 		if _, err := tx.ExecContext(ctx, `
             UPDATE requests
             SET status=$1,
@@ -132,11 +136,12 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
                 leased_at=$3,
                 attempts=$4,
                 visible_at=$5,
+                lease_epoch=$6,
                 next_attempt_at=NULL,
                 last_error=NULL,
                 updated_at=$3
-            WHERE id=$6
-        `, string(model.RequestStatusClaimed), machineID, now, attempts, visible, req.ID); err != nil {
+            WHERE id=$7
+        `, string(model.RequestStatusClaimed), machineID, now, attempts, visible, epoch, req.ID); err != nil {
 			return fmt.Errorf("lease request: update: %w", err)
 		}
 
@@ -146,6 +151,7 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 		req.VisibleAt = visible
 		req.LeasedBy = machineID
 		req.LeasedAt = &now
+		req.LeaseEpoch = epoch
 		req.NextAttemptAt = nil
 		req.LastError = ""
 		req.UpdatedAt = now
@@ -189,7 +195,13 @@ func (s *Store) FindExpiredRequests(ctx context.Context, limit int) ([]*model.Re
 	if s == nil {
 		return nil, nil
 	}
-	query := `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE dead_letter=false AND leased_at IS NOT NULL ORDER BY leased_at ASC`
+	// A leased request is reclaimable once either its lease deadline
+	// (visible_at, extended by renewals) or its absolute per-attempt deadline
+	// (leased_at + timeout_seconds) has passed. Pushing both predicates down
+	// and ordering by visible_at keeps the reaper from head-of-line blocking:
+	// long-running-but-renewed leases no longer sit at the head of the scan
+	// and starve newer expired rows behind the LIMIT window.
+	query := `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE dead_letter=false AND leased_at IS NOT NULL AND (visible_at <= NOW() OR leased_at + timeout_seconds * INTERVAL '1 second' <= NOW()) ORDER BY visible_at ASC`
 	args := []interface{}{}
 	if limit > 0 {
 		query += " LIMIT $1"
@@ -209,7 +221,7 @@ func (s *Store) FindExpiredRequests(ctx context.Context, limit int) ([]*model.Re
 		if err != nil {
 			return nil, err
 		}
-		if req.HasTimedOut(now) {
+		if req.LeaseExpired(now) || req.HasTimedOut(now) {
 			expired = append(expired, req)
 		}
 	}
@@ -228,7 +240,7 @@ func scanRequestRow(row rowScanner) (*model.Request, error) {
 	var leasedAt sql.NullTime
 	var nextAttempt sql.NullTime
 	var lastError sql.NullString
-	if err := row.Scan(&r.ID, &r.SessionID, &r.ToolName, &r.Status, &r.Input, &resultBytes, &resultType, &errorStr, &execMachineID, &metaBytes, &streamBytes, &r.StreamStartSeq, &r.NextStreamSeq, &r.Attempts, &r.MaxAttempts, &r.BackoffSeconds, &r.VisibleAt, &nextAttempt, &leasedBy, &leasedAt, &r.TimeoutSeconds, &r.DeadLetter, &lastError, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	if err := row.Scan(&r.ID, &r.SessionID, &r.ToolName, &r.Status, &r.Input, &resultBytes, &resultType, &errorStr, &execMachineID, &metaBytes, &streamBytes, &r.StreamStartSeq, &r.NextStreamSeq, &r.Attempts, &r.MaxAttempts, &r.BackoffSeconds, &r.VisibleAt, &nextAttempt, &leasedBy, &leasedAt, &r.LeaseEpoch, &r.TimeoutSeconds, &r.DeadLetter, &lastError, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("scan request: %w", err)
 	}
 	if len(resultBytes) > 0 {
@@ -278,7 +290,7 @@ func scanRequestRow(row rowScanner) (*model.Request, error) {
 
 // requestColumns is the canonical column list used by guarded single-row
 // request reads/updates. It must stay in sync with scanRequestRow.
-const requestColumns = "id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at"
+const requestColumns = "id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at"
 
 // GetRequest fetches a single request by ID regardless of session. It supports
 // store-backed reads when a request is not present in the local cache, which is
@@ -324,6 +336,9 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 		now := time.Now()
 		visible := now.Add(leaseDuration)
 		attempts := req.Attempts + 1
+		// Each successful claim grants a fresh lease epoch: the fencing token
+		// that fenced writes (submit/append/update/renew) must echo.
+		epoch := req.LeaseEpoch + 1
 		if _, err := tx.ExecContext(ctx, `
             UPDATE requests
             SET status=$1,
@@ -332,11 +347,12 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
                 leased_at=$3,
                 attempts=$4,
                 visible_at=$5,
+                lease_epoch=$6,
                 next_attempt_at=NULL,
                 last_error=NULL,
                 updated_at=$3
-            WHERE id=$6
-        `, string(model.RequestStatusClaimed), machineID, now, attempts, visible, req.ID); err != nil {
+            WHERE id=$7
+        `, string(model.RequestStatusClaimed), machineID, now, attempts, visible, epoch, req.ID); err != nil {
 			return fmt.Errorf("claim request: update: %w", err)
 		}
 		req.Status = model.RequestStatusClaimed
@@ -345,6 +361,7 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 		req.VisibleAt = visible
 		req.LeasedBy = machineID
 		req.LeasedAt = &now
+		req.LeaseEpoch = epoch
 		req.NextAttemptAt = nil
 		req.LastError = ""
 		req.UpdatedAt = now
@@ -405,10 +422,13 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 			return err
 		}
 		// Only claimed/running requests with an active lease are reclaimable.
+		// Reclaim is allowed once the lease deadline passed without a renewal,
+		// or once the absolute per-attempt timeout was exceeded (renewal moves
+		// the lease deadline but never the absolute timeout).
 		if req.Status != model.RequestStatusClaimed && req.Status != model.RequestStatusRunning {
 			return nil
 		}
-		if !req.HasTimedOut(now) {
+		if !req.LeaseExpired(now) && !req.HasTimedOut(now) {
 			return nil
 		}
 
@@ -471,8 +491,8 @@ func persistRequestInTx(ctx context.Context, tx *sql.Tx, req *model.Request) err
 	leasedAtVal := nullableTime(req.LeasedAt)
 	nextAttempt := nullableTime(req.NextAttemptAt)
 	if _, err := tx.ExecContext(ctx, `
-	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, timeout_seconds, dead_letter, last_error, created_at, updated_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             tool_name = EXCLUDED.tool_name,
@@ -484,8 +504,8 @@ func persistRequestInTx(ctx context.Context, tx *sql.Tx, req *model.Request) err
             executing_machine_id = EXCLUDED.executing_machine_id,
             meta = EXCLUDED.meta,
             stream_results = EXCLUDED.stream_results,
-		stream_start_seq = EXCLUDED.stream_start_seq,
-		next_stream_seq = EXCLUDED.next_stream_seq,
+			stream_start_seq = EXCLUDED.stream_start_seq,
+			next_stream_seq = EXCLUDED.next_stream_seq,
             attempts = EXCLUDED.attempts,
             max_attempts = EXCLUDED.max_attempts,
             backoff_seconds = EXCLUDED.backoff_seconds,
@@ -493,12 +513,13 @@ func persistRequestInTx(ctx context.Context, tx *sql.Tx, req *model.Request) err
             next_attempt_at = EXCLUDED.next_attempt_at,
             leased_by = EXCLUDED.leased_by,
             leased_at = EXCLUDED.leased_at,
+            lease_epoch = EXCLUDED.lease_epoch,
             timeout_seconds = EXCLUDED.timeout_seconds,
             dead_letter = EXCLUDED.dead_letter,
             last_error = EXCLUDED.last_error,
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at
-	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt); err != nil {
+	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt); err != nil {
 		return fmt.Errorf("persist request in tx: %w", err)
 	}
 	return nil

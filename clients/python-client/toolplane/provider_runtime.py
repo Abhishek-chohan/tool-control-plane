@@ -173,6 +173,9 @@ class ProviderRuntime:
                 self.attach_session(session_id, register_machine=True)
 
             self.client.machine_manager.start_heartbeat(self._heartbeat_interval)
+            # Keep claimed executions alive: the renewal loop extends each
+            # in-flight lease so long-running tools are not reclaimed mid-run.
+            self.client.request_manager.start_lease_renewal()
             self._running = True
             if hasattr(self.client, "running"):
                 self.client.running = True
@@ -202,6 +205,7 @@ class ProviderRuntime:
             self._main_thread.join(timeout=1)
             self._main_thread = None
 
+        self.client.request_manager.stop_lease_renewal()
         self.client.machine_manager.stop_heartbeat()
 
     def close(self) -> None:

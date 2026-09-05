@@ -43,23 +43,24 @@ func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing
 		t.Fatalf("register machine: %v", err)
 	}
 
-	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`)
+	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0)
 	if err != nil {
 		t.Fatalf("create active request: %v", err)
 	}
-	if _, err := requestService.ClaimRequest(sessionID, activeRequest.ID, machineID); err != nil {
+	claimedActive, err := requestService.ClaimRequest(sessionID, activeRequest.ID, machineID)
+	if err != nil {
 		t.Fatalf("claim active request: %v", err)
 	}
-	if _, err := requestService.UpdateRequest(sessionID, activeRequest.ID, model.RequestStatusRunning, nil, ""); err != nil {
+	if _, err := requestService.UpdateRequest(sessionID, activeRequest.ID, machineID, claimedActive.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
 		t.Fatalf("mark active request running: %v", err)
 	}
 
-	pendingRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"pending"}`)
+	pendingRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"pending"}`, 0)
 	if err != nil {
 		t.Fatalf("create pending request: %v", err)
 	}
 
-	cancelledRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"cancelled"}`)
+	cancelledRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"cancelled"}`, 0)
 	if err != nil {
 		t.Fatalf("create cancelled request: %v", err)
 	}
@@ -113,7 +114,7 @@ func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing
 		}
 	}
 
-	if err := requestService.SubmitRequestResult(sessionID, activeRequest.ID, map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, activeRequest.ID, machineID, claimedActive.LeaseEpoch, map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit active request result: %v", err)
 	}
 	select {

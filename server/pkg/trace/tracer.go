@@ -36,6 +36,7 @@ const (
 	EventRequestCancelled          SessionEventType = "request_cancelled"
 	EventRequestChunksAppended     SessionEventType = "request_chunks_appended"
 	EventRequestLeaseExpired       SessionEventType = "request_lease_expired"
+	EventRequestLeaseRenewed       SessionEventType = "request_lease_renewed"
 	EventRequestRequeued           SessionEventType = "request_requeued"
 	EventRequestDeadLettered       SessionEventType = "request_dead_lettered"
 	EventTaskCreated               SessionEventType = "task_created"

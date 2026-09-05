@@ -190,21 +190,30 @@ test('claimRequest uses the registered machine by default and returns a normaliz
   assert.equal(result.executingMachineId, 'machine-9');
 });
 
-test('updateRequest forwards running status and result type', async () => {
+test('updateRequest forwards running status, result type, and lease grant', async () => {
   const client = createConnectedClient({
     updateRequest: unaryResponse((request: {
       getRequestId(): string;
       getStatus(): string;
       getResultType(): string;
+      getMachineId(): string;
+      getLeaseEpoch(): number;
     }) => {
       assert.equal(request.getRequestId(), 'request-1');
       assert.equal(request.getStatus(), 'running');
       assert.equal(request.getResultType(), 'streaming');
+      assert.equal(request.getMachineId(), 'machine-9');
+      assert.equal(request.getLeaseEpoch(), 3);
       return createRequest({ id: 'request-1', status: 'running', resultType: 'streaming' });
     }),
   });
 
-  const result = await client.updateRequest('request-1', { status: 'running', resultType: 'streaming' });
+  const result = await client.updateRequest('request-1', {
+    status: 'running',
+    resultType: 'streaming',
+    machineId: 'machine-9',
+    leaseEpoch: 3,
+  });
 
   assert.equal(result.status, 'running');
   assert.equal(result.resultType, 'streaming');
@@ -215,14 +224,24 @@ test('appendRequestChunks serializes chunk payloads and returns success', async 
   response.setSuccess(true);
 
   const client = createConnectedClient({
-    appendRequestChunks: unaryResponse((request: { getChunksList(): string[]; getRequestId(): string }) => {
+    appendRequestChunks: unaryResponse((request: {
+      getChunksList(): string[];
+      getRequestId(): string;
+      getMachineId(): string;
+      getLeaseEpoch(): number;
+    }) => {
       assert.equal(request.getRequestId(), 'request-append');
       assert.deepEqual(request.getChunksList(), ['{"value":1}', 'plain']);
+      assert.equal(request.getMachineId(), 'machine-9');
+      assert.equal(request.getLeaseEpoch(), 2);
       return response;
     }),
   });
 
-  const success = await client.appendRequestChunks('request-append', [{ value: 1 }, 'plain']);
+  const success = await client.appendRequestChunks('request-append', [{ value: 1 }, 'plain'], 'streaming', {
+    machineId: 'machine-9',
+    leaseEpoch: 2,
+  });
 
   assert.equal(success, true);
 });
@@ -237,11 +256,15 @@ test('submitRequestResult serializes objects and returns the server success flag
       getResult(): string;
       getResultType(): string;
       getMetaMap(): Map<string, string>;
+      getMachineId(): string;
+      getLeaseEpoch(): number;
     }) => {
       assert.equal(request.getRequestId(), 'request-1');
       assert.equal(request.getResult(), '{"echo":"hello"}');
       assert.equal(request.getResultType(), 'resolution');
       assert.equal(request.getMetaMap().get('handled_by'), 'unit-test');
+      assert.equal(request.getMachineId(), 'machine-9');
+      assert.equal(request.getLeaseEpoch(), 1);
       return response;
     }),
   });
@@ -251,9 +274,31 @@ test('submitRequestResult serializes objects and returns the server success flag
     { echo: 'hello' },
     'resolution',
     { handled_by: 'unit-test' },
+    { machineId: 'machine-9', leaseEpoch: 1 },
   );
 
   assert.equal(success, true);
+});
+
+test('fenced writes fail fast when the lease grant is missing', async () => {
+  const client = createConnectedClient({});
+
+  await assert.rejects(
+    () => client.submitRequestResult('request-1', { echo: 'hello' }),
+    /requires the lease grant from claimRequest/,
+  );
+  await assert.rejects(
+    () => client.appendRequestChunks('request-1', ['chunk']),
+    /requires the lease grant from claimRequest/,
+  );
+  await assert.rejects(
+    () => client.updateRequest('request-1', { status: 'running' }),
+    /requires the lease grant from claimRequest/,
+  );
+  await assert.rejects(
+    () => client.renewRequestLease('request-1', '', 1),
+    /requires the lease grant from claimRequest/,
+  );
 });
 
 test('cancelRequest returns the server success flag', async () => {

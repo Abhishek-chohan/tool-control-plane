@@ -94,6 +94,20 @@ export interface Request {
   resultType?: string;
   error?: string;
   streamResults?: unknown[];
+  /** Lease metadata for the current execution attempt (populated once claimed). */
+  leasedBy?: string;
+  leaseEpoch?: number;
+  leaseExpiresAt?: string;
+  timeoutSeconds?: number;
+}
+
+/**
+ * Lease grant a provider must present on fenced writes (update/submit/append/
+ * renew). Captured from the ClaimRequest response.
+ */
+export interface LeaseContext {
+  machineId: string;
+  leaseEpoch: number;
 }
 
 /**
@@ -235,6 +249,9 @@ export interface RequestUpdate {
   status?: string;
   result?: string;
   resultType?: string;
+  /** Fencing: the lease grant the update is performed under. */
+  machineId?: string;
+  leaseEpoch?: number;
 }
 
 /**
@@ -243,6 +260,8 @@ export interface RequestUpdate {
 export interface ProviderRuntimeOptions {
   pollIntervalMs?: number;
   heartbeatIntervalMs?: number;
+  /** Cadence for renewing in-flight execution leases (default 10s, one third of the server lease TTL). */
+  leaseRenewalIntervalMs?: number;
   sdkVersion?: string;
 }
 
@@ -327,13 +346,20 @@ export interface ProviderRuntimeSessionClient {
   listRequests(options?: RequestListOptions): Promise<Request[]>;
   claimRequest(requestId: string, machineId?: string): Promise<Request>;
   updateRequest(requestId: string, update: RequestUpdate): Promise<Request>;
-  appendRequestChunks(requestId: string, chunks: unknown[], resultType?: string): Promise<boolean>;
+  appendRequestChunks(
+    requestId: string,
+    chunks: unknown[],
+    resultType?: string,
+    lease?: LeaseContext,
+  ): Promise<boolean>;
   submitRequestResult(
     requestId: string,
     result: unknown,
     resultType?: string,
     meta?: Record<string, string>,
+    lease?: LeaseContext,
   ): Promise<boolean>;
+  renewRequestLease(requestId: string, machineId: string, leaseEpoch: number): Promise<Request>;
   updateMachinePing(machineId?: string): Promise<Machine>;
   unregisterMachine(machineId?: string): Promise<boolean>;
   drainMachine(machineId?: string): Promise<boolean>;

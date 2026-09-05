@@ -110,6 +110,7 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 	pick.Status = model.RequestStatusClaimed
 	pick.ExecutingMachineID = machineID
 	pick.Attempts++
+	pick.LeaseEpoch++
 	pick.VisibleAt = visible
 	pick.LeasedBy = machineID
 	pick.LeasedAt = &now
@@ -128,7 +129,7 @@ func (s *Store) FindExpiredRequests(ctx context.Context, limit int) ([]*model.Re
 		if r.DeadLetter || r.LeasedAt == nil {
 			continue
 		}
-		if r.HasTimedOut(now) {
+		if r.LeaseExpired(now) || r.HasTimedOut(now) {
 			out = append(out, cloneRequest(r))
 		}
 		if limit > 0 && len(out) >= limit {
@@ -163,6 +164,7 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 	r.Status = model.RequestStatusClaimed
 	r.ExecutingMachineID = machineID
 	r.Attempts++
+	r.LeaseEpoch++
 	r.VisibleAt = visible
 	r.LeasedBy = machineID
 	r.LeasedAt = &now
@@ -182,7 +184,7 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 	if r.Status != model.RequestStatusClaimed && r.Status != model.RequestStatusRunning {
 		return nil, false, nil
 	}
-	if !r.HasTimedOut(now) {
+	if !r.LeaseExpired(now) && !r.HasTimedOut(now) {
 		return nil, false, nil
 	}
 	r.ExecutingMachineID = ""

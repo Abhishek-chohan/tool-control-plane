@@ -143,6 +143,10 @@ class Toolplane:
         except Exception:
             pass
         try:
+            self.request_manager.stop_lease_renewal()
+        except Exception:
+            pass
+        try:
             self.machine_manager.stop_heartbeat()
         except Exception:
             pass

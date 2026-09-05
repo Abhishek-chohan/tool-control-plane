@@ -1381,6 +1381,7 @@ const (
 	RequestsService_SubmitRequestResult_FullMethodName = "/api.RequestsService/SubmitRequestResult"
 	RequestsService_AppendRequestChunks_FullMethodName = "/api.RequestsService/AppendRequestChunks"
 	RequestsService_GetRequestChunks_FullMethodName    = "/api.RequestsService/GetRequestChunks"
+	RequestsService_RenewRequestLease_FullMethodName   = "/api.RequestsService/RenewRequestLease"
 )
 
 // RequestsServiceClient is the client API for RequestsService service.
@@ -1401,6 +1402,14 @@ type RequestsServiceClient interface {
 	SubmitRequestResult(ctx context.Context, in *SubmitRequestResultRequest, opts ...grpc.CallOption) (*SubmitRequestResultResponse, error)
 	AppendRequestChunks(ctx context.Context, in *AppendRequestChunksRequest, opts ...grpc.CallOption) (*AppendRequestChunksResponse, error)
 	GetRequestChunks(ctx context.Context, in *GetRequestChunksRequest, opts ...grpc.CallOption) (*GetRequestChunksResponse, error)
+	// RenewRequestLease extends the execution lease of a claimed/running request
+	// so long-running tools are not reclaimed mid-flight. Only the current lease
+	// holder may renew: machine_id and lease_epoch must match the request's
+	// current lease grant. Renewal moves the lease deadline (visible_at) forward
+	// but never past the request's absolute timeout (leased_at + timeout_seconds).
+	// The server rejects renewals with FAILED_PRECONDITION when the lease is
+	// stale, reclaimed, or expired.
+	RenewRequestLease(ctx context.Context, in *RenewRequestLeaseRequest, opts ...grpc.CallOption) (*Request, error)
 }
 
 type requestsServiceClient struct {
@@ -1501,6 +1510,16 @@ func (c *requestsServiceClient) GetRequestChunks(ctx context.Context, in *GetReq
 	return out, nil
 }
 
+func (c *requestsServiceClient) RenewRequestLease(ctx context.Context, in *RenewRequestLeaseRequest, opts ...grpc.CallOption) (*Request, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Request)
+	err := c.cc.Invoke(ctx, RequestsService_RenewRequestLease_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RequestsServiceServer is the server API for RequestsService service.
 // All implementations must embed UnimplementedRequestsServiceServer
 // for forward compatibility.
@@ -1519,6 +1538,14 @@ type RequestsServiceServer interface {
 	SubmitRequestResult(context.Context, *SubmitRequestResultRequest) (*SubmitRequestResultResponse, error)
 	AppendRequestChunks(context.Context, *AppendRequestChunksRequest) (*AppendRequestChunksResponse, error)
 	GetRequestChunks(context.Context, *GetRequestChunksRequest) (*GetRequestChunksResponse, error)
+	// RenewRequestLease extends the execution lease of a claimed/running request
+	// so long-running tools are not reclaimed mid-flight. Only the current lease
+	// holder may renew: machine_id and lease_epoch must match the request's
+	// current lease grant. Renewal moves the lease deadline (visible_at) forward
+	// but never past the request's absolute timeout (leased_at + timeout_seconds).
+	// The server rejects renewals with FAILED_PRECONDITION when the lease is
+	// stale, reclaimed, or expired.
+	RenewRequestLease(context.Context, *RenewRequestLeaseRequest) (*Request, error)
 	mustEmbedUnimplementedRequestsServiceServer()
 }
 
@@ -1555,6 +1582,9 @@ func (UnimplementedRequestsServiceServer) AppendRequestChunks(context.Context, *
 }
 func (UnimplementedRequestsServiceServer) GetRequestChunks(context.Context, *GetRequestChunksRequest) (*GetRequestChunksResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRequestChunks not implemented")
+}
+func (UnimplementedRequestsServiceServer) RenewRequestLease(context.Context, *RenewRequestLeaseRequest) (*Request, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RenewRequestLease not implemented")
 }
 func (UnimplementedRequestsServiceServer) mustEmbedUnimplementedRequestsServiceServer() {}
 func (UnimplementedRequestsServiceServer) testEmbeddedByValue()                         {}
@@ -1739,6 +1769,24 @@ func _RequestsService_GetRequestChunks_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RequestsService_RenewRequestLease_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewRequestLeaseRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RequestsServiceServer).RenewRequestLease(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RequestsService_RenewRequestLease_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RequestsServiceServer).RenewRequestLease(ctx, req.(*RenewRequestLeaseRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RequestsService_ServiceDesc is the grpc.ServiceDesc for RequestsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1781,6 +1829,10 @@ var RequestsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRequestChunks",
 			Handler:    _RequestsService_GetRequestChunks_Handler,
+		},
+		{
+			MethodName: "RenewRequestLease",
+			Handler:    _RequestsService_RenewRequestLease_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

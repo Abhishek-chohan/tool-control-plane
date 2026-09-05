@@ -18,12 +18,13 @@ import (
 func TestGRPCServerGetRequestChunksReturnsRetainedWindowMetadata(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"stream"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"stream"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
 
-	if err := requestService.AppendRequestChunks(sessionID, request.ID, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
+	claimed := claimForStreamTest(t, requestService, sessionID, request.ID)
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
 
@@ -66,15 +67,16 @@ func TestGRPCServerGetRequestChunksReturnsRetainedWindowMetadata(t *testing.T) {
 func TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"resume"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"resume"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
 
-	if err := requestService.AppendRequestChunks(sessionID, request.ID, []string{"alpha", "beta"}, model.ResultTypeStreaming); err != nil {
+	claimed := claimForStreamTest(t, requestService, sessionID, request.ID)
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, []string{"alpha", "beta"}, model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
-	if err := requestService.SubmitRequestResult(sessionID, request.ID, map[string]string{"done": "ok"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, map[string]string{"done": "ok"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit result: %v", err)
 	}
 
@@ -101,15 +103,16 @@ func TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker(t *testing.T)
 func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"expired"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"expired"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
 
-	if err := requestService.AppendRequestChunks(sessionID, request.ID, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
+	claimed := claimForStreamTest(t, requestService, sessionID, request.ID)
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
-	if err := requestService.SubmitRequestResult(sessionID, request.ID, map[string]string{"done": "late"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, map[string]string{"done": "late"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit result: %v", err)
 	}
 
@@ -126,15 +129,16 @@ func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *tes
 func TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trimmed"}`)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trimmed"}`, 0)
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
 
-	if err := requestService.AppendRequestChunks(sessionID, request.ID, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
+	claimed := claimForStreamTest(t, requestService, sessionID, request.ID)
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, makeStreamChunks(105), model.ResultTypeStreaming); err != nil {
 		t.Fatalf("append chunks: %v", err)
 	}
-	if err := requestService.SubmitRequestResult(sessionID, request.ID, map[string]string{"done": "trimmed"}, model.ResultTypeResolution, nil); err != nil {
+	if err := requestService.SubmitRequestResult(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, map[string]string{"done": "trimmed"}, model.ResultTypeResolution, nil); err != nil {
 		t.Fatalf("submit result: %v", err)
 	}
 
@@ -184,6 +188,17 @@ func newRequestStreamTestServer(t *testing.T) (*GRPCServer, *RequestsService, st
 	}
 
 	return server, requestService, sessionID
+}
+
+// claimForStreamTest claims the request as the stream test machine and returns
+// the lease grant that fenced provider writes must present.
+func claimForStreamTest(t *testing.T, requestService *RequestsService, sessionID, requestID string) *model.Request {
+	t.Helper()
+	claimed, err := requestService.ClaimRequest(sessionID, requestID, "machine-stream")
+	if err != nil {
+		t.Fatalf("claim request: %v", err)
+	}
+	return claimed
 }
 
 func makeStreamChunks(count int) []string {
