@@ -52,22 +52,14 @@ Use the Python client when you need the richest maintained Toolplane surface:
 
 ## Installation
 
-### From PyPI (Recommended)
-
-```bash
-# Install the latest stable version
-pip install toolplane-python-client
-
-# Install a specific version
-pip install toolplane-python-client==1.0.0
-```
-
 ### From Source
+
+The package is not published to PyPI yet; install it from the repository.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/tool-control-plane.git
-cd toolplane/clients/python
+git clone https://github.com/Abhishek-chohan/tool-control-plane.git
+cd tool-control-plane/clients/python-client
 
 # Install in development mode
 pip install -e .
@@ -82,11 +74,16 @@ The toolplane Python client requires Python 3.8 or higher and the following depe
 
 ```bash
 # Core dependencies
-pip install grpcio grpcio-tools requests
+pip install grpcio requests protobuf googleapis-common-protos
 
 # Optional dependencies for enhanced features
 pip install pydantic typing-extensions
 ```
+
+The SWE/standalone toolkits have their own heavier dependencies (langchain,
+chardet); install `toolplane/toolkits/swe/requirements.txt` only if you use
+them. `grpcio-tools` is needed only for proto regeneration
+(`cd server && make gen-proto-python`).
 
 ## Quick Start
 
@@ -1129,8 +1126,8 @@ We welcome contributions to the toolplane Python client! Follow these guidelines
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/your-org/tool-control-plane.git
-cd toolplane/clients/python
+git clone https://github.com/Abhishek-chohan/tool-control-plane.git
+cd tool-control-plane/clients/python-client
 ```
 
 1. **Install development dependencies:**

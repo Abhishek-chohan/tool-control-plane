@@ -4,8 +4,28 @@ import pytest
 
 from .runner import MCP_TRANSPORT_FEATURES, execute_case, load_cases
 
-
 CASES = load_cases()
+
+# Connectivity failures are only converted to skips when the run explicitly
+# targets an externally managed environment
+# (TOOLPLANE_CONFORMANCE_ALLOW_SKIP=1). In the default auto-boot mode a
+# connectivity error is a real failure: the bootstrap owns the server
+# lifecycle, and "deadline exceeded" in particular is a plausible symptom of a
+# dispatch/lease regression, not an environment problem.
+CONNECTIVITY_SKIP_TOKENS = (
+    "failed to connect",
+    "connection refused",
+    "connection reset",
+    "unavailable",
+)
+
+
+def _allow_connectivity_skips() -> bool:
+    return os.getenv("TOOLPLANE_CONFORMANCE_ALLOW_SKIP", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
 
 def _supports_environment(case_obj, transport):
@@ -53,13 +73,8 @@ def test_conformance_case(case_obj, transport):
         execute_case(case_obj, transport)
     except Exception as exc:
         message = str(exc).lower()
-        connectivity_tokens = (
-            "failed to connect",
-            "unavailable",
-            "connection",
-            "refused",
-            "deadline exceeded",
-        )
-        if any(token in message for token in connectivity_tokens):
+        if _allow_connectivity_skips() and any(
+            token in message for token in CONNECTIVITY_SKIP_TOKENS
+        ):
             pytest.skip(f"transport {transport} unavailable for conformance run: {exc}")
         raise

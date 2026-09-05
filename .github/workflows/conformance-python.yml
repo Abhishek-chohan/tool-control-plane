@@ -140,12 +140,54 @@ jobs:
 
       # Enforces the focused test packages the maintained docs cite as proof
       # (pkg/mcp, cmd/proxy, pkg/observability, cmd/server/auth) alongside the
-      # rest of the server suite. Runs in memory-storage mode: Postgres-backed
-      # variants stay with the release gate's focused runtime slice and skip
-      # here without TOOLPLANE_DATABASE_URL.
-      - name: Run Go server tests
+      # rest of the server suite, under the race detector where it is clean.
+      # Runs in memory-storage mode: Postgres-backed variants stay with the
+      # release gate's focused runtime slice and skip here without
+      # TOOLPLANE_DATABASE_URL.
+      #
+      # pkg/service is temporarily excluded from the -race leg: the service
+      # hands out live cached *model.Request/*model.Task pointers that callers
+      # read outside the service lock (TestTasksService* fails under -race).
+      # The clone-at-the-boundary fix is scheduled with the store-backed read
+      # model work; until then pkg/service still runs every commit, just
+      # without the detector.
+      - name: Run Go server tests (race detector)
         working-directory: server
-        run: go test ./... -count=1
+        run: go test $(go list ./... | grep -v 'toolplane/pkg/service$') -count=1 -race
+
+      - name: Run Go server tests (pkg/service)
+        working-directory: server
+        run: go test ./pkg/service/... -count=1
+
+  python-unit:
+    name: Python Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r clients/python-client/requirements.txt
+          # Toolkit self-tests import the SWE toolkit modules (langchain,
+          # chardet); those extras live outside the client requirements.
+          python -m pip install -r clients/python-client/toolplane/toolkits/swe/requirements.txt
+
+      # SDK unit suites that live outside the conformance marker: request
+      # wrapper behavior (gRPC + HTTP managers) and gRPC TLS configuration,
+      # plus the standalone toolkit self-tests.
+      - name: Run Python unit tests
+        working-directory: clients/python-client
+        run: |
+          python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py toolplane/toolkits/standalone_tools -q
 
   typescript-client:
     name: TypeScript Client

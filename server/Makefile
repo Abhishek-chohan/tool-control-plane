@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration
+.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race python-unit
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -98,6 +98,18 @@ check-proto-drift: gen-proto-all
 # Conformance tests (Python SDK)
 conformance-python:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -q
+
+# Python SDK unit suites outside the conformance marker (request wrappers,
+# gRPC TLS, standalone toolkit self-tests).
+python-unit:
+	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py toolplane/toolkits/standalone_tools -q
+
+# Server suite under the race detector. pkg/service is excluded from the race
+# leg until the clone-at-the-boundary fix lands (the service hands out live
+# cached model pointers read outside the lock); it still runs, without -race.
+test-race:
+	go test $$(go list ./... | grep -v 'toolplane/pkg/service$$') -count=1 -race
+	go test ./pkg/service/... -count=1
 
 conformance-python-grpc:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k grpc -q
