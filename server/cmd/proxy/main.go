@@ -364,6 +364,14 @@ func main() {
 
 	root := newProxyRootHandler(cfg, breaker, rateLimiter, throttleTracker, mux)
 
-	// Start HTTP server
-	log.Fatal(http.ListenAndServe(*httpListen, root))
+	// Start HTTP server. WriteTimeout stays unset on purpose: the gateway
+	// proxies server-streaming RPCs (ResumeStream/StreamExecuteTool) whose
+	// responses can legitimately outlive any fixed write deadline.
+	httpServer := &http.Server{
+		Addr:              *httpListen,
+		Handler:           root,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+	}
+	log.Fatal(httpServer.ListenAndServe())
 }

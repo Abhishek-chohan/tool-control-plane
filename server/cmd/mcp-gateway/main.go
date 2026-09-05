@@ -149,5 +149,13 @@ func main() {
 
 	log.Printf("MCP gateway listening on %s → gRPC %s (env=%s cors=%s backend=%s sync-timeout=%s)",
 		*httpListen, *grpcEndpoint, cfg.environment, cfg.corsSummary(), cfg.backendSecuritySummary(), *syncTimeout)
-	log.Fatal(http.ListenAndServe(*httpListen, root))
+	// ReadHeaderTimeout bounds slow-loris header reads; WriteTimeout stays
+	// unset because JSON-RPC responses ride long-lived keep-alive connections.
+	httpServer := &http.Server{
+		Addr:              *httpListen,
+		Handler:           root,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+	}
+	log.Fatal(httpServer.ListenAndServe())
 }

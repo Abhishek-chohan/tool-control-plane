@@ -5,11 +5,28 @@ run:
 
 issues:
   exclude-generated: strict
+  exclude-rules:
+    # G115 flags every int -> int32/uint32 conversion. The conversions in this
+    # repo are provably bounded: chunk windows are capped at 100 entries,
+    # timeout_seconds is validated against a 3600s maximum, and sequence
+    # numbers originate from int32 wire fields. Clamping helpers would add
+    # noise without changing safety.
+    - linters:
+        - gosec
+      text: "G115:"
+    # Test harnesses launch the server/proxy binaries with fixed, test-owned
+    # arguments (exec.Command("go", "run", ...) with integer ports).
+    - path: _test\.go
+      linters:
+        - gosec
+      text: "G204:"
 
 linters:
   enable:
     - errcheck
     - gofmt
+    - gosec
     - govet
     - ineffassign
+    - staticcheck
     - unused

@@ -166,7 +166,11 @@ func startMetricsServer(ctx context.Context, listenAddr string, collector *obser
 		log.Fatalf("failed to listen for metrics: %v", err)
 	}
 
-	server := &http.Server{Handler: collector.Handler()}
+	server := &http.Server{
+		Handler: collector.Handler(),
+		// Bound header reads so a slow-loris client cannot pin connections.
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

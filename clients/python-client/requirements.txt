@@ -1,9 +1,15 @@
-# Core dependencies
-google-api-python-client==2.168.0 
+# Runtime dependencies for the toolplane Python client
+# (mirrors pyproject.toml [project.dependencies]).
 grpcio==1.80.0
 protobuf==6.31.1
-grpcio-tools==1.80.0
 googleapis-common-protos>=1.63.0
+requests>=2.25.0
+typing-extensions>=4.0.0
+pydantic>=2.0.0
+
+# Proto regeneration (cd server && make gen-proto-python). The proto-drift
+# workflow installs its own pinned copy; this line keeps local regen working.
+grpcio-tools==1.80.0
 
 # Development dependencies
 pytest>=7.0.0
@@ -12,11 +18,10 @@ black>=23.0.0
 isort>=5.10.0
 mypy>=1.0.0
 flake8>=6.0.0
-
-# Optional dependencies
-ipython>=8.0.0  # For interactive development
 setuptools>=68.1.2
 
-langchain==0.3.19
-langchain-core==0.3.63
-chardet==5.2.0
+# Toolkit extras are deliberately NOT listed here. The SWE and standalone
+# toolkits pull langchain/chardet via
+#   clients/python-client/toolplane/toolkits/swe/requirements.txt
+# Install that file only when running the toolkits or their self-tests; the
+# client, the conformance suite, and CI conformance jobs do not import them.
