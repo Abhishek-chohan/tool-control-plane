@@ -40,6 +40,14 @@ jobs:
         working-directory: clients/python-client
         run: python -m flake8 toolplane
 
+      # Advisory only: the codebase is not fully annotated yet, so mypy
+      # reports type drift without failing the build. Flip continue-on-error
+      # to false once the error count reaches zero.
+      - name: Run mypy (advisory)
+        working-directory: clients/python-client
+        continue-on-error: true
+        run: python -m mypy toolplane --ignore-missing-imports
+
   go:
     name: Go Lint (${{ matrix.module-name }})
     runs-on: ubuntu-latest

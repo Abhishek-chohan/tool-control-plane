@@ -8,19 +8,24 @@ x-toolplane-image: &toolplane-image
 
 x-postgres-env: &postgres-env
   POSTGRES_USER: ${POSTGRES_USER:-toolplane}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toolplane}
+  # No default credentials: compose refuses to start until a real password is
+  # provided (copy .env.example to .env and fill it in).
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required; the reference stack ships no default database credential}
   POSTGRES_DB: ${POSTGRES_DB:-toolplane}
 
 x-toolplane-db-env: &toolplane-db-env
   TOOLPLANE_STORAGE_MODE: "postgres"
-  TOOLPLANE_DATABASE_URL: ${TOOLPLANE_DATABASE_URL:-postgres://toolplane:toolplane@postgres:5432/toolplane?sslmode=disable}
+  TOOLPLANE_DATABASE_URL: ${TOOLPLANE_DATABASE_URL:?TOOLPLANE_DATABASE_URL is required; it must embed the chosen POSTGRES_PASSWORD, e.g. postgres://toolplane:<password>@postgres:5432/toolplane?sslmode=disable}
 
 services:
   postgres:
     image: postgres:16
     environment: *postgres-env
     ports:
-      - "${TOOLPLANE_POSTGRES_PUBLISHED_PORT:-5432}:5432"
+      # Loopback-only by default: the database has no business being reachable
+      # from other hosts. Override TOOLPLANE_POSTGRES_PUBLISHED_PORT and the
+      # bind address deliberately if remote access is required.
+      - "127.0.0.1:${TOOLPLANE_POSTGRES_PUBLISHED_PORT:-5432}:5432"
     volumes:
       - toolplane-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -67,7 +72,9 @@ services:
         condition: service_completed_successfully
     ports:
       - "${TOOLPLANE_GRPC_PUBLISHED_PORT:-9001}:9001"
-      - "${TOOLPLANE_METRICS_PUBLISHED_PORT:-9102}:9102"
+      # Metrics are a scraping surface, not a public API: loopback-only by
+      # default so the reference stack never publishes them on all interfaces.
+      - "127.0.0.1:${TOOLPLANE_METRICS_PUBLISHED_PORT:-9102}:9102"
     volumes:
       - ${TOOLPLANE_SERVER_TLS_CERT_PATH:-./certs/server.crt}:/certs/server.crt:ro
       - ${TOOLPLANE_SERVER_TLS_KEY_PATH:-./certs/server.key}:/certs/server.key:ro
@@ -154,7 +161,10 @@ services:
       <<: *toolplane-db-env
       TOOLPLANE_ENV_MODE: "development"
       TOOLPLANE_AUTH_MODE: "fixed"
-      TOOLPLANE_AUTH_FIXED_API_KEY: ${TOOLPLANE_BOOTSTRAP_FIXED_API_KEY:-replace-this-one-time-bootstrap-token}
+      # Fixed-mode keys bypass session binding entirely: a known default here
+      # would grant full cross-session admin. Compose refuses to start the
+      # bootstrap profile until an operator supplies a one-time token.
+      TOOLPLANE_AUTH_FIXED_API_KEY: ${TOOLPLANE_BOOTSTRAP_FIXED_API_KEY:?TOOLPLANE_BOOTSTRAP_FIXED_API_KEY is required; generate a one-time token (e.g. openssl rand -hex 32)}
     depends_on:
       postgres:
         condition: service_healthy

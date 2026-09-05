@@ -67,9 +67,9 @@ lint = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/tool-control-plane"
-Repository = "https://github.com/your-org/tool-control-plane"
-"Bug Tracker" = "https://github.com/your-org/tool-control-plane/issues"
+Homepage = "https://github.com/Abhishek-chohan/tool-control-plane"
+Repository = "https://github.com/Abhishek-chohan/tool-control-plane"
+"Bug Tracker" = "https://github.com/Abhishek-chohan/tool-control-plane/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -127,15 +127,23 @@ If you want the Postgres instance to come from the maintained reference topology
 cd server/deploy/reference && docker compose up -d postgres
 ```
 
-Then run the same `make release-gate` command from `server/`, but point `TOOLPLANE_DATABASE_URL` at the host-published port from `server/deploy/reference/.env.example`. With the default reference env file that is:
+Then run the same `make release-gate` command from `server/`, but point `TOOLPLANE_DATABASE_URL` at the host-published port. The reference compose file no longer ships default credentials: copy `server/deploy/reference/.env.example` to `.env`, choose a `POSTGRES_PASSWORD`, and mirror it into the DSN, e.g.:
 
 ```bash
-cd server && TOOLPLANE_DATABASE_URL=postgres://toolplane:toolplane@localhost:5432/toolplane?sslmode=disable make release-gate
+cd server && TOOLPLANE_DATABASE_URL=postgres://toolplane:<your-password>@localhost:5432/toolplane?sslmode=disable make release-gate
 ```
 
 This target always runs the Python shared-fixture conformance suite, then the live observability scrape leg in `server/scripts/release_gate_observability.sh`, and finally the focused runtime slice. The conformance portion exercises the first seven steps above through the auto-boot harness in `clients/python-client/tests/conformance/conftest.py`. When `TOOLPLANE_DATABASE_URL` is set, the Makefile infers `TOOLPLANE_STORAGE_MODE=postgres` so the full conformance leg runs on Postgres rather than falling back to in-memory storage. The maintained provider path in that suite now runs through the explicit Python `ProviderRuntime` surface rather than ad hoc polling threads embedded in the adapters.
 
 If `TOOLPLANE_DATABASE_URL` points at a reachable Postgres instance, the same target also runs focused Go tests that validate the production storage guardrail, lease-expiry requeue behavior, bounded replay semantics, drain waiting behavior, and persisted request recovery path. If the variable is unset, the conformance leg falls back to in-memory storage and the persisted recovery test is skipped for local convenience.
+
+## Integrity Guarantees
+
+The gate cannot go green while proving nothing:
+
+- **Bootstrap failures are hard failures.** When the harness boots its own stack (`TOOLPLANE_CONFORMANCE_AUTO_BOOT=1`, the default), a server/proxy/gateway that fails to compile, bind, or pass its production-config checks fails the run with the boot log tail attached — it is never converted into a skip. A crashed bootstrap process is detected immediately via its exit status instead of waiting out the readiness timeout.
+- **Connectivity skips are opt-in.** Runtime exceptions are only downgraded to skips when `TOOLPLANE_CONFORMANCE_ALLOW_SKIP=1` is set explicitly (external-server runs), and the token list no longer includes `deadline exceeded` — a hanging dispatch path is a failure, not an environment problem.
+- **Minimum-evidence guard.** At session end, every expected transport that executed tests must have recorded at least one passing case; a run where an expected transport passed nothing exits non-zero even if every individual test "skipped".
 
 ## CI
 
@@ -146,7 +154,7 @@ The `.github/workflows/release-gate.yml` workflow runs the same `make release-ga
 | Workflow | Role |
 | --- | --- |
 | `release-gate.yml` | Authoritative release gate: one canonical secure end-to-end scenario |
-| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript, plus the full Go server test suite (`go test ./...`) on every pull request and push to `main` |
+| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript, the Python SDK unit suites, and the Go server suite (race detector on every package except `pkg/service`, which runs without it until the clone-at-the-boundary fix lands) on every pull request and push to `main` |
 
 The release gate remains intentionally narrow and fast. Shared conformance is broader and verifies parity across SDKs. Both must pass before a release is trusted.
 
