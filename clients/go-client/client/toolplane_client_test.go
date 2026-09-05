@@ -94,6 +94,10 @@ func (s *requestsServiceClientStub) GetRequestChunks(ctx context.Context, in *pb
 	return nil, unexpectedRequestCall("GetRequestChunks")
 }
 
+func (s *requestsServiceClientStub) RenewRequestLease(ctx context.Context, in *pb.RenewRequestLeaseRequest, opts ...grpc.CallOption) (*pb.Request, error) {
+	return nil, unexpectedRequestCall("RenewRequestLease")
+}
+
 func (s *toolServiceClientStub) RegisterTool(ctx context.Context, in *pb.RegisterToolRequest, opts ...grpc.CallOption) (*pb.RegisterToolResponse, error) {
 	return nil, unexpectedToolCall("RegisterTool")
 }
