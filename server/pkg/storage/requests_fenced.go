@@ -116,8 +116,8 @@ func (s *Store) RenewRequestLease(ctx context.Context, sessionID, requestID, mac
 // SubmitRequestResultFenced writes the terminal result as the current lease
 // holder. The streaming special case is preserved: a streaming submission to a
 // terminal request appends one trailing chunk when the epoch identifies the
-// final lease holder. A non-streaming submission to a terminal request keeps
-// the historical "already in state" error.
+// final lease holder. A non-streaming submission to a terminal request fails
+// with ErrRequestTerminal (keeping the historical "already in state" message).
 func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, result interface{}, resultType model.ResultType, meta map[string]string) (*model.Request, error) {
 	if s == nil {
 		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
@@ -134,7 +134,7 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 
 		if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
 			if resultType != model.ResultTypeStreaming {
-				return fmt.Errorf("request %s is already in state %s", requestID, req.Status)
+				return fmt.Errorf("%w: request %s is already in state %s", ErrRequestTerminal, requestID, req.Status)
 			}
 			// Trailing streaming chunk from the final lease holder.
 			if resultStr, ok := result.(string); ok {

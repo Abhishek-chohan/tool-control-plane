@@ -775,8 +775,25 @@ export class ToolplaneClient {
     return response.getRequestsList().map((item) => this.normalizeRequest(item));
   }
 
+  /**
+   * Fenced provider writes must present the lease grant returned by
+   * claimRequest. Fail fast client-side with an actionable error instead of
+   * sending an empty grant that the server always rejects with
+   * FAILED_PRECONDITION. A zero leaseEpoch is accepted: rows claimed before
+   * lease fencing existed legitimately carry epoch 0.
+   */
+  private assertLeaseGrant(machineId: string | undefined, operation: string): void {
+    if (!machineId || !machineId.trim()) {
+      throw new ToolplaneError(
+        `${operation} requires the lease grant from claimRequest (machineId + leaseEpoch); ` +
+        'pass the claimed request\'s lease context',
+      );
+    }
+  }
+
   async updateRequest(requestId: string, update: RequestUpdate): Promise<RequestModel> {
     this.ensureGRPCConnected('request update');
+    this.assertLeaseGrant(update.machineId, 'updateRequest');
 
     const request = new UpdateRequestMessage();
     request.setSessionId(this.getRequiredSessionId('request update'));
@@ -820,6 +837,7 @@ export class ToolplaneClient {
     lease?: LeaseContext,
   ): Promise<boolean> {
     this.ensureGRPCConnected('request chunk append');
+    this.assertLeaseGrant(lease?.machineId, 'appendRequestChunks');
 
     const request = new AppendRequestChunksMessage();
     request.setSessionId(this.getRequiredSessionId('request chunk append'));
@@ -846,6 +864,7 @@ export class ToolplaneClient {
     lease?: LeaseContext,
   ): Promise<boolean> {
     this.ensureGRPCConnected('request result submission');
+    this.assertLeaseGrant(lease?.machineId, 'submitRequestResult');
 
     const request = new SubmitRequestResultMessage();
     request.setSessionId(this.getRequiredSessionId('request result submission'));
@@ -873,6 +892,7 @@ export class ToolplaneClient {
     leaseEpoch: number,
   ): Promise<RequestModel> {
     this.ensureGRPCConnected('request lease renewal');
+    this.assertLeaseGrant(machineId, 'renewRequestLease');
 
     const request = new RenewRequestLeaseMessage();
     request.setSessionId(this.getRequiredSessionId('request lease renewal'));

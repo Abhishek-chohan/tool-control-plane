@@ -347,6 +347,31 @@ func TestGRPCServerFencedWritesMapLeaseConflictToFailedPrecondition(t *testing.T
 	if renewed.GetLeaseExpiresAt() == "" {
 		t.Fatal("renewed lease_expires_at should be populated for an active lease")
 	}
+
+	// A valid submit completes the request; a second submit is a write against
+	// a terminal request and must surface as FAILED_PRECONDITION, not
+	// NOT_FOUND.
+	if _, err := server.SubmitRequestResult(context.Background(), &proto.SubmitRequestResultRequest{
+		SessionId:  sessionID,
+		RequestId:  request.ID,
+		MachineId:  machineID,
+		LeaseEpoch: claimed.LeaseEpoch,
+		Result:     `{"ok":true}`,
+		ResultType: string(model.ResultTypeResolution),
+	}); err != nil {
+		t.Fatalf("holder submit: %v", err)
+	}
+	_, err = server.SubmitRequestResult(context.Background(), &proto.SubmitRequestResultRequest{
+		SessionId:  sessionID,
+		RequestId:  request.ID,
+		MachineId:  machineID,
+		LeaseEpoch: claimed.LeaseEpoch,
+		Result:     `{"again":true}`,
+		ResultType: string(model.ResultTypeResolution),
+	})
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("terminal submit status = %v, want %v (err=%v)", status.Code(err), codes.FailedPrecondition, err)
+	}
 }
 
 func ptrTime(t time.Time) *time.Time { return &t }
