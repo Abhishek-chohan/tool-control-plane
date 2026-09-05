@@ -1,0 +1,5 @@
+# Pin line endings so every checkout is byte-identical on every platform.
+# CI (Linux) and the containerized toolchain (gofmt/golangci-lint, black,
+# eslint) see exactly what is committed; Windows checkouts with
+# core.autocrlf=true stay LF instead of drifting to CRLF.
+* text=auto eol=lf
