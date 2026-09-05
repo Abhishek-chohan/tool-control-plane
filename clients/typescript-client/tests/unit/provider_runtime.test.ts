@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { ProviderRuntime } from '../../src/provider_runtime';
 import {
+  LeaseContext,
   Machine,
   ProviderRuntimeClient,
   ProviderRuntimeSessionClient,
@@ -14,6 +15,7 @@ import {
   Session,
   Tool,
 } from '../../src/interfaces';
+import { ProtocolError } from '../../src/errors';
 
 function createRequest(overrides: Partial<Request> = {}): Request {
   return {
@@ -51,9 +53,11 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
 
   updatedRequests: Array<{ requestId: string; update: RequestUpdate }> = [];
 
-  appendedChunks: Array<{ requestId: string; chunks: unknown[]; resultType: string }> = [];
+  appendedChunks: Array<{ requestId: string; chunks: unknown[]; resultType: string; lease?: LeaseContext }> = [];
 
-  submittedResults: Array<{ requestId: string; result: unknown; resultType: string; meta: Record<string, string> }> = [];
+  submittedResults: Array<{ requestId: string; result: unknown; resultType: string; meta: Record<string, string>; lease?: LeaseContext }> = [];
+
+  renewedLeases: Array<{ requestId: string; machineId: string; leaseEpoch: number }> = [];
 
   constructor(readonly sessionId: string) {}
 
@@ -148,6 +152,9 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
 
     request.status = 'claimed';
     request.executingMachineId = machineId || this.machineId;
+    // Each claim grants a fresh lease epoch that fenced writes must echo.
+    request.leasedBy = request.executingMachineId;
+    request.leaseEpoch = (request.leaseEpoch ?? 0) + 1;
     return { ...request };
   }
 
@@ -164,8 +171,13 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
     return { ...request };
   }
 
-  async appendRequestChunks(requestId: string, chunks: unknown[], resultType: string = 'streaming'): Promise<boolean> {
-    this.appendedChunks.push({ requestId, chunks, resultType });
+  async appendRequestChunks(
+    requestId: string,
+    chunks: unknown[],
+    resultType: string = 'streaming',
+    lease?: LeaseContext,
+  ): Promise<boolean> {
+    this.appendedChunks.push({ requestId, chunks, resultType, lease });
     const request = this.pendingRequests.find((candidate) => candidate.id === requestId);
     if (request) {
       request.streamResults = [...(request.streamResults ?? []), ...chunks];
@@ -179,8 +191,9 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
     result: unknown,
     resultType: string = 'resolution',
     meta: Record<string, string> = {},
+    lease?: LeaseContext,
   ): Promise<boolean> {
-    this.submittedResults.push({ requestId, result, resultType, meta });
+    this.submittedResults.push({ requestId, result, resultType, meta, lease });
     const request = this.pendingRequests.find((candidate) => candidate.id === requestId);
     if (request) {
       request.status = resultType === 'rejection' ? 'failure' : 'done';
@@ -191,6 +204,18 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
       }
     }
     return true;
+  }
+
+  async renewRequestLease(requestId: string, machineId: string, leaseEpoch: number): Promise<Request> {
+    const request = this.pendingRequests.find((candidate) => candidate.id === requestId);
+    if (!request) {
+      throw new Error(`Unknown request ${requestId}`);
+    }
+    if (request.leaseEpoch !== leaseEpoch || request.leasedBy !== machineId) {
+      throw new ProtocolError(`lease conflict for request ${requestId}`);
+    }
+    this.renewedLeases.push({ requestId, machineId, leaseEpoch });
+    return { ...request };
   }
 
   async updateMachinePing(machineId: string = ''): Promise<Machine> {
@@ -275,6 +300,7 @@ test('ProviderRuntime processes a unary request end to end', async () => {
     result: { echo: 'hello' },
     resultType: 'resolution',
     meta: { handled_by: 'typescript-provider-runtime' },
+    lease: { machineId: 'machine-session-unary', leaseEpoch: 1 },
   });
 });
 
@@ -312,14 +338,63 @@ test('ProviderRuntime streams chunks and submits the retained final payload', as
 
   assert.equal(sessionClient.updatedRequests.at(-1)?.update.resultType, 'streaming');
   assert.deepEqual(sessionClient.appendedChunks, [
-    { requestId: 'request-stream', chunks: ['piece-1'], resultType: 'streaming' },
-    { requestId: 'request-stream', chunks: ['piece-2'], resultType: 'streaming' },
+    {
+      requestId: 'request-stream',
+      chunks: ['piece-1'],
+      resultType: 'streaming',
+      lease: { machineId: 'machine-session-stream', leaseEpoch: 1 },
+    },
+    {
+      requestId: 'request-stream',
+      chunks: ['piece-2'],
+      resultType: 'streaming',
+      lease: { machineId: 'machine-session-stream', leaseEpoch: 1 },
+    },
   ]);
   assert.deepEqual(sessionClient.submittedResults[0], {
     requestId: 'request-stream',
     result: ['piece-1', 'piece-2'],
     resultType: 'resolution',
     meta: { handled_by: 'typescript-provider-runtime' },
+    lease: { machineId: 'machine-session-stream', leaseEpoch: 1 },
+  });
+});
+
+test('ProviderRuntime presents the claim lease on every fenced write', async () => {
+  const client = new FakeProviderClient();
+  const runtime = new ProviderRuntime(client, { sdkVersion: '9.9.9-test' });
+
+  const session = await runtime.createSession({
+    sessionId: 'session-fence',
+    name: 'Fence Session',
+    description: 'Fenced provider test',
+  });
+
+  await runtime.registerTool({
+    sessionId: session.id,
+    name: 'echo_tool',
+    description: 'Echo tool',
+    handler: async (input) => ({ echo: input.message }),
+  });
+
+  const sessionClient = client.lookup(session.id);
+  sessionClient.pendingRequests.push(createRequest({
+    id: 'request-fence',
+    sessionId: session.id,
+    toolName: 'echo_tool',
+    input: '{"message":"fenced"}',
+  }));
+
+  await runtime.pollOnce();
+
+  // The running transition carries the lease grant from the claim response.
+  const runningUpdate = sessionClient.updatedRequests[0]?.update;
+  assert.equal(runningUpdate?.machineId, 'machine-session-fence');
+  assert.equal(runningUpdate?.leaseEpoch, 1);
+  // The final submission echoes the same grant.
+  assert.deepEqual(sessionClient.submittedResults[0]?.lease, {
+    machineId: 'machine-session-fence',
+    leaseEpoch: 1,
   });
 });
 

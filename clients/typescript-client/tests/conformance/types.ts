@@ -46,6 +46,21 @@ export interface ConformanceAdapter {
   resumeStream(requestId: string, lastSeq: number): Promise<Record<string, unknown>>;
   waitForRequestCompletion(sessionId: string, requestId: string): Promise<Record<string, unknown>>;
   listRequests(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>[]>;
+  getProviderMachineId(sessionId: string): Promise<string>;
+  claimRequestForFencing(sessionId: string, requestId: string, machineId: string): Promise<Record<string, unknown>>;
+  submitFencedResult(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+    result: unknown,
+  ): Promise<Record<string, unknown>>;
+  renewRequestLease(
+    sessionId: string,
+    requestId: string,
+    machineId: string,
+    leaseEpoch: number,
+  ): Promise<Record<string, unknown>>;
   createApiKey(sessionId: string, name: string, capabilities?: string[]): Promise<Record<string, unknown>>;
   listApiKeys(sessionId: string): Promise<Record<string, unknown>[]>;
   revokeApiKey(sessionId: string, keyId: string): Promise<boolean>;

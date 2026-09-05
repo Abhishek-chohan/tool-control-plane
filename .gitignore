@@ -127,3 +127,5 @@ pnpm-debug.log*
 
 # Internal documentation (not for the repo)
 docs/
+# The maintained server documentation lives in server/docs/ and is tracked.
+!server/docs/

@@ -51,10 +51,15 @@ type Request struct {
 	NextAttemptAt      *time.Time        `json:"nextAttemptAt,omitempty"`
 	LeasedBy           string            `json:"leasedBy,omitempty"`
 	LeasedAt           *time.Time        `json:"leasedAt,omitempty"`
-	LastError          string            `json:"lastError,omitempty"`
-	DeadLetter         bool              `json:"deadLetter"`
-	CreatedAt          time.Time         `json:"createdAt"`
-	UpdatedAt          time.Time         `json:"updatedAt"`
+	// LeaseEpoch identifies the current claim grant. It is incremented on every
+	// successful claim and must be echoed by the lease holder on fenced writes
+	// (update/submit/append/renew). It is retained after the request reaches a
+	// terminal state so late writes from a stale executor can still be rejected.
+	LeaseEpoch int64     `json:"leaseEpoch"`
+	LastError  string    `json:"lastError,omitempty"`
+	DeadLetter bool      `json:"deadLetter"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // NewRequest creates a new request
@@ -217,11 +222,23 @@ func (r *Request) MarkDeadLetter(errMsg string) {
 	r.UpdatedAt = time.Now()
 }
 
-// HasTimedOut returns true when the request lease timed out.
+// HasTimedOut returns true when the request's absolute per-attempt deadline
+// (leased_at + timeout_seconds) has passed. Renewing the lease does not move
+// this deadline; it bounds how long one attempt may run regardless of renewals.
 func (r *Request) HasTimedOut(now time.Time) bool {
 	if r.LeasedAt == nil {
 		return false
 	}
 	deadline := r.LeasedAt.Add(time.Duration(r.TimeoutSeconds) * time.Second)
 	return now.After(deadline)
+}
+
+// LeaseExpired returns true when the current lease deadline (visible_at) has
+// passed without a renewal. It only applies to leased requests; callers should
+// only consult it for claimed/running requests.
+func (r *Request) LeaseExpired(now time.Time) bool {
+	if r.LeasedAt == nil {
+		return false
+	}
+	return !r.VisibleAt.IsZero() && !r.VisibleAt.After(now)
 }

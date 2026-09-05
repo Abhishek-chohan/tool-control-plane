@@ -272,6 +272,14 @@ export class Request extends jspb.Message {
     getStreamResultsList(): Array<string>;
     setStreamResultsList(value: Array<string>): Request;
     addStreamResults(value: string, index?: number): string;
+    getLeasedBy(): string;
+    setLeasedBy(value: string): Request;
+    getLeaseEpoch(): number;
+    setLeaseEpoch(value: number): Request;
+    getLeaseExpiresAt(): string;
+    setLeaseExpiresAt(value: string): Request;
+    getTimeoutSeconds(): number;
+    setTimeoutSeconds(value: number): Request;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): Request.AsObject;
@@ -297,6 +305,10 @@ export namespace Request {
         updatedAt: string,
         executingMachineId: string,
         streamResultsList: Array<string>,
+        leasedBy: string,
+        leaseEpoch: number,
+        leaseExpiresAt: string,
+        timeoutSeconds: number,
     }
 }
 
@@ -1258,6 +1270,8 @@ export class ExecuteToolRequest extends jspb.Message {
     setToolName(value: string): ExecuteToolRequest;
     getInput(): string;
     setInput(value: string): ExecuteToolRequest;
+    getTimeoutSeconds(): number;
+    setTimeoutSeconds(value: number): ExecuteToolRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ExecuteToolRequest.AsObject;
@@ -1274,6 +1288,7 @@ export namespace ExecuteToolRequest {
         sessionId: string,
         toolName: string,
         input: string,
+        timeoutSeconds: number,
     }
 }
 
@@ -1348,6 +1363,8 @@ export class CreateRequestRequest extends jspb.Message {
     setToolName(value: string): CreateRequestRequest;
     getInput(): string;
     setInput(value: string): CreateRequestRequest;
+    getTimeoutSeconds(): number;
+    setTimeoutSeconds(value: number): CreateRequestRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): CreateRequestRequest.AsObject;
@@ -1364,6 +1381,7 @@ export namespace CreateRequestRequest {
         sessionId: string,
         toolName: string,
         input: string,
+        timeoutSeconds: number,
     }
 }
 
@@ -1455,6 +1473,10 @@ export class UpdateRequestRequest extends jspb.Message {
     setResult(value: string): UpdateRequestRequest;
     getResultType(): string;
     setResultType(value: string): UpdateRequestRequest;
+    getMachineId(): string;
+    setMachineId(value: string): UpdateRequestRequest;
+    getLeaseEpoch(): number;
+    setLeaseEpoch(value: number): UpdateRequestRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): UpdateRequestRequest.AsObject;
@@ -1473,6 +1495,8 @@ export namespace UpdateRequestRequest {
         status: string,
         result: string,
         resultType: string,
+        machineId: string,
+        leaseEpoch: number,
     }
 }
 
@@ -1557,6 +1581,10 @@ export class SubmitRequestResultRequest extends jspb.Message {
 
     getMetaMap(): jspb.Map<string, string>;
     clearMetaMap(): void;
+    getMachineId(): string;
+    setMachineId(value: string): SubmitRequestResultRequest;
+    getLeaseEpoch(): number;
+    setLeaseEpoch(value: number): SubmitRequestResultRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): SubmitRequestResultRequest.AsObject;
@@ -1576,6 +1604,8 @@ export namespace SubmitRequestResultRequest {
         resultType: string,
 
         metaMap: Array<[string, string]>,
+        machineId: string,
+        leaseEpoch: number,
     }
 }
 
@@ -1610,6 +1640,10 @@ export class AppendRequestChunksRequest extends jspb.Message {
     addChunks(value: string, index?: number): string;
     getResultType(): string;
     setResultType(value: string): AppendRequestChunksRequest;
+    getMachineId(): string;
+    setMachineId(value: string): AppendRequestChunksRequest;
+    getLeaseEpoch(): number;
+    setLeaseEpoch(value: number): AppendRequestChunksRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): AppendRequestChunksRequest.AsObject;
@@ -1627,6 +1661,8 @@ export namespace AppendRequestChunksRequest {
         requestId: string,
         chunksList: Array<string>,
         resultType: string,
+        machineId: string,
+        leaseEpoch: number,
     }
 }
 
@@ -1698,6 +1734,35 @@ export namespace GetRequestChunksResponse {
         chunksList: Array<string>,
         startSeq: number,
         nextSeq: number,
+    }
+}
+
+export class RenewRequestLeaseRequest extends jspb.Message { 
+    getSessionId(): string;
+    setSessionId(value: string): RenewRequestLeaseRequest;
+    getRequestId(): string;
+    setRequestId(value: string): RenewRequestLeaseRequest;
+    getMachineId(): string;
+    setMachineId(value: string): RenewRequestLeaseRequest;
+    getLeaseEpoch(): number;
+    setLeaseEpoch(value: number): RenewRequestLeaseRequest;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): RenewRequestLeaseRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: RenewRequestLeaseRequest): RenewRequestLeaseRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: RenewRequestLeaseRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): RenewRequestLeaseRequest;
+    static deserializeBinaryFromReader(message: RenewRequestLeaseRequest, reader: jspb.BinaryReader): RenewRequestLeaseRequest;
+}
+
+export namespace RenewRequestLeaseRequest {
+    export type AsObject = {
+        sessionId: string,
+        requestId: string,
+        machineId: string,
+        leaseEpoch: number,
     }
 }
 

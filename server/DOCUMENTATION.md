@@ -115,7 +115,7 @@ This section is the canonical summary of the durability guarantees supported by 
 
 ### Supported Guarantees
 
-- **Request leases are explicit and time-bounded.** A request moves into `claimed` or `running` with a machine-owned lease. If that lease expires, the server emits `request_lease_expired`, releases any reserved machine slot, and either requeues the request with linear backoff or dead-letters it after `MaxAttempts`.
+- **Request leases are explicit, renewable, and fenced.** A request moves into `claimed` or `running` with a machine-owned lease. Every successful claim grants a fresh `lease_epoch` exposed on the `Request` message; the lease deadline (`lease_expires_at`) is extended by `RenewRequestLease()` but never past the request's absolute timeout (`leased_at + timeout_seconds`). Provider writes — `UpdateRequest`, `SubmitRequestResult`, `AppendRequestChunks`, `RenewRequestLease` — are fenced: they must present the current lease grant (machine ID + lease epoch) and are rejected with `FAILED_PRECONDITION` once the lease is reclaimed, expired, or mismatched, so a stale executor cannot write results or chunks after losing its lease. If a lease expires unrenewed, the server emits `request_lease_expired`, releases any reserved machine slot, and either requeues the request with linear backoff or dead-letters it after `MaxAttempts`.
 - **Postgres-backed restart recovery reuses persisted lease state.** When a `storage.Store` is attached, request lease metadata survives restart-like reloads. Expired persisted leases are scanned after startup and follow the same requeue-or-dead-letter path as in-memory leases.
 - **Consumer disconnect does not cancel work.** A broken `StreamExecuteTool()` or `ResumeStream()` client connection leaves the request record intact. Callers can inspect final request state later and may resume from the retained chunk window if the missing sequence range is still retained.
 - **Resume is retained-window replay, not durable full-history replay.** `GetRequestChunks()` and `ResumeStream()` expose only the retained chunk window. Resuming from within that window replays ordered remaining chunks plus the terminal marker. Resuming before the retained window fails with `OUT_OF_RANGE` rather than silently skipping missing data.
@@ -127,6 +127,7 @@ This section is the canonical summary of the durability guarantees supported by 
 | Guarantee | Automated proof | Current limit |
 | --- | --- | --- |
 | Lease expiry requeues or dead-letters claimed/running work and frees machine load | `server/pkg/service/request_runtime_test.go`, `server/pkg/service/request_persistence_test.go`, `server/pkg/service/machine_test.go` | Retries stop after `MaxAttempts`; in-memory mode still has no restart guarantee |
+| Renewed leases are not reclaimed mid-flight, the absolute timeout still bounds them, and stale holders cannot write results or chunks after reclaim | `server/pkg/service/request_lease_test.go`, `server/pkg/storage/requests_fenced_test.go`, `conformance/cases/provider_runtime_fenced_submission.json` | Renewal cannot cross the absolute timeout; a reclaimed request re-executes from the start under a fresh epoch |
 | Consumer reconnect can inspect state and replay the retained chunk window deterministically | `server/pkg/service/request_stream_test.go`, `conformance/cases/request_recovery_chunk_window.json`, `conformance/cases/request_recovery_resume.json`, `conformance/cases/request_recovery_resume_trimmed_window.json`, `conformance/cases/request_recovery_expired_window.json` | The retained window is capped at 100 chunks; there is no durable full-history replay API |
 | Graceful drain stops new routing immediately and lets in-flight work finish or age out before unregister | `server/pkg/service/machine_test.go`, `conformance/cases/machine_lifecycle_drain_under_load.json`, `conformance/cases/provider_runtime_drain_under_load.json` | Pending requests are not automatically reassigned during drain |
 | The authoritative release signal covers the maintained durability slice | `cd server && make release-gate`, plus `release-gate-runtime` focused Go tests | The gate remains intentionally narrow and does not directly prove live Postgres-backed auth or every deployment topology |
@@ -221,8 +222,10 @@ The current runtime constants come from `server/pkg/service/constants.go` and th
 | Machine heartbeat TTL | 5 minutes | Machines older than this are reclaimed as inactive |
 | Machine cleanup scan | 5 minutes | Inactive-machine cleanup goroutine interval |
 | Max concurrent requests per machine | 4 | Used by request running-state reservation and task scheduling |
-| Request lease duration | 30 seconds | Claim visibility window for leased work |
-| Request timeout | 45 seconds | Default per-request timeout when `RequestsService.ExecuteRequest()` is called without its own deadline |
+| Request lease duration | 30 seconds | Lease TTL granted on claim and on each `RenewRequestLease()`. Unrenewed work becomes reclaimable once this window passes |
+| Request timeout | 45 seconds | Default absolute per-attempt execution timeout. Renewed leases can never extend past `leased_at + timeout`. Callers may override it per request via `CreateRequest`/`ExecuteTool` `timeout_seconds` |
+| Max request timeout override | 3600 seconds | Upper bound for caller-supplied `timeout_seconds`; larger values are rejected with `INVALID_ARGUMENT` |
+| SDK lease renewal cadence | 10 seconds | Python and TypeScript provider runtimes renew every in-flight lease at one third of the lease TTL |
 | Request dispatch scan | 2 seconds | Cleanup ticker interval for expired or stalled requests |
 | Request retry backoff | 5 seconds base | Linear backoff is multiplied by attempt count |
 | Request max attempts | 3 | Internal model default |
@@ -442,7 +445,7 @@ The internal request and task models expose more state than the current proto me
 | Entity | Public proto fields | Internal-only fields currently used by runtime |
 | --- | --- | --- |
 | `Machine` | ID, session, SDK version/language, IP, created/ping timestamps | Capacity and in-flight load are tracked separately in `MachinesService` |
-| `Request` | ID, session, tool, status, input, result, result type, error, timestamps, executing machine, `stream_results` | `Attempts`, `MaxAttempts`, `TimeoutSeconds`, `BackoffSeconds`, `VisibleAt`, `NextAttemptAt`, `LeasedBy`, `LeasedAt`, `LastError`, `DeadLetter` |
+| `Request` | ID, session, tool, status, input, result, result type, error, timestamps, executing machine, `stream_results`, plus lease metadata `leased_by`, `lease_epoch`, `lease_expires_at`, `timeout_seconds` | `Attempts`, `MaxAttempts`, `BackoffSeconds`, `VisibleAt`, `NextAttemptAt`, `LeasedAt`, `LastError`, `DeadLetter` |
 | `Task` | ID, session, tool, status, input, result, result type, error, created/updated/completed timestamps | `Attempts`, `MaxAttempts`, `TimeoutSeconds`, `BackoffSeconds`, `NextAttemptAt`, `LastError`, `DeadLetter` |
 
 This means the retry and dead-letter mechanics described above are real runtime behavior even though the current gRPC and HTTP task and request messages do not surface all of that state directly.

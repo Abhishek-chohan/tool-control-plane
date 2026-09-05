@@ -1,0 +1,25 @@
+{
+  "id": "provider_runtime_fenced_submission",
+  "feature": "provider_runtime",
+  "description": "Claim queued work manually and prove lease fencing: forged submissions and renewals with a stale epoch are rejected with failed_precondition, the holder can renew the lease, and the correct grant submits the final result.",
+  "request": {
+    "mode": "fenced",
+    "tool_name": "provider_runtime_fenced_echo",
+    "tool_description": "Fenced provider submission tool",
+    "params": {
+      "message": "fenced"
+    },
+    "timeout_seconds": 30
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "forged_submit_error_code": "failed_precondition",
+    "forged_renew_error_code": "failed_precondition",
+    "renewed_lease_expires_non_empty": true,
+    "status_equals": "done",
+    "result_equals": {
+      "echo": "fenced"
+    }
+  },
+  "tags": ["core", "provider", "runtime", "fencing", "lease"]
+}
