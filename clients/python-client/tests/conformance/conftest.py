@@ -435,6 +435,12 @@ def pytest_runtest_logreport(report):
 
 
 def pytest_sessionfinish(session, exitstatus):
+    # Only upgrade a would-be-green session: when the run already failed,
+    # errored, or was interrupted, keep the original exit code and failure
+    # output instead of overlaying the guard banner on top of it.
+    if exitstatus != 0:
+        return
+
     auto_boot = os.getenv(
         "TOOLPLANE_CONFORMANCE_AUTO_BOOT", "1"
     ).strip().lower() not in {
