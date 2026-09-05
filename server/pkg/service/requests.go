@@ -346,7 +346,7 @@ func (s *RequestsService) UpdateRequest(
 		return nil, err
 	}
 	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
-		return nil, fmt.Errorf("request %s is already in state %s", requestID, request.Status)
+		return nil, fmt.Errorf("%w: request %s is already in state %s", storage.ErrRequestTerminal, requestID, request.Status)
 	}
 
 	prevStatus := request.Status
@@ -742,7 +742,7 @@ func (s *RequestsService) SubmitRequestResult(
 
 	// Don't update already completed requests unless streaming
 	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
-		return fmt.Errorf("request %s is already in state %s", requestID, request.Status)
+		return fmt.Errorf("%w: request %s is already in state %s", storage.ErrRequestTerminal, requestID, request.Status)
 	}
 
 	// Update metadata if provided

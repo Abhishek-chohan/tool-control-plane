@@ -654,10 +654,11 @@ func (s *GRPCServer) RenewRequestLease(ctx context.Context, req *proto.RenewRequ
 }
 
 // fencedWriteStatusError maps fenced provider-write failures to gRPC codes:
-// a rejected lease grant is FAILED_PRECONDITION (typed and actionable), while
-// lookup failures keep the historical NOT_FOUND mapping.
+// a rejected lease grant or a write against a terminal request is
+// FAILED_PRECONDITION (typed and actionable), while lookup failures keep the
+// historical NOT_FOUND mapping.
 func fencedWriteStatusError(action string, err error) error {
-	if errors.Is(err, storage.ErrLeaseConflict) {
+	if errors.Is(err, storage.ErrLeaseConflict) || errors.Is(err, storage.ErrRequestTerminal) {
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
 	}
 	return status.Errorf(codes.NotFound, "failed to %s: %v", action, err)

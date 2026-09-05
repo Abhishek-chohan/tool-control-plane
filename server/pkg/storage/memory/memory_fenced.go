@@ -68,7 +68,7 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 
 	if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
 		if resultType != model.ResultTypeStreaming {
-			return nil, fmt.Errorf("request %s is already in state %s", requestID, req.Status)
+			return nil, fmt.Errorf("%w: request %s is already in state %s", storage.ErrRequestTerminal, requestID, req.Status)
 		}
 		if resultStr, ok := result.(string); ok {
 			req.AddStreamChunk(resultStr)

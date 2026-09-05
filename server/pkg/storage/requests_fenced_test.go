@@ -319,10 +319,10 @@ func TestSubmitRequestResultFencedTerminalSemantics(t *testing.T) {
 			t.Fatalf("submit status: got %s want done", done.Status)
 		}
 
-		// A second non-streaming submission reports the historical
-		// already-terminal error (not a fencing error).
-		if _, err := s.SubmitRequestResultFenced(ctx, sess, reqID, mach, claimed.LeaseEpoch, `{"again":true}`, model.ResultTypeResolution, nil); err == nil || errors.Is(err, storage.ErrLeaseConflict) {
-			t.Fatalf("second submit should fail with already-in-state error, got: %v", err)
+		// A second non-streaming submission reports the typed terminal error
+		// (not a fencing error).
+		if _, err := s.SubmitRequestResultFenced(ctx, sess, reqID, mach, claimed.LeaseEpoch, `{"again":true}`, model.ResultTypeResolution, nil); !errors.Is(err, storage.ErrRequestTerminal) {
+			t.Fatalf("second submit should fail with ErrRequestTerminal, got: %v", err)
 		}
 
 		// The final lease holder may still append a trailing streaming chunk
