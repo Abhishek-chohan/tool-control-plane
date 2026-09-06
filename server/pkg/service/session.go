@@ -24,6 +24,11 @@ type SessionsService struct {
 	apiKeys      map[string]map[string]*model.ApiKey // map[sessionID]map[keyID]ApiKey
 	apiKeysMutex sync.RWMutex
 
+	// keyIndex maps SHA-256(key secret) -> key for O(1) authentication.
+	// Guarded by apiKeysMutex; revoked/deleted keys are removed so the index
+	// only ever contains live grants.
+	keyIndex map[string]*model.ApiKey
+
 	// In-memory mapping of users to sessions
 	userSessions      map[string][]string // map[userID][]sessionID
 	userSessionsMutex sync.RWMutex
@@ -43,6 +48,7 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 	svc := &SessionsService{
 		sessions:     make(map[string]*model.Session),
 		apiKeys:      make(map[string]map[string]*model.ApiKey),
+		keyIndex:     make(map[string]*model.ApiKey),
 		userSessions: make(map[string][]string),
 		tracer:       tracer,
 		store:        store,
@@ -77,6 +83,9 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 					svc.apiKeys[key.SessionID] = make(map[string]*model.ApiKey)
 				}
 				svc.apiKeys[key.SessionID][key.ID] = key
+				if !key.IsRevoked() {
+					svc.keyIndex[key.KeyHash] = key
+				}
 			}
 		}
 
@@ -321,6 +330,11 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 	s.userSessionsMutex.Unlock()
 
 	s.apiKeysMutex.Lock()
+	for _, apiKey := range s.apiKeys[sessionID] {
+		if apiKey != nil {
+			delete(s.keyIndex, apiKey.KeyHash)
+		}
+	}
 	delete(s.apiKeys, sessionID)
 	s.apiKeysMutex.Unlock()
 
@@ -354,7 +368,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 		return nil, fmt.Errorf("session %s not found", sessionID)
 	}
 
-	capabilities, err := model.NormalizeAPIKeyCapabilities(capabilityValues)
+	capabilities, err := model.ParseAPIKeyCapabilitiesStrict(capabilityValues)
 	if err != nil {
 		return nil, err
 	}
@@ -372,6 +386,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 
 	// Store API key
 	s.apiKeys[sessionID][apiKey.ID] = apiKey
+	s.keyIndex[apiKey.KeyHash] = apiKey
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -430,6 +445,7 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 
 	// Revoke the API key
 	apiKey.Revoke()
+	delete(s.keyIndex, apiKey.KeyHash)
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -461,36 +477,21 @@ func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, 
 		return nil, fmt.Errorf("api key is empty")
 	}
 
-	var matchedKey *model.ApiKey
-	matchedSessionID := ""
-	revokedMatch := false
-
+	// O(1) lookup by SHA-256 hash instead of scanning every stored key. The
+	// index only contains live (non-revoked) grants; comparing hashes is safe
+	// because recovering a secret from its SHA-256 is infeasible.
+	keyHash := model.HashAPIKeySecret(normalizedKey)
 	s.apiKeysMutex.RLock()
-	for sessionID, keys := range s.apiKeys {
-		for _, apiKey := range keys {
-			if apiKey == nil || !apiKey.Matches(normalizedKey) {
-				continue
-			}
-			if apiKey.IsRevoked() {
-				revokedMatch = true
-				break
-			}
-			matchedSessionID = sessionID
-			matchedKey = apiKey
-			break
-		}
-		if matchedKey != nil || revokedMatch {
-			break
-		}
-	}
+	matchedKey := s.keyIndex[keyHash]
 	s.apiKeysMutex.RUnlock()
 
-	if revokedMatch {
-		return nil, fmt.Errorf("api key is revoked")
-	}
 	if matchedKey == nil {
 		return nil, fmt.Errorf("api key not found")
 	}
+	if matchedKey.IsRevoked() {
+		return nil, fmt.Errorf("api key is revoked")
+	}
+	matchedSessionID := matchedKey.SessionID
 
 	userID := ""
 	s.sessionsMutex.RLock()
@@ -657,18 +658,40 @@ func (s *SessionsService) GetSessionStats(userID string) (int, int, int, error) 
 	return totalSessions, activeSessions, inactiveSessions, nil
 }
 
-// RefreshSessionToken refreshes a session token for extended validity
-func (s *SessionsService) RefreshSessionToken(sessionID string) error {
-	// In this implementation, we don't have expiring tokens, so this is a no-op
-	// In a real implementation, this would extend the validity of a session token
-	return nil
-}
+// InvalidateSession is the session-wide kill switch: it revokes every live
+// API key of the session so no credential for that session authenticates
+// again. The session record itself is kept (DeleteSession removes it); this
+// is the incident-response path for suspected key compromise. It returns the
+// number of keys revoked.
+func (s *SessionsService) InvalidateSession(sessionID, reason string) (int, error) {
+	s.apiKeysMutex.Lock()
+	keys := make([]*model.ApiKey, 0, len(s.apiKeys[sessionID]))
+	for _, apiKey := range s.apiKeys[sessionID] {
+		if apiKey == nil || apiKey.IsRevoked() {
+			continue
+		}
+		apiKey.Revoke()
+		delete(s.keyIndex, apiKey.KeyHash)
+		keys = append(keys, apiKey)
+	}
+	s.apiKeysMutex.Unlock()
 
-// InvalidateSession immediately invalidates a session
-func (s *SessionsService) InvalidateSession(sessionID, reason string) error {
-	// In this implementation, we don't have separate session tokens to invalidate
-	// In a real implementation, this would invalidate any active tokens for the session
-	return nil
+	if s.store != nil {
+		for _, apiKey := range keys {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			if err := s.store.SaveApiKey(ctx, apiKey); err != nil {
+				log.Printf("persist session invalidation revoke failed for key %s: %v", apiKey.ID, err)
+			}
+			cancel()
+		}
+	}
+
+	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyRevoked, time.Now(), map[string]any{
+		"reason":       "session_invalidated:" + reason,
+		"revokedCount": len(keys),
+	})
+
+	return len(keys), nil
 }
 
 func (s *SessionsService) userLock(userID string) *sync.Mutex {

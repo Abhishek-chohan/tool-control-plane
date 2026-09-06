@@ -125,6 +125,13 @@ func main() {
 			grpc.UnaryInterceptor(authorizer.UnaryInterceptor()),
 			grpc.StreamInterceptor(authorizer.StreamInterceptor()),
 		)
+	} else {
+		// Auth-disabled dev mode: still attach an anonymous fixed-mode
+		// principal so handler-level fail-closed checks behave consistently.
+		serverOptions = append(serverOptions,
+			grpc.UnaryInterceptor(auth.AnonymousUnaryInterceptor()),
+			grpc.StreamInterceptor(auth.AnonymousStreamInterceptor()),
+		)
 	}
 	server := grpc.NewServer(serverOptions...)
 	startMetricsServer(ctx, *metricsListen, metricsCollector)

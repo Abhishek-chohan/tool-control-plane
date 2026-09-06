@@ -230,18 +230,6 @@ class HTTPSessionManager:
         except Exception as e:
             raise SessionError(f"Failed to get session stats: {e}")
 
-    def refresh_session_token(self, session_id: str) -> Dict[str, str]:
-        """Refresh session token."""
-        try:
-            self.connection_manager.ensure_connected()
-
-            payload = {"sessionId": session_id}
-            response = self.connection_manager.refresh_session_token(payload)
-            return response
-
-        except Exception as e:
-            raise SessionError(f"Failed to refresh session token: {e}")
-
     def invalidate_session(self, session_id: str, reason: str = "") -> bool:
         """Invalidate a session."""
         try:
@@ -258,16 +246,25 @@ class HTTPSessionManager:
         self,
         session_id: str,
         name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: List[str],
     ) -> Dict[str, Any]:
-        """Create a new API key for a session."""
+        """Create a new API key for a session.
+
+        capabilities is required and must be non-empty: keys are minted
+        least-privilege and explicit (the server rejects empty capability
+        lists with INVALID_ARGUMENT).
+        """
+        if not capabilities or not any(str(c).strip() for c in capabilities):
+            raise SessionError(
+                "create_api_key requires an explicit non-empty capabilities list"
+            )
         try:
             self.connection_manager.ensure_connected()
 
             payload = {
                 "sessionId": session_id,
                 "name": name,
-                "capabilities": capabilities or [],
+                "capabilities": list(capabilities),
             }
             response = self.connection_manager.create_api_key(payload)
             return self._normalize_api_key(response)

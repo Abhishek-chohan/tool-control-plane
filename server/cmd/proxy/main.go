@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"log"
@@ -97,15 +99,17 @@ func (r *responseRecorder) Flush() {
 }
 
 // proxyControlMiddleware coordinates rate limiting and circuit breaker checks before dispatching to the mux.
-func proxyControlMiddleware(breaker *CircuitBreakerManager, rlm *RateLimiterManager, tracker *ThrottleTracker, next http.Handler) http.Handler {
+func proxyControlMiddleware(cfg proxyConfig, breaker *CircuitBreakerManager, rlm *RateLimiterManager, tracker *ThrottleTracker, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
-		apiKey := extractAPIKey(r)
-		clientIP := extractClientIP(r)
+		// Rate limiting and throttle tracking key on a hash of the credential,
+		// never the raw secret.
+		apiKey := hashClientSecret(extractAPIKey(r))
+		clientIP := extractClientIP(r, cfg.trustedProxy)
 
 		if rlm != nil {
 			allowed, wait, rlReason, rlMessage := rlm.Allow(apiKey, clientIP)
@@ -164,6 +168,9 @@ func proxyControlMiddleware(breaker *CircuitBreakerManager, rlm *RateLimiterMana
 	})
 }
 
+// extractAPIKey reads the caller credential from headers only. Query-string
+// credentials (?api_key=) are deliberately not accepted: URLs land in access
+// logs, browser history, Referer headers, and APM traces.
 func extractAPIKey(r *http.Request) string {
 	if key := r.Header.Get("Grpc-Metadata-api_key"); key != "" {
 		return key
@@ -171,17 +178,31 @@ func extractAPIKey(r *http.Request) string {
 	if key := r.Header.Get("X-API-Key"); key != "" {
 		return key
 	}
-	if key := r.URL.Query().Get("api_key"); key != "" {
-		return key
-	}
 	return ""
 }
 
-func extractClientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+// hashClientSecret derives a stable non-secret identity from an API key for
+// rate-limiter buckets and throttle observability, so raw credentials never
+// live in limiter maps or tracker snapshots.
+func hashClientSecret(secret string) string {
+	if secret == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:8])
+}
+
+// extractClientIP resolves the client identity. X-Forwarded-For is only
+// trusted when the operator explicitly declared a terminating reverse proxy
+// (TOOLPLANE_TRUSTED_PROXY=1); otherwise the header is client-controlled and
+// RemoteAddr is the only trustworthy source.
+func extractClientIP(r *http.Request, trustForwardedFor bool) string {
+	if trustForwardedFor {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			parts := strings.Split(xff, ",")
+			if len(parts) > 0 {
+				return strings.TrimSpace(parts[0])
+			}
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -199,7 +220,7 @@ func newProxyRootHandler(
 	apiHandler http.Handler,
 ) http.Handler {
 	root := http.NewServeMux()
-	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(breaker, rateLimiter, throttleTracker, apiHandler)))
+	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(cfg, breaker, rateLimiter, throttleTracker, apiHandler)))
 	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeHealthResponse(w, breaker, rateLimiter, throttleTracker, time.Now().UTC())
 	})
@@ -271,7 +292,22 @@ func main() {
 	apiBurst := flag.Int("api-burst", 0, "Burst size per API key when rate limiting is enabled")
 	ipRate := flag.Float64("ip-rate", 0, "Maximum requests per second per client IP (0 disables)")
 	ipBurst := flag.Int("ip-burst", 0, "Burst size per client IP when rate limiting is enabled")
+	// Client-facing TLS. When both files are set the gateway serves HTTPS
+	// directly instead of relying on an upstream terminator.
+	tlsCertFile := flag.String("tls-cert-file", "", "TLS certificate for the client-facing listener (enables HTTPS)")
+	tlsKeyFile := flag.String("tls-key-file", "", "TLS private key for the client-facing listener")
 	flag.Parse()
+
+	// Production must not serve client-facing plaintext: either terminate TLS
+	// here, or the operator explicitly declares a TLS-terminating reverse
+	// proxy via TOOLPLANE_TRUSTED_PROXY=1.
+	serveTLS := *tlsCertFile != "" || *tlsKeyFile != ""
+	if serveTLS && (*tlsCertFile == "" || *tlsKeyFile == "") {
+		log.Fatalf("--tls-cert-file and --tls-key-file must be set together")
+	}
+	if cfg.environment == "production" && !serveTLS && !cfg.trustedProxy {
+		log.Fatalf("production requires client-facing TLS (--tls-cert-file/--tls-key-file) or an explicit TOOLPLANE_TRUSTED_PROXY=1 declaration")
+	}
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -334,7 +370,7 @@ func main() {
 			if apiKey := extractAPIKey(r); apiKey != "" {
 				md.Set("api_key", apiKey)
 			}
-			if directIP := extractClientIP(r); directIP != "" {
+			if directIP := extractClientIP(r, cfg.trustedProxy); directIP != "" {
 				md.Set("client-ip", directIP)
 			}
 			return md
@@ -372,6 +408,10 @@ func main() {
 		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
+	}
+	if serveTLS {
+		log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
+		log.Fatal(httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile))
 	}
 	log.Fatal(httpServer.ListenAndServe())
 }

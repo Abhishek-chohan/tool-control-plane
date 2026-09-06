@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -725,6 +726,18 @@ func (c *ToolplaneClient) UpdateSession(name, description, namespace string) (*p
 func (c *ToolplaneClient) CreateAPIKey(name string, capabilities ...string) (*pb.ApiKey, error) {
 	if c.protocol != ProtocolGRPC {
 		return nil, fmt.Errorf("api key creation only supported with gRPC protocol")
+	}
+	// Keys are minted least-privilege and explicit: fail fast instead of
+	// sending an empty capability list the server rejects.
+	hasCapability := false
+	for _, capability := range capabilities {
+		if strings.TrimSpace(capability) != "" {
+			hasCapability = true
+			break
+		}
+	}
+	if !hasCapability {
+		return nil, fmt.Errorf("CreateAPIKey requires an explicit non-empty capabilities list")
 	}
 	if err := c.ensureGRPCConnected(); err != nil {
 		return nil, err

@@ -14,6 +14,10 @@ type gatewayConfig struct {
 	allowInsecureBackend bool
 	backendTLSServerName string
 	backendTLSCAFile     string
+	// trustedProxy declares a TLS-terminating reverse proxy in front of the
+	// gateway: X-Forwarded-For is trusted for client identity and plaintext
+	// serving is allowed in production. Mirrors cmd/proxy semantics.
+	trustedProxy bool
 }
 
 func loadGatewayConfig() (gatewayConfig, error) {
@@ -34,6 +38,7 @@ func loadGatewayConfig() (gatewayConfig, error) {
 		allowInsecureBackend: allowInsecureBackend,
 		backendTLSServerName: strings.TrimSpace(os.Getenv("TOOLPLANE_MCP_BACKEND_TLS_SERVER_NAME")),
 		backendTLSCAFile:     strings.TrimSpace(os.Getenv("TOOLPLANE_MCP_BACKEND_TLS_CA_FILE")),
+		trustedProxy:         boolEnv("TOOLPLANE_TRUSTED_PROXY", false),
 	}
 
 	if rawOrigins == "" {

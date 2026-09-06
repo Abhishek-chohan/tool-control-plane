@@ -102,23 +102,21 @@ def grep_search(
 
 
 def get_files_by_pattern(pattern: str, base_path: str) -> List[str]:
-    """Get list of files matching the glob pattern."""
-    original_cwd = os.getcwd()
-    os.chdir(base_path)
+    """Get list of files matching the glob pattern.
 
-    try:
-        matches = glob.glob(pattern, recursive=True)
-        files = []
+    Globs against base_path directly instead of os.chdir: changing the
+    process working directory is global state and races with every other
+    thread in the provider runtime.
+    """
+    matches = glob.glob(str(Path(base_path) / pattern), recursive=True)
+    files = []
 
-        for match in matches:
-            path = Path(match)
-            if path.is_file():
-                files.append(str(path.resolve()))
+    for match in matches:
+        path = Path(match)
+        if path.is_file():
+            files.append(str(path.resolve()))
 
-        return files
-
-    finally:
-        os.chdir(original_cwd)
+    return files
 
 
 def get_all_text_files(base_path: str) -> List[str]:

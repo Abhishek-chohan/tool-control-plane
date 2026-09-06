@@ -34,7 +34,7 @@ The two facades intentionally mirror each other closely.
 
 - Connection lifecycle: `connect()`, `disconnect()`, context-manager helpers.
 - Session lifecycle (consumer scope — portable across maintained SDKs): `create_session()`, `get_session()`, `list_sessions()`.
-- Session admin (admin scope — Python-only): `list_user_sessions()`, `bulk_delete_sessions()`, `get_session_stats()`, `refresh_session_token()`, `invalidate_session()`.
+- Session admin (admin scope — Python-only): `list_user_sessions()`, `bulk_delete_sessions()`, `get_session_stats()`, `invalidate_session()`.
 - Tool invocation (consumer scope): `invoke()`, `ainvoke()`, `stream()`, `astream()`, `get_available_tools()`, `get_request_status()`.
 - Provider runtime access: `provider_runtime()`.
 - Backward-compatible provider aliases: `tool()`, `start()`, `stop()`.
