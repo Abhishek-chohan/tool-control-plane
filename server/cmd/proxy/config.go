@@ -14,6 +14,11 @@ type proxyConfig struct {
 	allowInsecureBackend bool
 	backendTLSServerName string
 	backendTLSCAFile     string
+	// trustedProxy declares that a TLS-terminating reverse proxy sits in
+	// front of this process: X-Forwarded-For is trusted for client identity
+	// and plaintext serving is allowed in production. Without it, production
+	// requires the proxy's own TLS flags and client IPs come from RemoteAddr.
+	trustedProxy bool
 }
 
 func loadProxyConfig() (proxyConfig, error) {
@@ -34,6 +39,7 @@ func loadProxyConfig() (proxyConfig, error) {
 		allowInsecureBackend: allowInsecureBackend,
 		backendTLSServerName: strings.TrimSpace(os.Getenv("TOOLPLANE_PROXY_BACKEND_TLS_SERVER_NAME")),
 		backendTLSCAFile:     strings.TrimSpace(os.Getenv("TOOLPLANE_PROXY_BACKEND_TLS_CA_FILE")),
+		trustedProxy:         boolEnv("TOOLPLANE_TRUSTED_PROXY", false),
 	}
 
 	if rawOrigins == "" {

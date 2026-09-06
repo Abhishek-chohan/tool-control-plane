@@ -3,16 +3,25 @@
 
 This file is not the first-touch getting-started path. Start with
 `example_client.py` and `example_user.py` for the maintained control-plane flow.
+
+By default this sample registers a safe echo tool. The SWE toolkit (arbitrary
+bash execution, unrestricted filesystem editor) is opt-in only:
+
+    python example.py <session-id> --toolkit swe
+    # or
+    TOOLPLANE_EXAMPLE_TOOLKIT=swe python example.py <session-id>
+
+The SWE toolkit is UNSANDBOXED. Only enable it when this provider process
+runs inside an isolated container or VM, and read the warnings in
+toolplane/toolkits/swe/execute_bash.py and file_editor.py first.
 """
 
+import argparse
 import os
 import sys
 import time
 
-from langchain_core.tools import ToolException
-
 from toolplane import Toolplane
-from toolplane.toolkits.swe.swe_toolkit import get_swe_toolkit
 
 # Get configuration
 config = {
@@ -23,21 +32,22 @@ config = {
     "tls_server_name": os.getenv("TOOLPLANE_TLS_SERVER_NAME") or None,
     "user_id": os.getenv("TOOLPLANE_USER_ID", "toolkit-integration-user"),
     "api_key": os.getenv("TOOLPLANE_API_KEY", "toolplane-conformance-fixture-key"),
-    "session_id": os.getenv("TOOLPLANE_SESSION_ID", ""),
-    "session_name": "swe-toolkit-session",
-    "session_description": "Software Engineering Toolkit via Toolplane",
-    "namespace": "swe-tools",
-    "enable_streaming": True,
-    "enable_batch_operations": True,
-    "max_file_size": 10 * 1024 * 1024,  # 10MB
-    "max_search_results": 100,
-    "default_chunk_size": 1024,
-    "default_stream_delay": 0.1,
+    "session_name": "toolkit-sample-session",
+    "session_description": "Toolkit integration sample via Toolplane",
+    "namespace": "toolkit-sample",
 }
 
-if len(sys.argv) >= 2 and sys.argv[1].strip():
-    config["session_id"] = sys.argv[1].strip()
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("session_id", nargs="?", default=os.getenv("TOOLPLANE_SESSION_ID", ""))
+parser.add_argument(
+    "--toolkit",
+    choices=["echo", "swe"],
+    default=os.getenv("TOOLPLANE_EXAMPLE_TOOLKIT", "echo"),
+    help="which tool set to register (default: safe echo demo)",
+)
+args = parser.parse_args()
 
+config["session_id"] = (args.session_id or "").strip()
 if not config["session_id"]:
     print("❌ Error: set TOOLPLANE_SESSION_ID or pass the session ID as the first argument.")
     sys.exit(1)
@@ -57,13 +67,13 @@ provider = client.provider_runtime([config["session_id"]])
 provider.attach_session(config["session_id"], register_machine=True)
 
 
-def convert_langchain_tool_to_toolplane_tool(
-    langchain_tool,
-) -> tuple[str, callable, dict, bool]:
+def convert_langchain_tool_to_toolplane_tool(langchain_tool):
     """
     Convert a LangChain StructuredTool into Toolplane tool components:
-      (name, func, schema_dict, stream_flag).
+      (name, func, schema_dict, description, stream_flag).
     """
+    from langchain_core.tools import ToolException
+
     name = langchain_tool.name
     description = getattr(langchain_tool, "description", "") or ""
     args_schema = getattr(langchain_tool, "args_schema", {}) or {}
@@ -76,7 +86,6 @@ def convert_langchain_tool_to_toolplane_tool(
     def func(**kwargs):
         # Try sync run first
         if hasattr(langchain_tool, "run"):
-
             return langchain_tool.run(kwargs)
         # Fallback to async
         elif hasattr(langchain_tool, "arun"):
@@ -85,7 +94,6 @@ def convert_langchain_tool_to_toolplane_tool(
             return asyncio.get_event_loop().run_until_complete(
                 langchain_tool.arun(kwargs)
             )
-
         else:
             raise ToolException(f"Tool '{name}' has no run()/arun()")
 
@@ -113,22 +121,56 @@ def register_langchain_tool(provider, session_id: str, langchain_tool, stream: b
     )
 
 
-tools = get_swe_toolkit()
-# tools = get_standalone_toolkit()
-for tool in tools:
-    register_langchain_tool(
-        provider,
-        config["session_id"],
-        tool,
+def register_echo_demo(provider, session_id: str):
+    """Register the safe default demo tool."""
+
+    def echo(message: str = "", **_: object) -> dict:
+        return {"echo": message}
+
+    provider.register_tool(
+        session_id=session_id,
+        name="echo",
+        func=echo,
+        schema={
+            "name": "echo",
+            "description": "Echo the message back (safe sample tool).",
+            "schema": {
+                "type": "object",
+                "properties": {"message": {"type": "string"}},
+                "required": ["message"],
+            },
+        },
+        description="Echo the message back (safe sample tool).",
         stream=False,
+        tags=["echo", "sample"],
     )
+
+
+def register_swe_toolkit(provider, session_id: str):
+    """Register the UNSANDBOXED SWE toolkit (explicit opt-in only)."""
+    print(
+        "⚠️  WARNING: registering the SWE toolkit — model-supplied bash commands "
+        "and unrestricted file edits run with this process's full privileges.\n"
+        "   Only continue if this provider is isolated (container/VM). "
+        "See toolplane/toolkits/swe/execute_bash.py for details."
+    )
+    from toolplane.toolkits.swe.swe_toolkit import get_swe_toolkit
+
+    for tool in get_swe_toolkit():
+        register_langchain_tool(provider, session_id, tool, stream=False)
+
+
+if args.toolkit == "swe":
+    register_swe_toolkit(provider, config["session_id"])
+else:
+    register_echo_demo(provider, config["session_id"])
 
 if __name__ == "__main__":
     try:
         print("\n🚀 Starting explicit provider runtime...")
         provider.start_in_background()
 
-        print("✅ SWE Toolkit Toolplane server is running!")
+        print(f"✅ Toolkit sample provider is running (toolkit={args.toolkit})!")
         print("Press Ctrl+C to stop the server.")
 
         # Keep the client running
@@ -136,7 +178,7 @@ if __name__ == "__main__":
             time.sleep(1)
 
     except KeyboardInterrupt:
-        print("\n🛑 Shutting down SWE Toolkit Toolplane server...")
+        print("\n🛑 Shutting down toolkit sample provider...")
         provider.stop()
         print("✅ Server stopped successfully.")
         sys.exit(0)

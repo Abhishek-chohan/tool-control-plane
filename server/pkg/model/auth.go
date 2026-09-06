@@ -24,6 +24,11 @@ type AuthMode string
 
 var ErrUnsupportedAPIKeyCapability = errors.New("unsupported api key capability")
 
+// ErrAPIKeyCapabilitiesRequired is returned when a caller asks to mint an API
+// key without stating any capabilities. Keys must be created least-privilege
+// and explicit; there is no implicit full-access default.
+var ErrAPIKeyCapabilitiesRequired = errors.New("api key capabilities are required")
+
 const (
 	AuthModeFixed      AuthMode = "fixed"
 	AuthModeSessionKey AuthMode = "session_key"
@@ -42,6 +47,27 @@ func DefaultAPIKeyCapabilities() []APIKeyCapability {
 	capabilities := make([]APIKeyCapability, len(apiKeyCapabilityOrder))
 	copy(capabilities, apiKeyCapabilityOrder)
 	return capabilities
+}
+
+// ParseAPIKeyCapabilitiesStrict validates an explicit capability list for
+// minting new keys. Unlike NormalizeAPIKeyCapabilities it never falls back to
+// the full-capability default: an empty (or entirely blank) list is
+// ErrAPIKeyCapabilitiesRequired, so provisioning a key always states intent.
+func ParseAPIKeyCapabilitiesStrict(values []string) ([]APIKeyCapability, error) {
+	if len(values) == 0 {
+		return nil, ErrAPIKeyCapabilitiesRequired
+	}
+	hasValue := false
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			hasValue = true
+			break
+		}
+	}
+	if !hasValue {
+		return nil, ErrAPIKeyCapabilitiesRequired
+	}
+	return NormalizeAPIKeyCapabilities(values)
 }
 
 func NormalizeAPIKeyCapabilities(values []string) ([]APIKeyCapability, error) {

@@ -283,10 +283,6 @@ class SessionContext:
         """Get session statistics for a user."""
         return self.session_manager.get_session_stats(user_id)
 
-    def refresh_session_token(self) -> Dict[str, str]:
-        """Refresh session token."""
-        return self.session_manager.refresh_session_token(self.session_id)
-
     def invalidate_session(self, reason: str = "") -> bool:
         """Invalidate a session."""
         return self.session_manager.invalidate_session(self.session_id, reason)

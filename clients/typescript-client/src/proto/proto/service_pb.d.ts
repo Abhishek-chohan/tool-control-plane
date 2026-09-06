@@ -830,49 +830,6 @@ export namespace GetSessionStatsResponse {
     }
 }
 
-export class RefreshSessionTokenRequest extends jspb.Message { 
-    getSessionId(): string;
-    setSessionId(value: string): RefreshSessionTokenRequest;
-
-    serializeBinary(): Uint8Array;
-    toObject(includeInstance?: boolean): RefreshSessionTokenRequest.AsObject;
-    static toObject(includeInstance: boolean, msg: RefreshSessionTokenRequest): RefreshSessionTokenRequest.AsObject;
-    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
-    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
-    static serializeBinaryToWriter(message: RefreshSessionTokenRequest, writer: jspb.BinaryWriter): void;
-    static deserializeBinary(bytes: Uint8Array): RefreshSessionTokenRequest;
-    static deserializeBinaryFromReader(message: RefreshSessionTokenRequest, reader: jspb.BinaryReader): RefreshSessionTokenRequest;
-}
-
-export namespace RefreshSessionTokenRequest {
-    export type AsObject = {
-        sessionId: string,
-    }
-}
-
-export class RefreshSessionTokenResponse extends jspb.Message { 
-    getNewToken(): string;
-    setNewToken(value: string): RefreshSessionTokenResponse;
-    getExpiresAt(): string;
-    setExpiresAt(value: string): RefreshSessionTokenResponse;
-
-    serializeBinary(): Uint8Array;
-    toObject(includeInstance?: boolean): RefreshSessionTokenResponse.AsObject;
-    static toObject(includeInstance: boolean, msg: RefreshSessionTokenResponse): RefreshSessionTokenResponse.AsObject;
-    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
-    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
-    static serializeBinaryToWriter(message: RefreshSessionTokenResponse, writer: jspb.BinaryWriter): void;
-    static deserializeBinary(bytes: Uint8Array): RefreshSessionTokenResponse;
-    static deserializeBinaryFromReader(message: RefreshSessionTokenResponse, reader: jspb.BinaryReader): RefreshSessionTokenResponse;
-}
-
-export namespace RefreshSessionTokenResponse {
-    export type AsObject = {
-        newToken: string,
-        expiresAt: string,
-    }
-}
-
 export class InvalidateSessionRequest extends jspb.Message { 
     getSessionId(): string;
     setSessionId(value: string): InvalidateSessionRequest;
@@ -899,6 +856,8 @@ export namespace InvalidateSessionRequest {
 export class InvalidateSessionResponse extends jspb.Message { 
     getSuccess(): boolean;
     setSuccess(value: boolean): InvalidateSessionResponse;
+    getRevokedApiKeys(): number;
+    setRevokedApiKeys(value: number): InvalidateSessionResponse;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): InvalidateSessionResponse.AsObject;
@@ -913,6 +872,7 @@ export class InvalidateSessionResponse extends jspb.Message {
 export namespace InvalidateSessionResponse {
     export type AsObject = {
         success: boolean,
+        revokedApiKeys: number,
     }
 }
 

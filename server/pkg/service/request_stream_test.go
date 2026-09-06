@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	gproto "google.golang.org/protobuf/proto"
+	"toolplane/cmd/server/auth"
 	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
 	proto "toolplane/proto"
@@ -80,7 +81,7 @@ func TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker(t *testing.T)
 		t.Fatalf("submit result: %v", err)
 	}
 
-	stream := newCollectingExecuteToolStream(context.Background())
+	stream := newCollectingExecuteToolStream(fixedPrincipalContext())
 	err = server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID, LastSeq: 1}, stream)
 	if err != nil {
 		t.Fatalf("resume stream: %v", err)
@@ -116,7 +117,7 @@ func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *tes
 		t.Fatalf("submit result: %v", err)
 	}
 
-	stream := newCollectingExecuteToolStream(context.Background())
+	stream := newCollectingExecuteToolStream(fixedPrincipalContext())
 	err = server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID, LastSeq: 0}, stream)
 	if status.Code(err) != codes.OutOfRange {
 		t.Fatalf("resume status = %v, want %v (err=%v)", status.Code(err), codes.OutOfRange, err)
@@ -142,7 +143,7 @@ func TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker(t *tes
 		t.Fatalf("submit result: %v", err)
 	}
 
-	stream := newCollectingExecuteToolStream(context.Background())
+	stream := newCollectingExecuteToolStream(fixedPrincipalContext())
 	err = server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID, LastSeq: 100}, stream)
 	if err != nil {
 		t.Fatalf("resume stream: %v", err)
@@ -219,6 +220,13 @@ func newCollectingExecuteToolStream(ctx context.Context) *collectingExecuteToolS
 		ctx = context.Background()
 	}
 	return &collectingExecuteToolStream{ctx: ctx}
+}
+
+// fixedPrincipalContext carries a fixed-mode auth principal so stream handlers
+// driven directly in tests pass the fail-closed capability checks the
+// interceptors would normally satisfy.
+func fixedPrincipalContext() context.Context {
+	return auth.NewContext(context.Background(), &model.AuthPrincipal{Mode: model.AuthModeFixed})
 }
 
 func (s *collectingExecuteToolStream) Send(chunk *proto.ExecuteToolChunk) error {

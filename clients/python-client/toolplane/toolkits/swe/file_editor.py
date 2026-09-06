@@ -48,12 +48,23 @@ def get_temp_dir():
 
 
 def get_state_file_path(filename="editor_state.json"):
-    """Get platform-appropriate state file path"""
-    return get_temp_dir() / filename
+    """Get the editor state file path.
+
+    The default is a per-user cache directory, NOT the shared world-writable
+    temp dir: the state holds full pre-edit copies of every edited file, so a
+    predictable shared path both leaks file contents to other local users and
+    is poisonable (undo_edit writes history bytes back to disk). Override via
+    TOOLPLANE_EDITOR_STATE_FILE (or the legacy EDITOR_STATE_FILE).
+    """
+    override = os.environ.get("TOOLPLANE_EDITOR_STATE_FILE") or os.environ.get(
+        "EDITOR_STATE_FILE"
+    )
+    if override:
+        return Path(override)
+    return Path.home() / ".cache" / "toolplane" / filename
 
 
-# Use environment variable or default to cross-platform temp directory
-STATE_FILE = str(os.environ.get("EDITOR_STATE_FILE", get_state_file_path()))
+STATE_FILE = str(get_state_file_path())
 SNIPPET_LINES = 4
 
 # We ignore certain warnings from tree_sitter (optional).
@@ -135,6 +146,7 @@ def save_history(history: Dict[str, List[str]]):
     Save the file edit history to STATE_FILE as JSON.
     """
     try:
+        Path(STATE_FILE).parent.mkdir(parents=True, exist_ok=True)
         with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f)
     except Exception as e:
@@ -195,6 +207,17 @@ class StrReplaceEditor:
             )
 
     def validate_path(self, command: str, path: Path):
+        # Optional workspace jail: when TOOLPLANE_WORKSPACE_ROOT is set, every
+        # editor operation must resolve inside it (symlinks resolved first).
+        root = os.environ.get("TOOLPLANE_WORKSPACE_ROOT", "").strip()
+        if root:
+            try:
+                Path(path).resolve().relative_to(Path(root).resolve())
+            except ValueError:
+                raise EditorError(
+                    f"Path '{path}' is outside TOOLPLANE_WORKSPACE_ROOT ({root})."
+                )
+
         if command == "create":
             if path.exists():
                 raise EditorError(

@@ -198,7 +198,6 @@ interface ISessionsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
     listUserSessions: ISessionsServiceService_IListUserSessions;
     bulkDeleteSessions: ISessionsServiceService_IBulkDeleteSessions;
     getSessionStats: ISessionsServiceService_IGetSessionStats;
-    refreshSessionToken: ISessionsServiceService_IRefreshSessionToken;
     invalidateSession: ISessionsServiceService_IInvalidateSession;
     createApiKey: ISessionsServiceService_ICreateApiKey;
     listApiKeys: ISessionsServiceService_IListApiKeys;
@@ -277,15 +276,6 @@ interface ISessionsServiceService_IGetSessionStats extends grpc.MethodDefinition
     responseSerialize: grpc.serialize<proto_service_pb.GetSessionStatsResponse>;
     responseDeserialize: grpc.deserialize<proto_service_pb.GetSessionStatsResponse>;
 }
-interface ISessionsServiceService_IRefreshSessionToken extends grpc.MethodDefinition<proto_service_pb.RefreshSessionTokenRequest, proto_service_pb.RefreshSessionTokenResponse> {
-    path: "/api.SessionsService/RefreshSessionToken";
-    requestStream: false;
-    responseStream: false;
-    requestSerialize: grpc.serialize<proto_service_pb.RefreshSessionTokenRequest>;
-    requestDeserialize: grpc.deserialize<proto_service_pb.RefreshSessionTokenRequest>;
-    responseSerialize: grpc.serialize<proto_service_pb.RefreshSessionTokenResponse>;
-    responseDeserialize: grpc.deserialize<proto_service_pb.RefreshSessionTokenResponse>;
-}
 interface ISessionsServiceService_IInvalidateSession extends grpc.MethodDefinition<proto_service_pb.InvalidateSessionRequest, proto_service_pb.InvalidateSessionResponse> {
     path: "/api.SessionsService/InvalidateSession";
     requestStream: false;
@@ -334,7 +324,6 @@ export interface ISessionsServiceServer extends grpc.UntypedServiceImplementatio
     listUserSessions: grpc.handleUnaryCall<proto_service_pb.ListUserSessionsRequest, proto_service_pb.ListUserSessionsResponse>;
     bulkDeleteSessions: grpc.handleUnaryCall<proto_service_pb.BulkDeleteSessionsRequest, proto_service_pb.BulkDeleteSessionsResponse>;
     getSessionStats: grpc.handleUnaryCall<proto_service_pb.GetSessionStatsRequest, proto_service_pb.GetSessionStatsResponse>;
-    refreshSessionToken: grpc.handleUnaryCall<proto_service_pb.RefreshSessionTokenRequest, proto_service_pb.RefreshSessionTokenResponse>;
     invalidateSession: grpc.handleUnaryCall<proto_service_pb.InvalidateSessionRequest, proto_service_pb.InvalidateSessionResponse>;
     createApiKey: grpc.handleUnaryCall<proto_service_pb.CreateApiKeyRequest, proto_service_pb.ApiKey>;
     listApiKeys: grpc.handleUnaryCall<proto_service_pb.ListApiKeysRequest, proto_service_pb.ListApiKeysResponse>;
@@ -366,9 +355,6 @@ export interface ISessionsServiceClient {
     getSessionStats(request: proto_service_pb.GetSessionStatsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
     getSessionStats(request: proto_service_pb.GetSessionStatsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
     getSessionStats(request: proto_service_pb.GetSessionStatsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
-    refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
-    refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
-    refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
     invalidateSession(request: proto_service_pb.InvalidateSessionRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;
     invalidateSession(request: proto_service_pb.InvalidateSessionRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;
     invalidateSession(request: proto_service_pb.InvalidateSessionRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;
@@ -409,9 +395,6 @@ export class SessionsServiceClient extends grpc.Client implements ISessionsServi
     public getSessionStats(request: proto_service_pb.GetSessionStatsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
     public getSessionStats(request: proto_service_pb.GetSessionStatsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
     public getSessionStats(request: proto_service_pb.GetSessionStatsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetSessionStatsResponse) => void): grpc.ClientUnaryCall;
-    public refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
-    public refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
-    public refreshSessionToken(request: proto_service_pb.RefreshSessionTokenRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RefreshSessionTokenResponse) => void): grpc.ClientUnaryCall;
     public invalidateSession(request: proto_service_pb.InvalidateSessionRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;
     public invalidateSession(request: proto_service_pb.InvalidateSessionRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;
     public invalidateSession(request: proto_service_pb.InvalidateSessionRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.InvalidateSessionResponse) => void): grpc.ClientUnaryCall;

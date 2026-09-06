@@ -151,7 +151,12 @@ r2egym_bash_execute_tool = {
 
 
 _BASH_DESCRIPTION = """
-Description: Execute a bash command in the terminal. Node: all commands will we executed in present working directory: {PWD}
+Description: Execute a bash command in the terminal. Note: all commands will be executed in the current working directory: {PWD}
+
+WARNING: UNSANDBOXED. Commands run with the full privileges of the provider
+process and there is no command filtering. This tool is only safe to register
+when the provider itself runs inside an isolated container or VM. Commands
+are killed after TOOLPLANE_BASH_TIMEOUT_SECONDS (default 120).
 
 Parameters:
   (1) command (string, optional): The bash command to execute. For example: `python my_script.py`. If not provided, will show help.

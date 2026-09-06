@@ -289,33 +289,17 @@ func (s *GRPCServer) GetSessionStats(ctx context.Context, req *proto.GetSessionS
 	}, nil
 }
 
-// RefreshSessionToken implements the gRPC RefreshSessionToken method
-func (s *GRPCServer) RefreshSessionToken(ctx context.Context, req *proto.RefreshSessionTokenRequest) (*proto.RefreshSessionTokenResponse, error) {
-	// Refresh session token
-	err := s.sessionService.RefreshSessionToken(req.SessionId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to refresh session token: %v", err)
-	}
-
-	expiresAt := time.Now().UTC().Add(24 * time.Hour).Format(time.RFC3339)
-	newToken := fmt.Sprintf("session_%s_%d", req.SessionId, time.Now().UTC().Unix())
-
-	return &proto.RefreshSessionTokenResponse{
-		NewToken:  newToken,
-		ExpiresAt: expiresAt,
-	}, nil
-}
-
 // InvalidateSession implements the gRPC InvalidateSession method
 func (s *GRPCServer) InvalidateSession(ctx context.Context, req *proto.InvalidateSessionRequest) (*proto.InvalidateSessionResponse, error) {
-	// Invalidate session
-	err := s.sessionService.InvalidateSession(req.SessionId, req.Reason)
+	// Revoke every live API key for the session (session-wide kill switch).
+	revoked, err := s.sessionService.InvalidateSession(req.SessionId, req.Reason)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to invalidate session: %v", err)
 	}
 
 	return &proto.InvalidateSessionResponse{
-		Success: true,
+		Success:        true,
+		RevokedApiKeys: int32(revoked),
 	}, nil
 }
 
@@ -334,7 +318,7 @@ func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRe
 	// Create API key
 	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities)
 	if err != nil {
-		if errors.Is(err, model.ErrUnsupportedAPIKeyCapability) {
+		if errors.Is(err, model.ErrUnsupportedAPIKeyCapability) || errors.Is(err, model.ErrAPIKeyCapabilitiesRequired) {
 			return nil, status.Errorf(codes.InvalidArgument, "failed to create API key: %v", err)
 		}
 		return nil, status.Errorf(codes.Internal, "failed to create API key: %v", err)
@@ -795,9 +779,24 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 
 // ResumeStream allows clients to resume a broken stream
 func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.ToolService_ResumeStreamServer) error {
+	// Fail closed before touching state: without a principal (wiring bug or a
+	// test driving the handler directly), the capability check below would
+	// only reject existing requests, which itself leaks existence.
+	principal, ok := auth.PrincipalFromContext(stream.Context())
+	if !ok || principal == nil {
+		return status.Error(codes.PermissionDenied, "missing authenticated principal")
+	}
+
 	request, err := s.requestService.GetRequestByIDAnySession(req.RequestId)
 	if err != nil {
-		return status.Errorf(codes.NotFound, "failed to resolve request %s: %v", req.RequestId, err)
+		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
+	}
+	// Session-scoped check before the capability check, returning the same
+	// NotFound as a missing request: a session-bound caller must not be able
+	// to distinguish "exists in another session" from "does not exist".
+	if principal.Mode != model.AuthModeFixed &&
+		principal.SessionID != "" && principal.SessionID != request.SessionID {
+		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
 	}
 	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityExecute); err != nil {
 		return err

@@ -191,10 +191,6 @@ func (s *sessionsServiceClientStub) GetSessionStats(ctx context.Context, in *pb.
 	return nil, unexpectedSessionCall("GetSessionStats")
 }
 
-func (s *sessionsServiceClientStub) RefreshSessionToken(ctx context.Context, in *pb.RefreshSessionTokenRequest, opts ...grpc.CallOption) (*pb.RefreshSessionTokenResponse, error) {
-	return nil, unexpectedSessionCall("RefreshSessionToken")
-}
-
 func (s *sessionsServiceClientStub) InvalidateSession(ctx context.Context, in *pb.InvalidateSessionRequest, opts ...grpc.CallOption) (*pb.InvalidateSessionResponse, error) {
 	return nil, unexpectedSessionCall("InvalidateSession")
 }

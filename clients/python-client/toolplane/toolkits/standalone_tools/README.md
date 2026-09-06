@@ -2,6 +2,16 @@
 
 This folder contains implementations of VS Code-independent tools that can be used for various development and analysis tasks. These tools are designed to work independently of VS Code and can be used from the command line or integrated into other systems.
 
+> **⚠️ UNSANDBOXED — read before remote use.** These tools operate on the
+> local filesystem with the full privileges of the process that runs them and
+> provide no isolation of their own. They are appropriate inside a benchmark
+> container (e.g. SWE-bench) or on a trusted workstation. Do **not** register
+> them on a Toolplane provider unless the provider itself runs inside an
+> isolated container or VM: once registered, a remote model can drive them
+> over the control plane. `TOOLPLANE_WORKSPACE_ROOT` (path jail for editors,
+> working directory for bash) and `TOOLPLANE_BASH_TIMEOUT_SECONDS` (command
+> timeout) narrow the blast radius but are not a sandbox.
+
 ## Available Tools
 
 ### 1. `create_directory.py`

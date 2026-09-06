@@ -146,12 +146,10 @@ service SessionsService {
       body: "*";
     };
   }
-  rpc RefreshSessionToken(RefreshSessionTokenRequest) returns (RefreshSessionTokenResponse) {
-    option (google.api.http) = {
-      post: "/api/RefreshSessionToken";
-      body: "*";
-    };
-  }
+  // InvalidateSession is the session-wide kill switch: it revokes every live
+  // API key for the session so no credential authenticates again. Use it for
+  // suspected key compromise; the session record itself is kept (use
+  // DeleteSession to remove it).
   rpc InvalidateSession(InvalidateSessionRequest) returns (InvalidateSessionResponse) {
     option (google.api.http) = {
       post: "/api/InvalidateSession";
@@ -549,17 +547,6 @@ message GetSessionStatsResponse {
   int32 expired_sessions = 3;
 }
 
-// RefreshSessionTokenRequest
-message RefreshSessionTokenRequest {
-  string session_id = 1;
-}
-
-// RefreshSessionTokenResponse
-message RefreshSessionTokenResponse {
-  string new_token = 1;
-  string expires_at = 2;
-}
-
 // InvalidateSessionRequest
 message InvalidateSessionRequest {
   string session_id = 1;
@@ -569,6 +556,7 @@ message InvalidateSessionRequest {
 // InvalidateSessionResponse
 message InvalidateSessionResponse {
   bool success = 1;
+  int32 revoked_api_keys = 2;  // number of live API keys revoked by this call
 }
 
 // UpdateSessionRequest
@@ -593,8 +581,9 @@ message DeleteSessionResponse {
 message CreateApiKeyRequest {
   string session_id = 1;
   string name = 2;
-  // Supported values are read, execute, and admin.
-  // Empty means the server default full capability set.
+  // Supported values are read, execute, and admin. Capabilities are
+  // REQUIRED: an empty list is rejected with INVALID_ARGUMENT so keys are
+  // always minted least-privilege and explicit.
   repeated string capabilities = 3;
 }
 
