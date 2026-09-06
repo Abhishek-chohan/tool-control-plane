@@ -390,7 +390,11 @@ func (s *GRPCServer) RegisterMachine(ctx context.Context, req *proto.RegisterMac
 	// Get remote IP from context
 	remoteIP := "127.0.0.1" // Default to localhost if not available
 
-	// Register machine
+	// Register machine. The re-registration credential travels in metadata
+	// (validated by the machine-token interceptor before this handler runs,
+	// and again here so the takeover check sees it).
+	presentedToken := auth.MachineTokenFromContext(ctx)
+
 	machine, err := s.machineService.RegisterMachine(
 		req.SessionId,
 		req.MachineId,
@@ -398,12 +402,17 @@ func (s *GRPCServer) RegisterMachine(ctx context.Context, req *proto.RegisterMac
 		req.SdkLanguage,
 		remoteIP,
 		tools,
+		presentedToken,
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to register machine: %v", err)
+		return nil, status.Errorf(codes.FailedPrecondition, "failed to register machine: %v", err)
 	}
 
-	return convertModelMachineToProto(machine), nil
+	protoMachine := convertModelMachineToProto(machine)
+	// The minted credential is returned exactly once, on the registration
+	// that created it.
+	protoMachine.MachineToken = machine.Token
+	return protoMachine, nil
 }
 
 // ListMachines implements the gRPC ListMachines method
@@ -739,7 +748,7 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 
 // StreamExecuteTool implements the gRPC StreamExecuteTool method
 func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream proto.ToolService_StreamExecuteToolServer) error {
-	if err := auth.RequireSessionCapability(stream.Context(), req.SessionId, model.APIKeyCapabilityExecute); err != nil {
+	if err := auth.RequireSessionCapability(stream.Context(), req.SessionId, model.APIKeyCapabilityInvoke); err != nil {
 		return err
 	}
 
@@ -798,7 +807,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 		principal.SessionID != "" && principal.SessionID != request.SessionID {
 		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
 	}
-	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityExecute); err != nil {
+	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityInvoke); err != nil {
 		return err
 	}
 

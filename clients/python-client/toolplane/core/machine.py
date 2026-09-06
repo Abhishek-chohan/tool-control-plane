@@ -142,6 +142,13 @@ class MachineManager:
 
             machine_id = response.id
 
+            # The registration response carries the per-machine credential
+            # exactly once. Store it so every subsequent provide-scoped call
+            # presents it (see ConnectionManager.get_metadata).
+            machine_token = getattr(response, "machine_token", "")
+            if machine_token:
+                self.connection_manager.set_machine_token(machine_token)
+
             with self.machines_lock:
                 self.machines[session_id] = machine_id
                 self._last_heartbeat[session_id] = time.time()

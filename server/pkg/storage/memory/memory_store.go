@@ -622,6 +622,9 @@ func cloneMachine(m *model.Machine) *model.Machine {
 		return nil
 	}
 	c := *m
+	// Machine tokens are return-once credentials; stored/returned copies
+	// never carry the plaintext.
+	c.Token = ""
 	return &c
 }
 

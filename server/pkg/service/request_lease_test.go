@@ -29,7 +29,7 @@ func newLeaseTestStack() (*RequestsService, *MachinesService, string, string) {
 	const machineID = "machine-lease"
 	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	})
+	}, "")
 	if err != nil {
 		panic(err)
 	}
@@ -151,7 +151,7 @@ func TestFencedWritesAfterReclaim(t *testing.T) {
 	const machineB = "machine-lease-b"
 	if _, err := machineService.RegisterMachine(sessionID, machineB, "1.0.0", "go", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineB, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	}); err != nil {
+	}, ""); err != nil {
 		t.Fatalf("register machine B: %v", err)
 	}
 
@@ -225,7 +225,7 @@ func TestActiveActiveFencedWritesAcrossInstances(t *testing.T) {
 	seedSessionForAA(t, store)
 
 	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
-	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}); err != nil {
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
 		t.Fatalf("RegisterMachine on A: %v", err)
 	}
 	machineB := model.NewMachine("sess-aa", "machine-b", "1.0", "go", "127.0.0.1")

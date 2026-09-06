@@ -9,14 +9,27 @@ import (
 type APIKeyCapability string
 
 const (
-	APIKeyCapabilityRead    APIKeyCapability = "read"
-	APIKeyCapabilityExecute APIKeyCapability = "execute"
+	APIKeyCapabilityRead APIKeyCapability = "read"
+	// APIKeyCapabilityInvoke authorizes consumer operations: creating
+	// requests, invoking tools, cancelling work.
+	APIKeyCapabilityInvoke APIKeyCapability = "invoke"
+	// APIKeyCapabilityProvide authorizes provider operations: registering
+	// machines/tools, claiming requests, submitting results and chunks,
+	// renewing leases, draining.
+	APIKeyCapabilityProvide APIKeyCapability = "provide"
 	APIKeyCapabilityAdmin   APIKeyCapability = "admin"
+
+	// APIKeyCapabilityExecute is the legacy pre-split value that combined
+	// invoke and provide. It is still accepted everywhere capabilities are
+	// normalized (existing keys and database rows keep working) and expands
+	// to invoke+provide. Do not mint new keys with it.
+	APIKeyCapabilityExecute APIKeyCapability = "execute"
 )
 
 var apiKeyCapabilityOrder = []APIKeyCapability{
 	APIKeyCapabilityRead,
-	APIKeyCapabilityExecute,
+	APIKeyCapabilityInvoke,
+	APIKeyCapabilityProvide,
 	APIKeyCapabilityAdmin,
 }
 
@@ -75,35 +88,38 @@ func NormalizeAPIKeyCapabilities(values []string) ([]APIKeyCapability, error) {
 		return DefaultAPIKeyCapabilities(), nil
 	}
 
-	allowed := map[string]APIKeyCapability{
-		string(APIKeyCapabilityRead):    APIKeyCapabilityRead,
-		string(APIKeyCapabilityExecute): APIKeyCapabilityExecute,
-		string(APIKeyCapabilityAdmin):   APIKeyCapabilityAdmin,
+	allowed := map[string][]APIKeyCapability{
+		string(APIKeyCapabilityRead):    {APIKeyCapabilityRead},
+		string(APIKeyCapabilityInvoke):  {APIKeyCapabilityInvoke},
+		string(APIKeyCapabilityProvide): {APIKeyCapabilityProvide},
+		string(APIKeyCapabilityAdmin):   {APIKeyCapabilityAdmin},
+		// Legacy alias from before the invoke/provide split.
+		string(APIKeyCapabilityExecute): {APIKeyCapabilityInvoke, APIKeyCapabilityProvide},
 	}
 	seen := make(map[APIKeyCapability]struct{})
-	capabilities := make([]APIKeyCapability, 0, len(values))
 
 	for _, value := range values {
 		normalized := strings.TrimSpace(strings.ToLower(value))
 		if normalized == "" {
 			continue
 		}
-		capability, ok := allowed[normalized]
+		expanded, ok := allowed[normalized]
 		if !ok {
 			return nil, fmt.Errorf("%w %q", ErrUnsupportedAPIKeyCapability, value)
 		}
-		if _, ok := seen[capability]; ok {
-			continue
+		for _, capability := range expanded {
+			if _, ok := seen[capability]; ok {
+				continue
+			}
+			seen[capability] = struct{}{}
 		}
-		seen[capability] = struct{}{}
-		capabilities = append(capabilities, capability)
 	}
 
-	if len(capabilities) == 0 {
+	if len(seen) == 0 {
 		return DefaultAPIKeyCapabilities(), nil
 	}
 
-	ordered := make([]APIKeyCapability, 0, len(capabilities))
+	ordered := make([]APIKeyCapability, 0, len(seen))
 	for _, capability := range apiKeyCapabilityOrder {
 		if _, ok := seen[capability]; ok {
 			ordered = append(ordered, capability)

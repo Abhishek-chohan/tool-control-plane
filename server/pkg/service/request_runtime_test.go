@@ -54,7 +54,7 @@ func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) 
 
 	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "python", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRequestsServiceRecordsProviderLifecycleEvents(t *testing.T) {
 
 	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "python", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("register machine: %v", err)
 	}

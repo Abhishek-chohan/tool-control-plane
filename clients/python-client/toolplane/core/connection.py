@@ -232,7 +232,19 @@ class ConnectionManager:
 
     def get_metadata(self):
         """Get metadata for gRPC calls."""
-        return self.config.get_metadata()
+        metadata = self.config.get_metadata()
+        # Per-machine credential for provide-scoped RPCs (set by the machine
+        # registration that minted it). Sent on every call; the server only
+        # consults it on provider operations.
+        if getattr(self, "machine_token", ""):
+            metadata = list(metadata) + [
+                ("x-toolplane-machine-token", self.machine_token)
+            ]
+        return metadata
+
+    def set_machine_token(self, token: str):
+        """Store the per-machine credential minted at registration."""
+        self.machine_token = token
 
     def mark_unhealthy(self):
         """Mark the current channel as unhealthy so the next call reconnects."""

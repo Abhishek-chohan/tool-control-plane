@@ -204,6 +204,9 @@ func authMetadata(r *http.Request) metadata.MD {
 	if header := r.Header.Get("X-API-Key"); header != "" {
 		md.Set("api_key", header)
 	}
+	if header := r.Header.Get("X-Toolplane-Machine-Token"); header != "" {
+		md.Set("x-toolplane-machine-token", header)
+	}
 	// Propagate W3C Trace Context (SEP-414) so distributed traces continue
 	// across the gateway into the backend.
 	for key, value := range traceMetadata(r) {

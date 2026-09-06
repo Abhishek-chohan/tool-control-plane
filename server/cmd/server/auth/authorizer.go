@@ -34,15 +34,24 @@ type userScopedRequest interface {
 }
 
 type APIKeyAuthorizer struct {
-	authenticate AuthenticateFunc
-	tracer       trace.SessionTracer
+	authenticate     AuthenticateFunc
+	tracer           trace.SessionTracer
+	machineTokenAuth MachineTokenAuthorizer
 }
 
-func NewAPIKeyAuthorizer(authenticate AuthenticateFunc, tracer trace.SessionTracer) *APIKeyAuthorizer {
+type authorizerOption func(*APIKeyAuthorizer)
+
+// NewAPIKeyAuthorizer builds the authorizer; options (e.g.
+// WithMachineTokenAuth) extend it.
+func NewAPIKeyAuthorizer(authenticate AuthenticateFunc, tracer trace.SessionTracer, opts ...authorizerOption) *APIKeyAuthorizer {
 	if tracer == nil {
 		tracer = trace.NopTracer()
 	}
-	return &APIKeyAuthorizer{authenticate: authenticate, tracer: tracer}
+	authorizer := &APIKeyAuthorizer{authenticate: authenticate, tracer: tracer}
+	for _, opt := range opts {
+		opt(authorizer)
+	}
+	return authorizer
 }
 
 func PrincipalFromContext(ctx context.Context) (*model.AuthPrincipal, bool) {
@@ -114,6 +123,13 @@ func (a *APIKeyAuthorizer) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		if authzErr := a.authorizeUnary(principal, info.FullMethod, req); authzErr != nil {
 			a.recordDenied(principal, info.FullMethod, authzErr.Error())
 			return nil, authzErr
+		}
+
+		if policy, ok := methodPolicyFor(info.FullMethod); ok {
+			if machineErr := a.authorizeMachineToken(ctx, principal, req, policy); machineErr != nil {
+				a.recordDenied(principal, info.FullMethod, machineErr.Error())
+				return nil, machineErr
+			}
 		}
 
 		ctx = NewContext(ctx, principal)
@@ -335,16 +351,26 @@ func methodPolicyFor(fullMethod string) (MethodPolicy, bool) {
 	return policy, ok
 }
 
+// methodPolicies partitions the contract by role:
+//   - read:    inspection RPCs (lists, gets, chunk windows, health)
+//   - invoke:  consumer RPCs (create requests, execute tools, cancel work)
+//   - provide: provider RPCs (register machines/tools, claim, submit, append,
+//     renew lease, drain, unregister) — these also require the per-machine
+//     token when the session-key auth mode is active
+//   - admin:   session/key administration
+//
+// The legacy "execute" capability satisfies both invoke and provide (it
+// normalizes to invoke+provide), so pre-split keys keep working.
 var methodPolicies = map[string]MethodPolicy{
-	"/api.ToolService/RegisterTool":            {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.ToolService/RegisterTool":            {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.ToolService/ListTools":               {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.ToolService/GetToolById":             {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.ToolService/GetToolByName":           {Capability: model.APIKeyCapabilityRead, BindSession: true},
-	"/api.ToolService/DeleteTool":              {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.ToolService/UpdateToolPing":          {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.ToolService/ExecuteTool":             {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.ToolService/StreamExecuteTool":       {Capability: model.APIKeyCapabilityExecute},
-	"/api.ToolService/ResumeStream":            {Capability: model.APIKeyCapabilityExecute},
+	"/api.ToolService/DeleteTool":              {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.ToolService/UpdateToolPing":          {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.ToolService/ExecuteTool":             {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
+	"/api.ToolService/StreamExecuteTool":       {Capability: model.APIKeyCapabilityInvoke},
+	"/api.ToolService/ResumeStream":            {Capability: model.APIKeyCapabilityInvoke},
 	"/api.ToolService/HealthCheck":             {Capability: model.APIKeyCapabilityRead},
 	"/api.SessionsService/CreateSession":       {Capability: model.APIKeyCapabilityAdmin, BindUser: true},
 	"/api.SessionsService/GetSession":          {Capability: model.APIKeyCapabilityRead, BindSession: true},
@@ -358,26 +384,26 @@ var methodPolicies = map[string]MethodPolicy{
 	"/api.SessionsService/CreateApiKey":        {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
 	"/api.SessionsService/ListApiKeys":         {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
 	"/api.SessionsService/RevokeApiKey":        {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
-	"/api.MachinesService/RegisterMachine":     {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.MachinesService/RegisterMachine":     {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.MachinesService/ListMachines":        {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.MachinesService/GetMachine":          {Capability: model.APIKeyCapabilityRead, BindSession: true},
-	"/api.MachinesService/UpdateMachinePing":   {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.MachinesService/UnregisterMachine":   {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.MachinesService/DrainMachine":        {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.RequestsService/CreateRequest":       {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.MachinesService/UpdateMachinePing":   {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.MachinesService/UnregisterMachine":   {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.MachinesService/DrainMachine":        {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.RequestsService/CreateRequest":       {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
 	"/api.RequestsService/GetRequest":          {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.RequestsService/ListRequests":        {Capability: model.APIKeyCapabilityRead, BindSession: true},
-	"/api.RequestsService/UpdateRequest":       {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.RequestsService/ClaimRequest":        {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.RequestsService/CancelRequest":       {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.RequestsService/SubmitRequestResult": {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.RequestsService/AppendRequestChunks": {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.RequestsService/UpdateRequest":       {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.RequestsService/ClaimRequest":        {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.RequestsService/CancelRequest":       {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
+	"/api.RequestsService/SubmitRequestResult": {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.RequestsService/AppendRequestChunks": {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.RequestsService/GetRequestChunks":    {Capability: model.APIKeyCapabilityRead, BindSession: true},
-	"/api.RequestsService/RenewRequestLease":   {Capability: model.APIKeyCapabilityExecute, BindSession: true},
-	"/api.TasksService/CreateTask":             {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.RequestsService/RenewRequestLease":   {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.TasksService/CreateTask":             {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
 	"/api.TasksService/GetTask":                {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.TasksService/ListTasks":              {Capability: model.APIKeyCapabilityRead, BindSession: true},
-	"/api.TasksService/CancelTask":             {Capability: model.APIKeyCapabilityExecute, BindSession: true},
+	"/api.TasksService/CancelTask":             {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
 }
 
 func DebugPrincipal(principal *model.AuthPrincipal) string {
