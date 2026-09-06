@@ -115,14 +115,13 @@ type ApiKey struct {
 	PlaintextPersisted bool               `json:"-"`
 }
 
-// NewApiKey creates a new API key with generated ID, key, and timestamp
-
+// NewApiKey creates a new API key with generated ID, key, and timestamp.
+// Capabilities are taken exactly as given: an empty list produces a key with
+// no capabilities (fail-closed) rather than an implicit full-access default.
+// Callers minting keys must validate capabilities up front (see
+// ParseAPIKeyCapabilitiesStrict).
 func NewApiKey(name, sessionID, createdBy string, capabilities []APIKeyCapability) *ApiKey {
-	key := generateApiKey(sessionID)
-	resolvedCapabilities := capabilities
-	if len(resolvedCapabilities) == 0 {
-		resolvedCapabilities = DefaultAPIKeyCapabilities()
-	}
+	key := generateApiKey()
 	return &ApiKey{
 		ID:                 uuid.New().String(),
 		Name:               name,
@@ -132,15 +131,17 @@ func NewApiKey(name, sessionID, createdBy string, capabilities []APIKeyCapabilit
 		SessionID:          sessionID,
 		CreatedAt:          time.Now(),
 		CreatedBy:          createdBy,
-		Capabilities:       append([]APIKeyCapability(nil), resolvedCapabilities...),
+		Capabilities:       append([]APIKeyCapability(nil), capabilities...),
 		PlaintextPersisted: false,
 	}
 }
 
-// generateApiKey generates a new API key
-func generateApiKey(sessionID string) string {
-	randomPart := uuid.New().String()
-	return "toolplane_session_" + sessionID + "_" + randomPart
+// generateApiKey generates a new API key. The key carries no structured
+// meaning: earlier formats embedded the session ID, which leaked session
+// identifiers wherever keys appeared (logs, env dumps). Entropy comes from
+// the UUID alone and the key-to-session binding lives in the store.
+func generateApiKey() string {
+	return "toolplane_key_" + uuid.New().String()
 }
 
 func HashAPIKeySecret(secret string) string {
@@ -148,14 +149,16 @@ func HashAPIKeySecret(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// BuildAPIKeyPreview renders a non-secret identification hint. The key prefix
+// is constant, so the preview shows only the tail.
 func BuildAPIKeyPreview(secret string) string {
 	if secret == "" {
 		return ""
 	}
-	if len(secret) <= 12 {
+	if len(secret) <= 8 {
 		return "****"
 	}
-	return secret[:8] + "..." + secret[len(secret)-4:]
+	return "***" + secret[len(secret)-8:]
 }
 
 func (k *ApiKey) EnsureSecurityMetadata() bool {

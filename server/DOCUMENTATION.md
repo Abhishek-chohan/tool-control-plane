@@ -208,7 +208,7 @@ These are the service groups currently exposed from `service.proto`.
 | --- | --- |
 | `ToolService` | `RegisterTool`, `ListTools`, `GetToolById`, `GetToolByName`, `DeleteTool`, `UpdateToolPing`, `ExecuteTool`, `StreamExecuteTool`, `ResumeStream`, `HealthCheck` |
 | `SessionsService` | `CreateSession`, `GetSession`, `ListSessions`, `UpdateSession`, `DeleteSession`, plus API-key lifecycle RPCs (`CreateApiKey`, `ListApiKeys`, `RevokeApiKey`) |
-| `SessionsService` (admin scope) | `ListUserSessions`, `BulkDeleteSessions`, `GetSessionStats`, `RefreshSessionToken`, `InvalidateSession` — currently surfaced only in the Python SDK; see `SDK_MAP.md` for cross-SDK support |
+| `SessionsService` (admin scope) | `ListUserSessions`, `BulkDeleteSessions`, `GetSessionStats`, `InvalidateSession` (session-wide key revocation) — currently surfaced only in the Python SDK; see `SDK_MAP.md` for cross-SDK support. `RefreshSessionToken` was removed: it fabricated a token that authenticated nothing |
 | `MachinesService` | `RegisterMachine`, `ListMachines`, `GetMachine`, `UpdateMachinePing`, `UnregisterMachine`, `DrainMachine` |
 | `RequestsService` | `CreateRequest`, `GetRequest`, `ListRequests`, `UpdateRequest`, `ClaimRequest`, `CancelRequest`, `SubmitRequestResult`, `AppendRequestChunks`, `GetRequestChunks` |
 | `TasksService` | `CreateTask`, `GetTask`, `ListTasks`, `CancelTask` |

@@ -2,6 +2,7 @@ package service
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +23,7 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 		t.Fatalf("update session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"})
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -56,7 +57,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"})
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -202,4 +203,90 @@ func sessionIDs(sessions []*model.Session) []string {
 		ids = append(ids, session.ID)
 	}
 	return ids
+}
+
+func TestSessionsServiceCreateApiKeyRequiresExplicitCapabilities(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+	session, err := svc.CreateSession("user-caps", "Caps Session", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	if _, err := svc.CreateApiKey(session.ID, "no-caps", "user-caps", nil); err == nil {
+		t.Fatal("CreateApiKey with no capabilities should fail")
+	}
+	if _, err := svc.CreateApiKey(session.ID, "blank-caps", "user-caps", []string{"", "  "}); err == nil {
+		t.Fatal("CreateApiKey with only blank capabilities should fail")
+	}
+	if _, err := svc.CreateApiKey(session.ID, "reader", "user-caps", []string{"read"}); err != nil {
+		t.Fatalf("CreateApiKey with explicit capabilities: %v", err)
+	}
+}
+
+func TestSessionsServiceApiKeySecretDoesNotEmbedSessionID(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+	session, err := svc.CreateSession("user-fmt", "Format Session", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	apiKey, err := svc.CreateApiKey(session.ID, "fmt", "user-fmt", []string{"read"})
+	if err != nil {
+		t.Fatalf("create api key: %v", err)
+	}
+	if strings.Contains(apiKey.Key, session.ID) {
+		t.Fatalf("api key secret embeds the session ID: %q", apiKey.KeyPreview)
+	}
+	if !strings.HasPrefix(apiKey.Key, "toolplane_key_") {
+		t.Fatalf("api key secret = %q, want toolplane_key_ prefix", apiKey.Key)
+	}
+}
+
+func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
+	svc := NewSessionsService(trace.NopTracer(), nil)
+	session, err := svc.CreateSession("user-inval", "Invalidate Session", "", "", "", "")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	first, err := svc.CreateApiKey(session.ID, "first", "user-inval", []string{"read", "execute"})
+	if err != nil {
+		t.Fatalf("create first key: %v", err)
+	}
+	second, err := svc.CreateApiKey(session.ID, "second", "user-inval", []string{"admin"})
+	if err != nil {
+		t.Fatalf("create second key: %v", err)
+	}
+
+	// Sanity: both keys authenticate before invalidation.
+	if _, err := svc.AuthenticateAPIKey(first.Key); err != nil {
+		t.Fatalf("authenticate first before invalidation: %v", err)
+	}
+	if _, err := svc.AuthenticateAPIKey(second.Key); err != nil {
+		t.Fatalf("authenticate second before invalidation: %v", err)
+	}
+
+	revoked, err := svc.InvalidateSession(session.ID, "suspected compromise")
+	if err != nil {
+		t.Fatalf("invalidate session: %v", err)
+	}
+	if revoked != 2 {
+		t.Fatalf("revoked count = %d, want 2", revoked)
+	}
+
+	if _, err := svc.AuthenticateAPIKey(first.Key); err == nil {
+		t.Fatal("first key still authenticates after session invalidation")
+	}
+	if _, err := svc.AuthenticateAPIKey(second.Key); err == nil {
+		t.Fatal("second key still authenticates after session invalidation")
+	}
+
+	// Invalidating again is a no-op, not an error.
+	revokedAgain, err := svc.InvalidateSession(session.ID, "already done")
+	if err != nil {
+		t.Fatalf("second invalidation: %v", err)
+	}
+	if revokedAgain != 0 {
+		t.Fatalf("second invalidation revoked = %d, want 0", revokedAgain)
+	}
 }

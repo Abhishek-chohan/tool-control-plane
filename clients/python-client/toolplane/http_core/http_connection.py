@@ -157,10 +157,6 @@ class HTTPConnectionManager:
         """Get session statistics."""
         return self._post("api/GetSessionStats", payload)
 
-    def refresh_session_token(self, payload: Dict):
-        """Refresh session token."""
-        return self._post("api/RefreshSessionToken", payload)
-
     def invalidate_session(self, payload: Dict):
         """Invalidate session."""
         return self._post("api/InvalidateSession", payload)

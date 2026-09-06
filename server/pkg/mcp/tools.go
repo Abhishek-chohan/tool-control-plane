@@ -2,8 +2,11 @@ package mcp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -36,7 +39,7 @@ func (s *Server) handleDiscover() (any, *Error) {
 func (s *Server) handleToolsList(ctx context.Context, meta requestMeta, apiKey string) (any, *Error) {
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
-		return nil, errInternal("session resolution failed: "+err.Error(), nil)
+		return nil, internalErrorRef("session resolution", err)
 	}
 
 	response, err := s.tools.ListTools(ctx, &gw.ListToolsRequest{SessionId: sessionID})
@@ -106,7 +109,7 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
-		return nil, errInternal("session resolution failed: "+err.Error(), nil)
+		return nil, internalErrorRef("session resolution", err)
 	}
 
 	input, err := json.Marshal(params.Arguments)
@@ -194,11 +197,27 @@ func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, 
 }
 
 // backendError converts a gRPC backend failure into an internal JSON-RPC
-// error, preserving the backend message for diagnostics.
+// error. Backend detail (session/request IDs, store errors, auth messages) is
+// logged server-side and replaced with a short correlation reference, so
+// gateway clients never receive internal error text they could probe with.
 func backendError(op string, err error) *Error {
-	message := err.Error()
-	if trimmed := strings.TrimSpace(message); trimmed != "" {
-		message = trimmed
+	return internalErrorRef(op, err)
+}
+
+// internalErrorRef logs the backend detail and returns a client-safe internal
+// error carrying a correlation reference.
+func internalErrorRef(op string, err error) *Error {
+	ref := correlationRef()
+	log.Printf("mcp gateway: %s failed (ref %s): %v", op, ref, err)
+	return errInternal(op+" failed (ref "+ref+")", nil)
+}
+
+// correlationRef generates a short random reference tying a client-visible
+// error back to its server-side log line.
+func correlationRef() string {
+	var buf [4]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return "00000000"
 	}
-	return errInternal(op+" failed: "+message, nil)
+	return hex.EncodeToString(buf[:])
 }

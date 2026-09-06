@@ -552,11 +552,6 @@ class SessionsServiceStub(object):
                 request_serializer=proto_dot_service__pb2.GetSessionStatsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetSessionStatsResponse.FromString,
                 _registered_method=True)
-        self.RefreshSessionToken = channel.unary_unary(
-                '/api.SessionsService/RefreshSessionToken',
-                request_serializer=proto_dot_service__pb2.RefreshSessionTokenRequest.SerializeToString,
-                response_deserializer=proto_dot_service__pb2.RefreshSessionTokenResponse.FromString,
-                _registered_method=True)
         self.InvalidateSession = channel.unary_unary(
                 '/api.SessionsService/InvalidateSession',
                 request_serializer=proto_dot_service__pb2.InvalidateSessionRequest.SerializeToString,
@@ -635,14 +630,12 @@ class SessionsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def RefreshSessionToken(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def InvalidateSession(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """InvalidateSession is the session-wide kill switch: it revokes every live
+        API key for the session so no credential authenticates again. Use it for
+        suspected key compromise; the session record itself is kept (use
+        DeleteSession to remove it).
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -708,11 +701,6 @@ def add_SessionsServiceServicer_to_server(servicer, server):
                     servicer.GetSessionStats,
                     request_deserializer=proto_dot_service__pb2.GetSessionStatsRequest.FromString,
                     response_serializer=proto_dot_service__pb2.GetSessionStatsResponse.SerializeToString,
-            ),
-            'RefreshSessionToken': grpc.unary_unary_rpc_method_handler(
-                    servicer.RefreshSessionToken,
-                    request_deserializer=proto_dot_service__pb2.RefreshSessionTokenRequest.FromString,
-                    response_serializer=proto_dot_service__pb2.RefreshSessionTokenResponse.SerializeToString,
             ),
             'InvalidateSession': grpc.unary_unary_rpc_method_handler(
                     servicer.InvalidateSession,
@@ -954,33 +942,6 @@ class SessionsService(object):
             '/api.SessionsService/GetSessionStats',
             proto_dot_service__pb2.GetSessionStatsRequest.SerializeToString,
             proto_dot_service__pb2.GetSessionStatsResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def RefreshSessionToken(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/api.SessionsService/RefreshSessionToken',
-            proto_dot_service__pb2.RefreshSessionTokenRequest.SerializeToString,
-            proto_dot_service__pb2.RefreshSessionTokenResponse.FromString,
             options,
             channel_credentials,
             insecure,
