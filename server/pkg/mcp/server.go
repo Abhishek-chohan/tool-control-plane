@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -38,8 +40,22 @@ type Server struct {
 	defaultUserID string
 
 	sessionsMu   sync.Mutex
-	sessionByKey map[string]string
+	sessionByKey map[string]*cachedSession
 }
+
+// cachedSession is one auto-provisioned session binding. The cache is keyed by
+// a SHA-256 hash of the caller credential — never the raw secret — and entries
+// expire so long-running gateways do not retain bindings (or hash memory)
+// forever.
+type cachedSession struct {
+	sessionID string
+	lastUsed  time.Time
+}
+
+const (
+	sessionCacheTTL      = 10 * time.Minute
+	sessionCacheMaxEntry = 1024
+)
 
 // Option customizes Server behavior.
 type Option func(*Server)
@@ -83,7 +99,7 @@ func NewServer(conn grpc.ClientConnInterface, opts ...Option) *Server {
 		syncTimeout:   60 * time.Second,
 		pollInterval:  250 * time.Millisecond,
 		defaultUserID: DefaultUserID,
-		sessionByKey:  make(map[string]string),
+		sessionByKey:  make(map[string]*cachedSession),
 	}
 	for _, opt := range opts {
 		opt(server)
@@ -196,21 +212,30 @@ func authMetadata(r *http.Request) metadata.MD {
 	return md
 }
 
+// apiKeyForCache derives the session-cache identity for a request. The raw
+// credential is hashed so bearer secrets never live in gateway memory as map
+// keys.
 func apiKeyForCache(r *http.Request) string {
+	credential := ""
 	if key := r.Header.Get("X-API-Key"); key != "" {
-		return key
+		credential = key
+	} else if auth := r.Header.Get("Authorization"); auth != "" {
+		credential = auth
 	}
-	if auth := r.Header.Get("Authorization"); auth != "" {
-		return auth
+	if credential == "" {
+		return "<anonymous>"
 	}
-	return "<anonymous>"
+	sum := sha256.Sum256([]byte(credential))
+	return hex.EncodeToString(sum[:])
 }
 
 // resolveSession picks the Toolplane session for a request: an explicit
 // dev.toolplane/session_id in _meta wins; otherwise one session per API key
 // is auto-provisioned and cached, matching the TS adapter's behavior. The
 // lock spans lookup and creation so concurrent requests for the same key
-// cannot provision duplicate sessions.
+// cannot provision duplicate sessions. Cached bindings expire after
+// sessionCacheTTL and the cache is capped at sessionCacheMaxEntry entries
+// (least-recently-used evicted on insert).
 func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey string) (string, error) {
 	if meta.sessionID != "" {
 		return meta.sessionID, nil
@@ -218,8 +243,13 @@ func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey st
 
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()
+	now := time.Now()
 	if cached, ok := s.sessionByKey[apiKey]; ok {
-		return cached, nil
+		if now.Sub(cached.lastUsed) < sessionCacheTTL {
+			cached.lastUsed = now
+			return cached.sessionID, nil
+		}
+		delete(s.sessionByKey, apiKey)
 	}
 
 	session, err := s.sessions.CreateSession(ctx, &gw.CreateSessionRequest{
@@ -235,7 +265,18 @@ func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey st
 		return "", fmt.Errorf("create session: empty session in response")
 	}
 
-	s.sessionByKey[apiKey] = session.Session.Id
+	if len(s.sessionByKey) >= sessionCacheMaxEntry {
+		var oldestKey string
+		var oldestSeen time.Time
+		for key, entry := range s.sessionByKey {
+			if oldestKey == "" || entry.lastUsed.Before(oldestSeen) {
+				oldestKey = key
+				oldestSeen = entry.lastUsed
+			}
+		}
+		delete(s.sessionByKey, oldestKey)
+	}
+	s.sessionByKey[apiKey] = &cachedSession{sessionID: session.Session.Id, lastUsed: now}
 	return session.Session.Id, nil
 }
 
@@ -256,7 +297,7 @@ func (s *Server) handleTasksGet(ctx context.Context, req *Request, meta requestM
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
-		return nil, errInternal("session resolution failed: "+err.Error(), nil)
+		return nil, internalErrorRef("session resolution", err)
 	}
 
 	request, err := s.requests.GetRequest(ctx, &gw.GetRequestRequest{SessionId: sessionID, RequestId: params.TaskID})
@@ -326,7 +367,7 @@ func (s *Server) handleTasksCancel(ctx context.Context, req *Request, meta reque
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
-		return nil, errInternal("session resolution failed: "+err.Error(), nil)
+		return nil, internalErrorRef("session resolution", err)
 	}
 
 	request, err := s.requests.GetRequest(ctx, &gw.GetRequestRequest{SessionId: sessionID, RequestId: params.TaskID})

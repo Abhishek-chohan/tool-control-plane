@@ -53,3 +53,20 @@ That means:
 - Root and SDK documentation now describe Go and TypeScript as gRPC-only maintained SDKs.
 - The shared parity story now lives across Python, Go, and TypeScript only.
 - There is no in-tree Node helper for `/rpc`.
+
+## Retired RPCs
+
+### SessionsService.RefreshSessionToken (removed 2026-09)
+
+`RefreshSessionToken` was removed from the contract. The handler synthesized a
+plausible-looking `session_<id>_<unix>` token over a domain method that was an
+explicit no-op ("we don't have expiring tokens"): the returned token was never
+stored and authenticated nothing, yet SDK docs labeled the RPC `full`. A
+credential-rotation control that silently does nothing is worse than an absent
+control, and nothing in the system had expiring session tokens to refresh.
+
+Migration: none. API-key rotation is `CreateApiKey` + `RevokeApiKey`; the
+session-wide kill switch is `InvalidateSession` (which now actually revokes
+every live key of the session). If expiring session tokens are ever
+introduced, a refresh RPC should return with them — implemented, not
+simulated.

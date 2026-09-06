@@ -374,13 +374,6 @@ class ToolplaneHTTP:
                 raise ConnectionError("Failed to connect to server")
         return self.session_manager.get_session_stats(user_id)
 
-    def refresh_session_token(self, session_id: str) -> Dict[str, str]:
-        """Refresh session token."""
-        if not self.connection_manager.connected:
-            if not self.connect():
-                raise ConnectionError("Failed to connect to server")
-        return self.session_manager.refresh_session_token(session_id)
-
     def invalidate_session(self, session_id: str, reason: str = "") -> bool:
         """Invalidate a session."""
         if not self.connection_manager.connected:
@@ -507,9 +500,13 @@ class ToolplaneHTTP:
         self,
         session_id: str,
         name: str,
-        capabilities: Optional[List[str]] = None,
+        capabilities: List[str],
     ) -> Dict[str, Any]:
-        """Create a new API key for a session."""
+        """Create a new API key for a session.
+
+        capabilities is required and must be non-empty (least-privilege,
+        explicit key minting).
+        """
         if not self.connection_manager.connected:
             if not self.connect():
                 raise ConnectionError("Failed to connect to server")

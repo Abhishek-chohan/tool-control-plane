@@ -604,28 +604,6 @@ function deserialize_api_Machine(buffer_arg) {
   return proto_service_pb.Machine.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
-function serialize_api_RefreshSessionTokenRequest(arg) {
-  if (!(arg instanceof proto_service_pb.RefreshSessionTokenRequest)) {
-    throw new Error('Expected argument of type api.RefreshSessionTokenRequest');
-  }
-  return Buffer.from(arg.serializeBinary());
-}
-
-function deserialize_api_RefreshSessionTokenRequest(buffer_arg) {
-  return proto_service_pb.RefreshSessionTokenRequest.deserializeBinary(new Uint8Array(buffer_arg));
-}
-
-function serialize_api_RefreshSessionTokenResponse(arg) {
-  if (!(arg instanceof proto_service_pb.RefreshSessionTokenResponse)) {
-    throw new Error('Expected argument of type api.RefreshSessionTokenResponse');
-  }
-  return Buffer.from(arg.serializeBinary());
-}
-
-function deserialize_api_RefreshSessionTokenResponse(buffer_arg) {
-  return proto_service_pb.RefreshSessionTokenResponse.deserializeBinary(new Uint8Array(buffer_arg));
-}
-
 function serialize_api_RegisterMachineRequest(arg) {
   if (!(arg instanceof proto_service_pb.RegisterMachineRequest)) {
     throw new Error('Expected argument of type api.RegisterMachineRequest');
@@ -1054,18 +1032,11 @@ listUserSessions: {
     responseSerialize: serialize_api_GetSessionStatsResponse,
     responseDeserialize: deserialize_api_GetSessionStatsResponse,
   },
-  refreshSessionToken: {
-    path: '/api.SessionsService/RefreshSessionToken',
-    requestStream: false,
-    responseStream: false,
-    requestType: proto_service_pb.RefreshSessionTokenRequest,
-    responseType: proto_service_pb.RefreshSessionTokenResponse,
-    requestSerialize: serialize_api_RefreshSessionTokenRequest,
-    requestDeserialize: deserialize_api_RefreshSessionTokenRequest,
-    responseSerialize: serialize_api_RefreshSessionTokenResponse,
-    responseDeserialize: deserialize_api_RefreshSessionTokenResponse,
-  },
-  invalidateSession: {
+  // InvalidateSession is the session-wide kill switch: it revokes every live
+// API key for the session so no credential authenticates again. Use it for
+// suspected key compromise; the session record itself is kept (use
+// DeleteSession to remove it).
+invalidateSession: {
     path: '/api.SessionsService/InvalidateSession',
     requestStream: false,
     responseStream: false,

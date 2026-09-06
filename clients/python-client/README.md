@@ -37,7 +37,7 @@ The Python public surface spans three scope categories (see `SDK_MAP.md` for the
 
 - **Consumer scope** — session/machine/task lifecycle, tool discovery, and remote invocation (`create_session`, `invoke`, `stream`, etc.). These methods are portable across maintained SDKs.
 - **Provider scope** — tool registration, request claiming, heartbeat, and result submission through the explicit `ProviderRuntime` surface (`provider_runtime()`, `ProviderRuntime.create_session()`, `ProviderRuntime.attach_session()`, `ProviderRuntime.tool()`, `ProviderRuntime.start_in_background()`, `ProviderRuntime.run_forever()`, `ProviderRuntime.stop()`). The client also exposes convenience aliases `tool()`, `start()`, and `stop()` over that same runtime surface.
-- **Admin scope** — session administration helpers (`list_user_sessions`, `bulk_delete_sessions`, `get_session_stats`, `refresh_session_token`, `invalidate_session`). These are currently exposed only in the Python SDK.
+- **Admin scope** — session administration helpers (`list_user_sessions`, `bulk_delete_sessions`, `get_session_stats`, `invalidate_session`). These are currently exposed only in the Python SDK.
 
 ## Overview
 
@@ -309,11 +309,7 @@ bulk_delete_result = client.bulk_delete_sessions(
     filter="inactive"  # Delete inactive sessions
 )
 
-# Refresh session token
-refresh_result = client.refresh_session_token(session_id="session-123")
-print(f"New token: {refresh_result['new_token']}")
-
-# Invalidate session
+# Invalidate a session (revokes every live API key of the session)
 success = client.invalidate_session(session_id="session-123", reason="Session expired")
 print(f"Session invalidated: {success}")
 ```
@@ -1321,8 +1317,7 @@ print(f"Optimal worker count: {worker_count}")
 - `list_user_sessions(user_id, page_size, page_token, filter)` - List user sessions with pagination
 - `bulk_delete_sessions(user_id, session_ids, filter)` - Bulk delete user sessions
 - `get_session_stats(user_id)` - Get session statistics for user
-- `refresh_session_token(session_id)` - Refresh session token
-- `invalidate_session(session_id, reason)` - Invalidate session
+- `invalidate_session(session_id, reason)` - Session-wide kill switch: revokes every live API key of the session
 
 #### Tool Management Methods
 

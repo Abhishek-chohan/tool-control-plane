@@ -31,7 +31,7 @@ except ImportError:
 
 # Import functions from individual tool files
 try:
-    from toolplane.toolkits.swe.execute_bash import BLOCKED_BASH_COMMANDS, run_command
+    from toolplane.toolkits.swe.execute_bash import run_command
     from toolplane.toolkits.swe.finish import submit as finish_submit
     from toolplane.toolkits.swe.read_file import read_file
     from toolplane.toolkits.swe.search import search_in_directory, search_in_file
@@ -43,7 +43,7 @@ try:
     from toolplane.toolkits.swe.submit import submit as simple_submit
 except ImportError:
     # Fallback for when running as standalone
-    from execute_bash import BLOCKED_BASH_COMMANDS, run_command
+    from execute_bash import run_command
     from finish import submit as finish_submit
     from search import search_in_directory, search_in_file
     from str_replace_editor import StrReplaceEditor, load_history, save_history
@@ -1053,7 +1053,9 @@ class BashInput(BaseModel):
 
 
 class BashTool(BaseTool):
-    """⚡ Execute bash commands with security restrictions."""
+    """⚡ Execute bash commands. UNSANDBOXED: only register on providers that
+    are themselves isolated (container/VM). Commands are killed after the
+    configured timeout; there is no command filtering."""
 
     name: str = "execute_bash"
     description: str = _BASH_DESCRIPTION.format(PWD=os.getcwd())
@@ -1068,12 +1070,8 @@ class BashTool(BaseTool):
         run_manager: Optional[CallbackManagerForToolRun] = None,
     ) -> str:
         try:
-            # Check if the command is blocked
-            first_token = command.strip().split()[0]
-            if first_token in BLOCKED_BASH_COMMANDS:
-                return f"Bash command '{first_token}' is not allowed. Please use a different command or tool."
-
-            # Run the command using the imported function
+            # Run the command using the imported function (hard timeout and
+            # optional workspace cwd are applied inside run_command).
             result = run_command(command)
 
             if result.returncode != 0:

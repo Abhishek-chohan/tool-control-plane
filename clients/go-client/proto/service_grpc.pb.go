@@ -496,19 +496,18 @@ var ToolService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SessionsService_CreateSession_FullMethodName       = "/api.SessionsService/CreateSession"
-	SessionsService_GetSession_FullMethodName          = "/api.SessionsService/GetSession"
-	SessionsService_ListSessions_FullMethodName        = "/api.SessionsService/ListSessions"
-	SessionsService_UpdateSession_FullMethodName       = "/api.SessionsService/UpdateSession"
-	SessionsService_DeleteSession_FullMethodName       = "/api.SessionsService/DeleteSession"
-	SessionsService_ListUserSessions_FullMethodName    = "/api.SessionsService/ListUserSessions"
-	SessionsService_BulkDeleteSessions_FullMethodName  = "/api.SessionsService/BulkDeleteSessions"
-	SessionsService_GetSessionStats_FullMethodName     = "/api.SessionsService/GetSessionStats"
-	SessionsService_RefreshSessionToken_FullMethodName = "/api.SessionsService/RefreshSessionToken"
-	SessionsService_InvalidateSession_FullMethodName   = "/api.SessionsService/InvalidateSession"
-	SessionsService_CreateApiKey_FullMethodName        = "/api.SessionsService/CreateApiKey"
-	SessionsService_ListApiKeys_FullMethodName         = "/api.SessionsService/ListApiKeys"
-	SessionsService_RevokeApiKey_FullMethodName        = "/api.SessionsService/RevokeApiKey"
+	SessionsService_CreateSession_FullMethodName      = "/api.SessionsService/CreateSession"
+	SessionsService_GetSession_FullMethodName         = "/api.SessionsService/GetSession"
+	SessionsService_ListSessions_FullMethodName       = "/api.SessionsService/ListSessions"
+	SessionsService_UpdateSession_FullMethodName      = "/api.SessionsService/UpdateSession"
+	SessionsService_DeleteSession_FullMethodName      = "/api.SessionsService/DeleteSession"
+	SessionsService_ListUserSessions_FullMethodName   = "/api.SessionsService/ListUserSessions"
+	SessionsService_BulkDeleteSessions_FullMethodName = "/api.SessionsService/BulkDeleteSessions"
+	SessionsService_GetSessionStats_FullMethodName    = "/api.SessionsService/GetSessionStats"
+	SessionsService_InvalidateSession_FullMethodName  = "/api.SessionsService/InvalidateSession"
+	SessionsService_CreateApiKey_FullMethodName       = "/api.SessionsService/CreateApiKey"
+	SessionsService_ListApiKeys_FullMethodName        = "/api.SessionsService/ListApiKeys"
+	SessionsService_RevokeApiKey_FullMethodName       = "/api.SessionsService/RevokeApiKey"
 )
 
 // SessionsServiceClient is the client API for SessionsService service.
@@ -529,7 +528,10 @@ type SessionsServiceClient interface {
 	ListUserSessions(ctx context.Context, in *ListUserSessionsRequest, opts ...grpc.CallOption) (*ListUserSessionsResponse, error)
 	BulkDeleteSessions(ctx context.Context, in *BulkDeleteSessionsRequest, opts ...grpc.CallOption) (*BulkDeleteSessionsResponse, error)
 	GetSessionStats(ctx context.Context, in *GetSessionStatsRequest, opts ...grpc.CallOption) (*GetSessionStatsResponse, error)
-	RefreshSessionToken(ctx context.Context, in *RefreshSessionTokenRequest, opts ...grpc.CallOption) (*RefreshSessionTokenResponse, error)
+	// InvalidateSession is the session-wide kill switch: it revokes every live
+	// API key for the session so no credential authenticates again. Use it for
+	// suspected key compromise; the session record itself is kept (use
+	// DeleteSession to remove it).
 	InvalidateSession(ctx context.Context, in *InvalidateSessionRequest, opts ...grpc.CallOption) (*InvalidateSessionResponse, error)
 	// API key management
 	CreateApiKey(ctx context.Context, in *CreateApiKeyRequest, opts ...grpc.CallOption) (*ApiKey, error)
@@ -625,16 +627,6 @@ func (c *sessionsServiceClient) GetSessionStats(ctx context.Context, in *GetSess
 	return out, nil
 }
 
-func (c *sessionsServiceClient) RefreshSessionToken(ctx context.Context, in *RefreshSessionTokenRequest, opts ...grpc.CallOption) (*RefreshSessionTokenResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RefreshSessionTokenResponse)
-	err := c.cc.Invoke(ctx, SessionsService_RefreshSessionToken_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *sessionsServiceClient) InvalidateSession(ctx context.Context, in *InvalidateSessionRequest, opts ...grpc.CallOption) (*InvalidateSessionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(InvalidateSessionResponse)
@@ -693,7 +685,10 @@ type SessionsServiceServer interface {
 	ListUserSessions(context.Context, *ListUserSessionsRequest) (*ListUserSessionsResponse, error)
 	BulkDeleteSessions(context.Context, *BulkDeleteSessionsRequest) (*BulkDeleteSessionsResponse, error)
 	GetSessionStats(context.Context, *GetSessionStatsRequest) (*GetSessionStatsResponse, error)
-	RefreshSessionToken(context.Context, *RefreshSessionTokenRequest) (*RefreshSessionTokenResponse, error)
+	// InvalidateSession is the session-wide kill switch: it revokes every live
+	// API key for the session so no credential authenticates again. Use it for
+	// suspected key compromise; the session record itself is kept (use
+	// DeleteSession to remove it).
 	InvalidateSession(context.Context, *InvalidateSessionRequest) (*InvalidateSessionResponse, error)
 	// API key management
 	CreateApiKey(context.Context, *CreateApiKeyRequest) (*ApiKey, error)
@@ -732,9 +727,6 @@ func (UnimplementedSessionsServiceServer) BulkDeleteSessions(context.Context, *B
 }
 func (UnimplementedSessionsServiceServer) GetSessionStats(context.Context, *GetSessionStatsRequest) (*GetSessionStatsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSessionStats not implemented")
-}
-func (UnimplementedSessionsServiceServer) RefreshSessionToken(context.Context, *RefreshSessionTokenRequest) (*RefreshSessionTokenResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RefreshSessionToken not implemented")
 }
 func (UnimplementedSessionsServiceServer) InvalidateSession(context.Context, *InvalidateSessionRequest) (*InvalidateSessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InvalidateSession not implemented")
@@ -913,24 +905,6 @@ func _SessionsService_GetSessionStats_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _SessionsService_RefreshSessionToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RefreshSessionTokenRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(SessionsServiceServer).RefreshSessionToken(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: SessionsService_RefreshSessionToken_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(SessionsServiceServer).RefreshSessionToken(ctx, req.(*RefreshSessionTokenRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _SessionsService_InvalidateSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InvalidateSessionRequest)
 	if err := dec(in); err != nil {
@@ -1041,10 +1015,6 @@ var SessionsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSessionStats",
 			Handler:    _SessionsService_GetSessionStats_Handler,
-		},
-		{
-			MethodName: "RefreshSessionToken",
-			Handler:    _SessionsService_RefreshSessionToken_Handler,
 		},
 		{
 			MethodName: "InvalidateSession",

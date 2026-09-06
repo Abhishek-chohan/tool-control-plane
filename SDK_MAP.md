@@ -107,9 +107,8 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `ListUserSessions` | `full`: `list_user_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `BulkDeleteSessions` | `full`: `bulk_delete_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `GetSessionStats` | `full`: `get_session_stats()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
-| `RefreshSessionToken` | `full`: `refresh_session_token()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
-| `InvalidateSession` | `full`: `invalidate_session()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
-| `CreateApiKey` | `full`: `create_api_key()` | `full`: `CreateAPIKey()` | `full`: `createApiKey()` | Covered by `conformance/cases/api_key_lifecycle.json` |
+| `InvalidateSession` | `full`: `invalidate_session()` | `unsupported` | `unsupported` | Session-wide kill switch (admin scope): revokes every live API key of the session so no credential authenticates again. `RefreshSessionToken` was removed — it fabricated a token that authenticated nothing |
+| `CreateApiKey` | `full`: `create_api_key()` | `full`: `CreateAPIKey()` | `full`: `createApiKey()` | Capabilities are required and must be non-empty (least-privilege minting; the read+execute+admin default is gone). Covered by `conformance/cases/api_key_lifecycle.json` |
 | `ListApiKeys` | `full`: `list_api_keys()` | `full`: `ListAPIKeys()` | `full`: `listApiKeys()` | Covered by `conformance/cases/api_key_lifecycle.json` |
 | `RevokeApiKey` | `full`: `revoke_api_key()` | `full`: `RevokeAPIKey()` | `full`: `revokeApiKey()` | Covered by `conformance/cases/api_key_lifecycle.json` |
 

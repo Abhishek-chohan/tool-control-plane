@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/keepalive"
@@ -76,7 +77,26 @@ func main() {
 	pollInterval := flag.Duration("poll-interval", 250*time.Millisecond, "backend task poll cadence")
 	defaultUserID := flag.String("default-user-id", "mcp-gateway", "user ID for auto-provisioned sessions")
 	maxMsgSize := flag.Int("max-msg-size", 4*1024*1024, "Maximum gRPC message size in bytes")
+	// Rate limiting controls, mirroring cmd/proxy (0 disables).
+	apiRate := flag.Float64("api-rate", 0, "Maximum requests per second per API key (0 disables)")
+	apiBurst := flag.Int("api-burst", 0, "Burst size per API key when rate limiting is enabled")
+	ipRate := flag.Float64("ip-rate", 0, "Maximum requests per second per client IP (0 disables)")
+	ipBurst := flag.Int("ip-burst", 0, "Burst size per client IP when rate limiting is enabled")
+	// Client-facing TLS. When both files are set the gateway serves HTTPS
+	// directly instead of relying on an upstream terminator.
+	tlsCertFile := flag.String("tls-cert-file", "", "TLS certificate for the client-facing listener (enables HTTPS)")
+	tlsKeyFile := flag.String("tls-key-file", "", "TLS private key for the client-facing listener")
 	flag.Parse()
+
+	serveTLS := *tlsCertFile != "" || *tlsKeyFile != ""
+	if serveTLS && (*tlsCertFile == "" || *tlsKeyFile == "") {
+		log.Fatalf("--tls-cert-file and --tls-key-file must be set together")
+	}
+	if cfg.environment == "production" && !serveTLS && !cfg.trustedProxy {
+		log.Fatalf("production requires client-facing TLS (--tls-cert-file/--tls-key-file) or an explicit TOOLPLANE_TRUSTED_PROXY=1 declaration")
+	}
+
+	rateLimiter := newGatewayRateLimiter(rate.Limit(*apiRate), *apiBurst, rate.Limit(*ipRate), *ipBurst)
 
 	transportCredentials, err := backendTransportCredentials(cfg)
 	if err != nil {
@@ -117,7 +137,7 @@ func main() {
 	)
 
 	root := http.NewServeMux()
-	root.Handle("/", corsMiddleware(cfg, facade.Handler()))
+	root.Handle("/", corsMiddleware(cfg, gatewayRateLimitMiddleware(rateLimiter, cfg.trustedProxy, facade.Handler())))
 	// Health probes transport-level connectivity only: backend RPCs require API
 	// keys, which an unauthenticated health check does not carry. The probe
 	// waits up to its deadline for the (lazily established) gRPC connection to
@@ -156,6 +176,10 @@ func main() {
 		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
+	}
+	if serveTLS {
+		log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
+		log.Fatal(httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile))
 	}
 	log.Fatal(httpServer.ListenAndServe())
 }

@@ -459,30 +459,6 @@ func local_request_SessionsService_GetSessionStats_0(ctx context.Context, marsha
 	return msg, metadata, err
 }
 
-func request_SessionsService_RefreshSessionToken_0(ctx context.Context, marshaler runtime.Marshaler, client SessionsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq RefreshSessionTokenRequest
-		metadata runtime.ServerMetadata
-	)
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := client.RefreshSessionToken(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
-	return msg, metadata, err
-}
-
-func local_request_SessionsService_RefreshSessionToken_0(ctx context.Context, marshaler runtime.Marshaler, server SessionsServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq RefreshSessionTokenRequest
-		metadata runtime.ServerMetadata
-	)
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := server.RefreshSessionToken(ctx, &protoReq)
-	return msg, metadata, err
-}
-
 func request_SessionsService_InvalidateSession_0(ctx context.Context, marshaler runtime.Marshaler, client SessionsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq InvalidateSessionRequest
@@ -1409,26 +1385,6 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		}
 		forward_SessionsService_GetSessionStats_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_SessionsService_RefreshSessionToken_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		var stream runtime.ServerTransportStream
-		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/RefreshSessionToken", runtime.WithHTTPPathPattern("/api/RefreshSessionToken"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := local_request_SessionsService_RefreshSessionToken_0(annotatedContext, inboundMarshaler, server, req, pathParams)
-		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_SessionsService_RefreshSessionToken_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
 	mux.Handle(http.MethodPost, pattern_SessionsService_InvalidateSession_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2350,23 +2306,6 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		}
 		forward_SessionsService_GetSessionStats_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_SessionsService_RefreshSessionToken_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/RefreshSessionToken", runtime.WithHTTPPathPattern("/api/RefreshSessionToken"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := request_SessionsService_RefreshSessionToken_0(annotatedContext, inboundMarshaler, client, req, pathParams)
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_SessionsService_RefreshSessionToken_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
 	mux.Handle(http.MethodPost, pattern_SessionsService_InvalidateSession_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -2439,35 +2378,33 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_SessionsService_CreateSession_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateSession"}, ""))
-	pattern_SessionsService_GetSession_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSession"}, ""))
-	pattern_SessionsService_ListSessions_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListSessions"}, ""))
-	pattern_SessionsService_UpdateSession_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateSession"}, ""))
-	pattern_SessionsService_DeleteSession_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "DeleteSession"}, ""))
-	pattern_SessionsService_ListUserSessions_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListUserSessions"}, ""))
-	pattern_SessionsService_BulkDeleteSessions_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "BulkDeleteSessions"}, ""))
-	pattern_SessionsService_GetSessionStats_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSessionStats"}, ""))
-	pattern_SessionsService_RefreshSessionToken_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RefreshSessionToken"}, ""))
-	pattern_SessionsService_InvalidateSession_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "InvalidateSession"}, ""))
-	pattern_SessionsService_CreateApiKey_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateApiKey"}, ""))
-	pattern_SessionsService_ListApiKeys_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListApiKeys"}, ""))
-	pattern_SessionsService_RevokeApiKey_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RevokeApiKey"}, ""))
+	pattern_SessionsService_CreateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateSession"}, ""))
+	pattern_SessionsService_GetSession_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSession"}, ""))
+	pattern_SessionsService_ListSessions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListSessions"}, ""))
+	pattern_SessionsService_UpdateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateSession"}, ""))
+	pattern_SessionsService_DeleteSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "DeleteSession"}, ""))
+	pattern_SessionsService_ListUserSessions_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListUserSessions"}, ""))
+	pattern_SessionsService_BulkDeleteSessions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "BulkDeleteSessions"}, ""))
+	pattern_SessionsService_GetSessionStats_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSessionStats"}, ""))
+	pattern_SessionsService_InvalidateSession_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "InvalidateSession"}, ""))
+	pattern_SessionsService_CreateApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateApiKey"}, ""))
+	pattern_SessionsService_ListApiKeys_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListApiKeys"}, ""))
+	pattern_SessionsService_RevokeApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RevokeApiKey"}, ""))
 )
 
 var (
-	forward_SessionsService_CreateSession_0       = runtime.ForwardResponseMessage
-	forward_SessionsService_GetSession_0          = runtime.ForwardResponseMessage
-	forward_SessionsService_ListSessions_0        = runtime.ForwardResponseMessage
-	forward_SessionsService_UpdateSession_0       = runtime.ForwardResponseMessage
-	forward_SessionsService_DeleteSession_0       = runtime.ForwardResponseMessage
-	forward_SessionsService_ListUserSessions_0    = runtime.ForwardResponseMessage
-	forward_SessionsService_BulkDeleteSessions_0  = runtime.ForwardResponseMessage
-	forward_SessionsService_GetSessionStats_0     = runtime.ForwardResponseMessage
-	forward_SessionsService_RefreshSessionToken_0 = runtime.ForwardResponseMessage
-	forward_SessionsService_InvalidateSession_0   = runtime.ForwardResponseMessage
-	forward_SessionsService_CreateApiKey_0        = runtime.ForwardResponseMessage
-	forward_SessionsService_ListApiKeys_0         = runtime.ForwardResponseMessage
-	forward_SessionsService_RevokeApiKey_0        = runtime.ForwardResponseMessage
+	forward_SessionsService_CreateSession_0      = runtime.ForwardResponseMessage
+	forward_SessionsService_GetSession_0         = runtime.ForwardResponseMessage
+	forward_SessionsService_ListSessions_0       = runtime.ForwardResponseMessage
+	forward_SessionsService_UpdateSession_0      = runtime.ForwardResponseMessage
+	forward_SessionsService_DeleteSession_0      = runtime.ForwardResponseMessage
+	forward_SessionsService_ListUserSessions_0   = runtime.ForwardResponseMessage
+	forward_SessionsService_BulkDeleteSessions_0 = runtime.ForwardResponseMessage
+	forward_SessionsService_GetSessionStats_0    = runtime.ForwardResponseMessage
+	forward_SessionsService_InvalidateSession_0  = runtime.ForwardResponseMessage
+	forward_SessionsService_CreateApiKey_0       = runtime.ForwardResponseMessage
+	forward_SessionsService_ListApiKeys_0        = runtime.ForwardResponseMessage
+	forward_SessionsService_RevokeApiKey_0       = runtime.ForwardResponseMessage
 )
 
 // RegisterMachinesServiceHandlerFromEndpoint is same as RegisterMachinesServiceHandler but

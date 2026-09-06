@@ -50,10 +50,19 @@ func PrincipalFromContext(ctx context.Context) (*model.AuthPrincipal, bool) {
 	return principal, ok
 }
 
+// NewContext returns a context carrying the authenticated principal. The
+// interceptors use it after successful authentication; tests that drive
+// handlers directly can use it to inject a principal.
+func NewContext(ctx context.Context, principal *model.AuthPrincipal) context.Context {
+	return context.WithValue(ctx, authPrincipalContextKey, principal)
+}
+
 func RequireSessionCapability(ctx context.Context, sessionID string, capability model.APIKeyCapability) error {
 	principal, ok := PrincipalFromContext(ctx)
 	if !ok || principal == nil {
-		return nil
+		// Fail closed: a handler reached without an authenticated principal is
+		// a wiring bug, not an anonymous-access grant.
+		return status.Error(codes.PermissionDenied, "missing authenticated principal")
 	}
 	if principal.Mode == model.AuthModeFixed {
 		return nil
@@ -70,7 +79,7 @@ func RequireSessionCapability(ctx context.Context, sessionID string, capability 
 func RequireUserCapability(ctx context.Context, userID string, capability model.APIKeyCapability) error {
 	principal, ok := PrincipalFromContext(ctx)
 	if !ok || principal == nil {
-		return nil
+		return status.Error(codes.PermissionDenied, "missing authenticated principal")
 	}
 	if principal.Mode == model.AuthModeFixed {
 		return nil
@@ -107,7 +116,7 @@ func (a *APIKeyAuthorizer) UnaryInterceptor() grpc.UnaryServerInterceptor {
 			return nil, authzErr
 		}
 
-		ctx = context.WithValue(ctx, authPrincipalContextKey, principal)
+		ctx = NewContext(ctx, principal)
 		a.recordValidated(principal, info.FullMethod, "unary")
 		return handler(ctx, req)
 	}
@@ -140,7 +149,7 @@ func (a *APIKeyAuthorizer) StreamInterceptor() grpc.StreamServerInterceptor {
 
 		wrapped := &principalServerStream{
 			ServerStream: ss,
-			ctx:          context.WithValue(ss.Context(), authPrincipalContextKey, principal),
+			ctx:          NewContext(ss.Context(), principal),
 		}
 		a.recordValidated(principal, info.FullMethod, "stream")
 		return handler(srv, wrapped)
@@ -154,6 +163,35 @@ type principalServerStream struct {
 
 func (s *principalServerStream) Context() context.Context {
 	return s.ctx
+}
+
+// AnonymousUnaryInterceptor / AnonymousStreamInterceptor attach a fixed-mode
+// principal to every call without authenticating. They are used only when
+// TOOLPLANE_AUTH_MODE=disabled (a development convenience that production
+// refuses to boot with), so handler-level principal checks — which fail
+// closed when no principal is present — keep working in that mode.
+func AnonymousUnaryInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		return handler(NewContext(ctx, anonymousPrincipal()), req)
+	}
+}
+
+func AnonymousStreamInterceptor() grpc.StreamServerInterceptor {
+	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		wrapped := &principalServerStream{
+			ServerStream: ss,
+			ctx:          NewContext(ss.Context(), anonymousPrincipal()),
+		}
+		return handler(srv, wrapped)
+	}
+}
+
+func anonymousPrincipal() *model.AuthPrincipal {
+	return &model.AuthPrincipal{
+		Mode:         model.AuthModeFixed,
+		Capabilities: model.DefaultAPIKeyCapabilities(),
+		TokenPreview: "<auth-disabled>",
+	}
 }
 
 func (a *APIKeyAuthorizer) authenticateRequest(ctx context.Context) (*model.AuthPrincipal, error) {
@@ -316,7 +354,6 @@ var methodPolicies = map[string]MethodPolicy{
 	"/api.SessionsService/ListUserSessions":    {Capability: model.APIKeyCapabilityAdmin, BindUser: true},
 	"/api.SessionsService/BulkDeleteSessions":  {Capability: model.APIKeyCapabilityAdmin, BindUser: true},
 	"/api.SessionsService/GetSessionStats":     {Capability: model.APIKeyCapabilityAdmin, BindUser: true},
-	"/api.SessionsService/RefreshSessionToken": {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
 	"/api.SessionsService/InvalidateSession":   {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
 	"/api.SessionsService/CreateApiKey":        {Capability: model.APIKeyCapabilityAdmin, BindSession: true},
 	"/api.SessionsService/ListApiKeys":         {Capability: model.APIKeyCapabilityAdmin, BindSession: true},

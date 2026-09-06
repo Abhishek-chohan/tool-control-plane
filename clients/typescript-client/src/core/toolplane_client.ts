@@ -468,7 +468,12 @@ export class ToolplaneClient {
     return this.normalizeSession(response);
   }
 
-  async createApiKey(name: string, capabilities: string[] = []): Promise<ApiKey> {
+  async createApiKey(name: string, capabilities: string[]): Promise<ApiKey> {
+    // Keys are minted least-privilege and explicit: fail fast instead of
+    // sending an empty capability list the server rejects.
+    if (!Array.isArray(capabilities) || capabilities.filter((capability) => capability.trim()).length === 0) {
+      throw new ToolplaneError('createApiKey requires an explicit non-empty capabilities list');
+    }
     this.ensureGRPCConnected('api key creation');
 
     const request = new CreateApiKeyMessage();

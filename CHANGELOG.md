@@ -6,6 +6,39 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Security
+
+- `CreateApiKey` requires an explicit capability list (`INVALID_ARGUMENT` on
+  empty); the implicit read+execute+admin default is gone, and all SDK
+  wrappers take a required non-empty list.
+- `InvalidateSession` is a real session-wide kill switch: revokes every live
+  API key of the session and reports the count
+  (`InvalidateSessionResponse.revoked_api_keys`).
+- API-key auth is an O(1) SHA-256 hash-index lookup (no all-keys scan); new
+  key format `toolplane_key_<uuid>` stops embedding the session ID; previews
+  show a masked tail only.
+- Authorizer helpers fail closed without a principal (auth-disabled dev mode
+  gets anonymous interceptors; production still refuses disabled auth).
+- `ResumeStream` returns identical `NOT_FOUND` for other sessions' requests
+  (cross-session existence oracle closed).
+- JSON proxy: no `?api_key=` URL credentials; XFF trusted only behind
+  `TOOLPLANE_TRUSTED_PROXY=1`; rate-limiter/throttle keys hashed. Both HTTP
+  edges gained TLS flags and refuse production plaintext without a declared
+  trusted proxy.
+- MCP gateway: rate limiting, hashed TTL-bounded capped session cache, and
+  generic client errors with correlation IDs (backend detail logged
+  server-side only).
+- Toolkits quarantined: bash timeout + optional workspace root instead of the
+  cosmetic blocklist, per-user editor state file, no `os.chdir`, loud
+  UNSANDBOXED warnings, `example.py` defaults to a safe echo demo (SWE behind
+  `--toolkit swe`).
+
+### Removed
+
+- `SessionsService.RefreshSessionToken` RPC (fabricated a token that
+  authenticated nothing) and its Python wrappers; rotation is create+revoke.
+  See `server/docs/rpc-retirement.md`.
+
 ### Added
 
 - Conformance integrity guarantees: bootstrap failures are hard failures
