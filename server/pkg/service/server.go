@@ -779,6 +779,14 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 
 // ResumeStream allows clients to resume a broken stream
 func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.ToolService_ResumeStreamServer) error {
+	// Fail closed before touching state: without a principal (wiring bug or a
+	// test driving the handler directly), the capability check below would
+	// only reject existing requests, which itself leaks existence.
+	principal, ok := auth.PrincipalFromContext(stream.Context())
+	if !ok || principal == nil {
+		return status.Error(codes.PermissionDenied, "missing authenticated principal")
+	}
+
 	request, err := s.requestService.GetRequestByIDAnySession(req.RequestId)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
@@ -786,8 +794,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 	// Session-scoped check before the capability check, returning the same
 	// NotFound as a missing request: a session-bound caller must not be able
 	// to distinguish "exists in another session" from "does not exist".
-	if principal, ok := auth.PrincipalFromContext(stream.Context()); ok && principal != nil &&
-		principal.Mode != model.AuthModeFixed &&
+	if principal.Mode != model.AuthModeFixed &&
 		principal.SessionID != "" && principal.SessionID != request.SessionID {
 		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
 	}
