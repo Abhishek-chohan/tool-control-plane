@@ -52,7 +52,7 @@ func TestActiveActive_CrossInstanceVisibility(t *testing.T) {
 	// Register machine + tool through instance A's service layer (persists to
 	// the shared store AND populates A's cache).
 	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
-	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}); err != nil {
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
 		t.Fatalf("RegisterMachine on A: %v", err)
 	}
 
@@ -80,7 +80,7 @@ func TestActiveActive_NoDoubleClaim(t *testing.T) {
 	ctx := context.Background()
 	seedSessionForAA(t, store)
 
-	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)}); err != nil {
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)}, ""); err != nil {
 		t.Fatalf("RegisterMachine on A: %v", err)
 	}
 	// B's ClaimRequest uses the store-first path; its machine just needs a
@@ -162,7 +162,7 @@ func TestActiveActive_NoDoubleRequeue(t *testing.T) {
 
 	// Register the machine on A so it exists for capacity bookkeeping on both.
 	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
-	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}); err != nil {
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
 		t.Fatalf("RegisterMachine on A: %v", err)
 	}
 	// Also track the machine in B's in-memory capacity map (mirrors a second

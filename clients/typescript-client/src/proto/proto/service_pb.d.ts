@@ -222,6 +222,8 @@ export class Machine extends jspb.Message {
     setCreatedAt(value: string): Machine;
     getLastPingAt(): string;
     setLastPingAt(value: string): Machine;
+    getMachineToken(): string;
+    setMachineToken(value: string): Machine;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): Machine.AsObject;
@@ -242,6 +244,7 @@ export namespace Machine {
         ip: string,
         createdAt: string,
         lastPingAt: string,
+        machineToken: string,
     }
 }
 

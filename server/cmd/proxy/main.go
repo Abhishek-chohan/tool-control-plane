@@ -64,6 +64,10 @@ func authHeaderMatcher(key string) (string, bool) {
 	if strings.EqualFold(key, "X-API-Key") {
 		return "api_key", true
 	}
+	// Per-machine credential for provide-scoped RPCs.
+	if strings.EqualFold(key, "X-Toolplane-Machine-Token") {
+		return "x-toolplane-machine-token", true
+	}
 	return runtime.DefaultHeaderMatcher(key)
 }
 

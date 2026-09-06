@@ -8,6 +8,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Security
 
+- Capability split: `invoke` (consumer) and `provide` (provider) replace the
+  overloaded `execute` in the authz policy table; `execute` remains a legacy
+  alias that expands to invoke+provide, so existing keys and rows keep
+  working.
+- Per-machine identity: `RegisterMachine` mints a once-only machine
+  credential (`Machine.machine_token`); provide-scoped RPCs must present it
+  (x-toolplane-machine-token metadata / X-Toolplane-Machine-Token header) in
+  session-key mode, and re-registering an existing machine ID requires it —
+  machine-ID takeover is closed. Python and TypeScript SDKs capture and send
+  the credential automatically.
 - `CreateApiKey` requires an explicit capability list (`INVALID_ARGUMENT` on
   empty); the implicit read+execute+admin default is gone, and all SDK
   wrappers take a required non-empty list.

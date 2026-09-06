@@ -52,7 +52,7 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	const machineID = "machine-persistent-recovery"
 	if _, err := machineSvc.RegisterMachine(session.ID, machineID, "1.0.0", "python", "127.0.0.1", []*model.Tool{
 		model.NewTool(session.ID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	}); err != nil {
+	}, ""); err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
 

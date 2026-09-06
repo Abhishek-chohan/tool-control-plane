@@ -130,6 +130,10 @@ export class ToolplaneClient {
 
   private machineId = '';
 
+  // Per-machine credential minted at machine registration; presented on
+  // provide-scoped RPCs via the x-toolplane-machine-token metadata.
+  private machineToken = '';
+
   constructor(config: ClientConfig) {
     this.config = {
       timeout: DEFAULT_TIMEOUT_MS,
@@ -555,6 +559,12 @@ export class ToolplaneClient {
 
     const machine = this.normalizeMachine(response);
     this.machineId = machine.id || resolvedMachineId;
+    // The registration response carries the per-machine credential exactly
+    // once; keep it so provide-scoped calls present it (createMetadata).
+    const machineToken = response.getMachineToken();
+    if (machineToken) {
+      this.machineToken = machineToken;
+    }
     return machine;
   }
 
@@ -1067,6 +1077,11 @@ export class ToolplaneClient {
     if (this.config.apiKey) {
       metadata.set('api_key', this.config.apiKey);
       metadata.set('authorization', `Bearer ${this.config.apiKey}`);
+    }
+    // Per-machine credential for provide-scoped RPCs; sent on every call and
+    // only consulted by the server on provider operations.
+    if (this.machineToken) {
+      metadata.set('x-toolplane-machine-token', this.machineToken);
     }
     return metadata;
   }

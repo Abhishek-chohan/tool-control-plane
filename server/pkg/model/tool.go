@@ -246,15 +246,23 @@ type Machine struct {
 	IP          string    `json:"ip"`
 	CreatedAt   time.Time `json:"createdAt"`
 	LastPingAt  time.Time `json:"lastPingAt"`
+	// TokenHash is the SHA-256 of the per-machine credential; Token carries
+	// the plaintext exactly once (on the registration that minted it) and is
+	// never persisted or listed.
+	TokenHash string `json:"-"`
+	Token     string `json:"-"`
 }
 
-// NewMachine creates a new machine with generated ID (if not provided) and timestamps
+// NewMachine creates a new machine with generated ID (if not provided) and
+// timestamps. A fresh per-machine credential is minted: the plaintext is in
+// Token (returned once to the registering caller) and TokenHash is stored.
 func NewMachine(sessionID, machineID, sdkVersion, sdkLanguage, ip string) *Machine {
 	id := machineID
 	if id == "" {
 		id = uuid.New().String()
 	}
 
+	token := "toolplane_machine_" + uuid.New().String()
 	now := time.Now()
 	return &Machine{
 		ID:          id,
@@ -264,7 +272,19 @@ func NewMachine(sessionID, machineID, sdkVersion, sdkLanguage, ip string) *Machi
 		IP:          ip,
 		CreatedAt:   now,
 		LastPingAt:  now,
+		TokenHash:   HashAPIKeySecret(token),
+		Token:       token,
 	}
+}
+
+// MatchesMachineToken reports whether the presented credential matches the
+// machine's stored token hash (constant-time compare).
+func (m *Machine) MatchesMachineToken(token string) bool {
+	if m == nil || m.TokenHash == "" || token == "" {
+		return false
+	}
+	computed := HashAPIKeySecret(token)
+	return subtle.ConstantTimeCompare([]byte(computed), []byte(m.TokenHash)) == 1
 }
 
 // UpdatePing updates the machine's last ping time

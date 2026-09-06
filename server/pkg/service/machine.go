@@ -103,10 +103,18 @@ func NewMachinesService(ctx context.Context, toolService *ToolService, tracer tr
 	return service
 }
 
-// RegisterMachine registers a new machine or updates an existing one
+// RegisterMachine registers a new machine or updates an existing one.
+//
+// Machine identity: a fresh registration mints a per-machine credential and
+// returns it exactly once (machine.Token; persisted only as a hash). When the
+// caller supplies the ID of an existing machine, presentedToken must match
+// that machine's stored credential — a different caller cannot silently take
+// over the ID, its tools, and its workload. Machines without a stored hash
+// (registered before machine tokens existed) bind the first presented token.
 func (s *MachinesService) RegisterMachine(
 	sessionID, machineID, sdkVersion, sdkLanguage, ip string,
 	tools []*model.Tool,
+	presentedToken string,
 ) (*model.Machine, error) {
 	if machineID != "" && s.IsMachineDraining(sessionID, machineID) {
 		return nil, fmt.Errorf("machine %s is draining", machineID)
@@ -128,6 +136,17 @@ func (s *MachinesService) RegisterMachine(
 		machine = model.NewMachine(sessionID, "", sdkVersion, sdkLanguage, ip)
 		id = machine.ID
 	} else if existing, ok := s.machines[sessionID][id]; ok {
+		// Re-registering an existing machine requires its credential.
+		switch {
+		case existing.TokenHash == "":
+			// Pre-token machine: bind the first presented credential.
+			if presentedToken == "" {
+				return nil, fmt.Errorf("machine %s has no bound credential; re-registration must present one to bind", id)
+			}
+			existing.TokenHash = model.HashAPIKeySecret(presentedToken)
+		case !existing.MatchesMachineToken(presentedToken):
+			return nil, fmt.Errorf("machine %s is already registered with a different credential", id)
+		}
 		// Update existing machine
 		existing.SDKVersion = sdkVersion
 		existing.SDKLanguage = sdkLanguage
@@ -189,7 +208,50 @@ func (s *MachinesService) RegisterMachine(
 		}
 	}
 
-	return machine, nil
+	// The minted token travels to the caller exactly once; the cached and
+	// persisted machine only ever holds its hash.
+	returned := *machine
+	machine.Token = ""
+	return &returned, nil
+}
+
+// AuthorizeMachineToken validates a presented per-machine credential for a
+// provide-scoped call. Unknown machines pass (registration may create them);
+// token-less machines bind the first credential; otherwise the credential
+// must match. Session binding is enforced by the caller's API key policy.
+func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token string) error {
+	if machineID == "" {
+		return nil
+	}
+
+	s.machinesMutex.RLock()
+	machine, ok := s.machines[sessionID][machineID]
+	s.machinesMutex.RUnlock()
+
+	if !ok || machine == nil {
+		// Not registered (yet): a fresh RegisterMachine will mint or bind.
+		return nil
+	}
+	if machine.TokenHash == "" {
+		if token == "" {
+			return nil // first post-upgrade call; registration binds the token
+		}
+		s.machinesMutex.Lock()
+		machine.TokenHash = model.HashAPIKeySecret(token)
+		s.machinesMutex.Unlock()
+		if s.store != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			defer cancel()
+			if err := s.store.SaveMachine(ctx, machine); err != nil {
+				log.Printf("persist machine token bind failed: %v", err)
+			}
+		}
+		return nil
+	}
+	if !machine.MatchesMachineToken(token) {
+		return fmt.Errorf("machine %s credential mismatch", machineID)
+	}
+	return nil
 }
 
 // SetRequestTracker lets the machine service observe in-flight requests for drain handling.

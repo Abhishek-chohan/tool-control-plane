@@ -3252,7 +3252,8 @@ proto.api.Machine.toObject = function(includeInstance, msg) {
     sdkLanguage: jspb.Message.getFieldWithDefault(msg, 4, ""),
     ip: jspb.Message.getFieldWithDefault(msg, 5, ""),
     createdAt: jspb.Message.getFieldWithDefault(msg, 6, ""),
-    lastPingAt: jspb.Message.getFieldWithDefault(msg, 7, "")
+    lastPingAt: jspb.Message.getFieldWithDefault(msg, 7, ""),
+    machineToken: jspb.Message.getFieldWithDefault(msg, 8, "")
   };
 
   if (includeInstance) {
@@ -3316,6 +3317,10 @@ proto.api.Machine.deserializeBinaryFromReader = function(msg, reader) {
     case 7:
       var value = /** @type {string} */ (reader.readString());
       msg.setLastPingAt(value);
+      break;
+    case 8:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMachineToken(value);
       break;
     default:
       reader.skipField();
@@ -3392,6 +3397,13 @@ proto.api.Machine.serializeBinaryToWriter = function(message, writer) {
   if (f.length > 0) {
     writer.writeString(
       7,
+      f
+    );
+  }
+  f = message.getMachineToken();
+  if (f.length > 0) {
+    writer.writeString(
+      8,
       f
     );
   }
@@ -3521,6 +3533,24 @@ proto.api.Machine.prototype.getLastPingAt = function() {
  */
 proto.api.Machine.prototype.setLastPingAt = function(value) {
   return jspb.Message.setProto3StringField(this, 7, value);
+};
+
+
+/**
+ * optional string machine_token = 8;
+ * @return {string}
+ */
+proto.api.Machine.prototype.getMachineToken = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 8, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.Machine} returns this
+ */
+proto.api.Machine.prototype.setMachineToken = function(value) {
+  return jspb.Message.setProto3StringField(this, 8, value);
 };
 
 

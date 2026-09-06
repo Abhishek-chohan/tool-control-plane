@@ -120,8 +120,10 @@ func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *tes
 	if listed[0].KeyPreview == "" {
 		t.Fatalf("listed api key preview = %q, want non-empty preview", listed[0].KeyPreview)
 	}
-	if !reflect.DeepEqual(listed[0].Capabilities, []model.APIKeyCapability{model.APIKeyCapabilityRead, model.APIKeyCapabilityExecute}) {
-		t.Fatalf("listed api key capabilities = %v, want [read execute]", listed[0].Capabilities)
+	// The key was minted with ["read", "execute"]; execute is the legacy
+	// pre-split alias and normalizes to invoke+provide on storage/normalization.
+	if !reflect.DeepEqual(listed[0].Capabilities, []model.APIKeyCapability{model.APIKeyCapabilityRead, model.APIKeyCapabilityInvoke, model.APIKeyCapabilityProvide}) {
+		t.Fatalf("listed api key capabilities = %v, want [read invoke provide]", listed[0].Capabilities)
 	}
 	if listed[0].ID != apiKey.ID {
 		t.Fatalf("listed api key id = %q, want %q", listed[0].ID, apiKey.ID)
@@ -148,8 +150,9 @@ func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
 	if principal.SessionID != session.ID || principal.UserID != "user-audit" || principal.KeyID != apiKey.ID {
 		t.Fatalf("principal = %#v, want session=%s user=user-audit key=%s", principal, session.ID, apiKey.ID)
 	}
-	if !principal.HasCapability(model.APIKeyCapabilityExecute) {
-		t.Fatalf("principal capabilities = %v, want execute capability", principal.Capabilities)
+	// The key's legacy execute capability expands to invoke+provide.
+	if !principal.HasCapability(model.APIKeyCapabilityInvoke) || !principal.HasCapability(model.APIKeyCapabilityProvide) {
+		t.Fatalf("principal capabilities = %v, want invoke+provide (legacy execute)", principal.Capabilities)
 	}
 }
 
