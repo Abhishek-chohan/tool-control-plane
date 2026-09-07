@@ -562,10 +562,7 @@ class ToolplaneHTTP:
                 time.sleep(self.config.poll_interval)
 
             except Exception as e:
-                logger.warning("Error in main loop: %s", e)
-                import traceback
-
-                traceback.print_exc()
+                logger.warning("Error in main loop: %s", e, exc_info=True)
                 time.sleep(1)
 
     def __enter__(self):

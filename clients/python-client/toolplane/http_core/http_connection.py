@@ -131,7 +131,10 @@ class HTTPConnectionManager:
         ),
     )
     def stream_post(self, path: str, payload: Optional[Dict] = None):
-        """Make a streaming POST request, retrying only transport errors."""
+        """Make a streaming POST request.
+
+        Retries the same failure classes as _post: transport errors and
+        capacity/backpressure (retryable typed errors)."""
         url = self.config.server_url.rstrip("/") + "/" + path
         headers = self._request_headers()
 
