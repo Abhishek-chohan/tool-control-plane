@@ -496,6 +496,8 @@ export class DeleteToolRequest extends jspb.Message {
     setSessionId(value: string): DeleteToolRequest;
     getToolId(): string;
     setToolId(value: string): DeleteToolRequest;
+    getMachineId(): string;
+    setMachineId(value: string): DeleteToolRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): DeleteToolRequest.AsObject;
@@ -511,6 +513,7 @@ export namespace DeleteToolRequest {
     export type AsObject = {
         sessionId: string,
         toolId: string,
+        machineId: string,
     }
 }
 
@@ -539,6 +542,8 @@ export class UpdateToolPingRequest extends jspb.Message {
     setSessionId(value: string): UpdateToolPingRequest;
     getToolId(): string;
     setToolId(value: string): UpdateToolPingRequest;
+    getMachineId(): string;
+    setMachineId(value: string): UpdateToolPingRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): UpdateToolPingRequest.AsObject;
@@ -554,6 +559,7 @@ export namespace UpdateToolPingRequest {
     export type AsObject = {
         sessionId: string,
         toolId: string,
+        machineId: string,
     }
 }
 

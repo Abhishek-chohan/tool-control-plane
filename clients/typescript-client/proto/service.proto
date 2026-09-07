@@ -466,6 +466,9 @@ message GetToolResponse {
 message DeleteToolRequest {
   string session_id = 1;
   string tool_id = 2;
+  // Owning machine; provide-scoped RPCs must present the per-machine
+  // credential alongside this ID in session-key auth mode.
+  string machine_id = 3;
 }
 
 // DeleteToolResponse
@@ -477,6 +480,9 @@ message DeleteToolResponse {
 message UpdateToolPingRequest {
   string session_id = 1;
   string tool_id = 2;
+  // Owning machine; provide-scoped RPCs must present the per-machine
+  // credential alongside this ID in session-key auth mode.
+  string machine_id = 3;
 }
 
 // CreateSessionRequest

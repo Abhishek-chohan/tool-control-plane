@@ -1155,9 +1155,12 @@ func (x *GetToolResponse) GetTool() *Tool {
 
 // DeleteToolRequest
 type DeleteToolRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolId        string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolId    string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	// Owning machine; provide-scoped RPCs must present the per-machine
+	// credential alongside this ID in session-key auth mode.
+	MachineId     string `protobuf:"bytes,3,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1202,6 +1205,13 @@ func (x *DeleteToolRequest) GetSessionId() string {
 func (x *DeleteToolRequest) GetToolId() string {
 	if x != nil {
 		return x.ToolId
+	}
+	return ""
+}
+
+func (x *DeleteToolRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
 	}
 	return ""
 }
@@ -1253,9 +1263,12 @@ func (x *DeleteToolResponse) GetSuccess() bool {
 
 // UpdateToolPingRequest
 type UpdateToolPingRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolId        string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolId    string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	// Owning machine; provide-scoped RPCs must present the per-machine
+	// credential alongside this ID in session-key auth mode.
+	MachineId     string `protobuf:"bytes,3,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1300,6 +1313,13 @@ func (x *UpdateToolPingRequest) GetSessionId() string {
 func (x *UpdateToolPingRequest) GetToolId() string {
 	if x != nil {
 		return x.ToolId
+	}
+	return ""
+}
+
+func (x *UpdateToolPingRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
 	}
 	return ""
 }
@@ -4647,17 +4667,21 @@ const file_proto_service_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\"0\n" +
 	"\x0fGetToolResponse\x12\x1d\n" +
-	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"K\n" +
+	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"j\n" +
 	"\x11DeleteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
-	"\atool_id\x18\x02 \x01(\tR\x06toolId\".\n" +
+	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\".\n" +
 	"\x12DeleteToolResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"O\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"n\n" +
 	"\x15UpdateToolPingRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
-	"\atool_id\x18\x02 \x01(\tR\x06toolId\"\xbb\x01\n" +
+	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\"\xbb\x01\n" +
 	"\x14CreateSessionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +

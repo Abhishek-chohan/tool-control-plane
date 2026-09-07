@@ -46,6 +46,36 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	return machines, rows.Err()
 }
 
+// GetMachine fetches a single machine by ID (nil when absent). The returned
+// copy never carries a machine token plaintext.
+func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machine, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE id=$1`, machineID)
+	m := &model.Machine{}
+	var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+	if err := row.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get machine: %w", err)
+	}
+	if sdkVersion.Valid {
+		m.SDKVersion = sdkVersion.String
+	}
+	if sdkLanguage.Valid {
+		m.SDKLanguage = sdkLanguage.String
+	}
+	if ip.Valid {
+		m.IP = ip.String
+	}
+	if tokenHash.Valid {
+		m.TokenHash = tokenHash.String
+	}
+	return m, nil
+}
+
 func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
 	if s == nil || machine == nil {
 		return nil

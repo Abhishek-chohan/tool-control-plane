@@ -5444,7 +5444,8 @@ proto.api.DeleteToolRequest.prototype.toObject = function(opt_includeInstance) {
 proto.api.DeleteToolRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    toolId: jspb.Message.getFieldWithDefault(msg, 2, "")
+    toolId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    machineId: jspb.Message.getFieldWithDefault(msg, 3, "")
   };
 
   if (includeInstance) {
@@ -5489,6 +5490,10 @@ proto.api.DeleteToolRequest.deserializeBinaryFromReader = function(msg, reader) 
       var value = /** @type {string} */ (reader.readString());
       msg.setToolId(value);
       break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMachineId(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -5532,6 +5537,13 @@ proto.api.DeleteToolRequest.serializeBinaryToWriter = function(message, writer) 
       f
     );
   }
+  f = message.getMachineId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
 };
 
 
@@ -5568,6 +5580,24 @@ proto.api.DeleteToolRequest.prototype.getToolId = function() {
  */
 proto.api.DeleteToolRequest.prototype.setToolId = function(value) {
   return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string machine_id = 3;
+ * @return {string}
+ */
+proto.api.DeleteToolRequest.prototype.getMachineId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.DeleteToolRequest} returns this
+ */
+proto.api.DeleteToolRequest.prototype.setMachineId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
 };
 
 
@@ -5734,7 +5764,8 @@ proto.api.UpdateToolPingRequest.prototype.toObject = function(opt_includeInstanc
 proto.api.UpdateToolPingRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    toolId: jspb.Message.getFieldWithDefault(msg, 2, "")
+    toolId: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    machineId: jspb.Message.getFieldWithDefault(msg, 3, "")
   };
 
   if (includeInstance) {
@@ -5779,6 +5810,10 @@ proto.api.UpdateToolPingRequest.deserializeBinaryFromReader = function(msg, read
       var value = /** @type {string} */ (reader.readString());
       msg.setToolId(value);
       break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setMachineId(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -5822,6 +5857,13 @@ proto.api.UpdateToolPingRequest.serializeBinaryToWriter = function(message, writ
       f
     );
   }
+  f = message.getMachineId();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
 };
 
 
@@ -5858,6 +5900,24 @@ proto.api.UpdateToolPingRequest.prototype.getToolId = function() {
  */
 proto.api.UpdateToolPingRequest.prototype.setToolId = function(value) {
   return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string machine_id = 3;
+ * @return {string}
+ */
+proto.api.UpdateToolPingRequest.prototype.getMachineId = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.UpdateToolPingRequest} returns this
+ */
+proto.api.UpdateToolPingRequest.prototype.setMachineId = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
 };
 
 
