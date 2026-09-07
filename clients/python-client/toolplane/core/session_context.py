@@ -1,5 +1,6 @@
 """Session context implementation."""
 
+import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from toolplane.utils.schema import generate_schema_from_function
@@ -10,6 +11,8 @@ from .machine import MachineManager
 from .request import RequestManager
 from .session import SessionManager
 from .tool import ToolManager
+
+logger = logging.getLogger(__name__)
 
 
 class SessionContext:
@@ -43,7 +46,9 @@ class SessionContext:
             self.machine_id = self.machine_manager.register_machine(self.session_id)
             return True
         except Exception as e:
-            print(f"Error registering machine for session {self.session_id}: {e}")
+            logger.warning(
+                "Error registering machine for session %s: %s", self.session_id, e
+            )
             return False
 
     def register_tool(
@@ -72,7 +77,7 @@ class SessionContext:
                 stream,
                 tags,
             )
-            print(f"Registered tool '{name}' for session {self.session_id}")
+            logger.debug("Registered tool '%s' for session %s", name, self.session_id)
         except Exception as e:
             raise ToolplaneError(
                 f"Failed to register tool {name} for session {self.session_id}: {e}"
@@ -243,7 +248,7 @@ class SessionContext:
                 self.session_manager.cleanup_session_context(self.session_id)
 
         except Exception as e:
-            print(f"Error cleaning up session {self.session_id}: {e}")
+            logger.warning("Error cleaning up session %s: %s", self.session_id, e)
 
     def poll_requests(self):
         """Poll for requests in this session."""
@@ -260,7 +265,9 @@ class SessionContext:
                 self.session_id, self.machine_id, tools, streaming_tools
             )
         except Exception as e:
-            print(f"Error polling requests for session {self.session_id}: {e}")
+            logger.warning(
+                "Error polling requests for session %s: %s", self.session_id, e
+            )
 
     # New methods for user session management
     def list_user_sessions(

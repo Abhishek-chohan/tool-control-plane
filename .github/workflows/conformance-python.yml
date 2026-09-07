@@ -187,7 +187,7 @@ jobs:
       - name: Run Python unit tests
         working-directory: clients/python-client
         run: |
-          python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py toolplane/toolkits/standalone_tools -q
+          python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_errors.py toolplane/toolkits/standalone_tools -q
 
   typescript-client:
     name: TypeScript Client

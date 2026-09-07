@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -156,7 +155,7 @@ func (s *ToolService) registerToolInMemoryLocked(sessionID, machineID, name, des
 						"ownerMachineId": existingTool.MachineID,
 					},
 				})
-				return existingTool, fmt.Errorf("tool %s already registered by another machine", name)
+				return existingTool, wrapf(ErrAlreadyExists, "tool %s already registered by another machine", name)
 			}
 		}
 
@@ -329,13 +328,13 @@ func (s *ToolService) GetToolByID(sessionID, toolID string) (*model.Tool, error)
 
 	// Check if session exists
 	if _, ok := s.tools[sessionID]; !ok {
-		return nil, fmt.Errorf("session %s not found", sessionID)
+		return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	// Find tool by ID
 	tool, ok := s.tools[sessionID][toolID]
 	if !ok {
-		return nil, fmt.Errorf("tool %s not found in session %s", toolID, sessionID)
+		return nil, wrapf(ErrNotFound, "tool %s not found in session %s", toolID, sessionID)
 	}
 
 	return tool, nil
@@ -349,7 +348,7 @@ func (s *ToolService) GetToolByName(sessionID, name string) (*model.Tool, error)
 	// Find tool by name
 	tool := s.findToolByName(sessionID, name)
 	if tool == nil {
-		return nil, fmt.Errorf("tool %s not found in session %s", name, sessionID)
+		return nil, wrapf(ErrNotFound, "tool %s not found in session %s", name, sessionID)
 	}
 
 	return tool, nil
@@ -404,13 +403,13 @@ func (s *ToolService) UpdateToolPing(sessionID, toolID string) (*model.Tool, err
 
 	// Check if session exists
 	if _, ok := s.tools[sessionID]; !ok {
-		return nil, fmt.Errorf("session %s not found", sessionID)
+		return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	// Find tool by ID
 	tool, ok := s.tools[sessionID][toolID]
 	if !ok {
-		return nil, fmt.Errorf("tool %s not found in session %s", toolID, sessionID)
+		return nil, wrapf(ErrNotFound, "tool %s not found in session %s", toolID, sessionID)
 	}
 
 	// Update ping time
@@ -434,13 +433,13 @@ func (s *ToolService) DeleteTool(sessionID, toolID string) error {
 
 	// Check if session exists
 	if _, ok := s.tools[sessionID]; !ok {
-		return fmt.Errorf("session %s not found", sessionID)
+		return wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	// Check if tool exists
 	tool, ok := s.tools[sessionID][toolID]
 	if !ok {
-		return fmt.Errorf("tool %s not found in session %s", toolID, sessionID)
+		return wrapf(ErrNotFound, "tool %s not found in session %s", toolID, sessionID)
 	}
 
 	// Delete the tool

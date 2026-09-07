@@ -11,7 +11,13 @@ from ..common.constants import (
     ERROR_CONNECTION_FAILED,
 )
 from ..common.utils import format_error_message, with_retry
-from ..core.errors import ConnectionError
+from ..core.errors import (
+    ConnectionError,
+    ToolplaneAPIError,
+    ToolplaneResourceExhaustedError,
+    ToolplaneUnavailableError,
+    api_error_from_http_response,
+)
 from .http_config import HTTPClientConfig
 
 
@@ -60,9 +66,37 @@ class HTTPConnectionManager:
             if not self.connect():
                 raise ConnectionError("Failed to establish HTTP connection")
 
-    @with_retry(max_retries=DEFAULT_MAX_RETRIES, backoff_ms=DEFAULT_RETRY_BACKOFF_MS)
+    def _error_from_response(self, response) -> ToolplaneAPIError:
+        """Translate a non-2xx response into a typed error.
+
+        Honors Retry-After on 429/503 (the backpressure statuses) before
+        raising; the resulting error is retryable, so the with_retry wrapper
+        sleeps the server-directed interval and tries again.
+        """
+        if response.status_code in (429, 503):
+            retry_after = response.headers.get("Retry-After")
+            if retry_after:
+                time.sleep(float(retry_after))
+        return api_error_from_http_response(
+            response.status_code, response.text, context=f"POST {response.url}"
+        )
+
+    @with_retry(
+        max_retries=DEFAULT_MAX_RETRIES,
+        backoff_ms=DEFAULT_RETRY_BACKOFF_MS,
+        exceptions=(
+            ConnectionError,
+            ToolplaneUnavailableError,
+            ToolplaneResourceExhaustedError,
+        ),
+    )
     def _post(self, path: str, payload: Optional[Dict] = None) -> Any:
-        """Make a POST request with retry logic and backpressure handling."""
+        """Make a POST request, retrying only transport and capacity errors.
+
+        Deterministic failures (bad credentials, invalid input, state
+        conflicts, missing entities) surface as typed ToolplaneAPIError
+        subclasses and are not retried: the same request would fail again.
+        """
         url = self.config.server_url.rstrip("/") + "/" + path
         headers = self._request_headers()
 
@@ -74,19 +108,10 @@ class HTTPConnectionManager:
                 timeout=self.config.request_timeout,
             )
 
-            # Handle backpressure response codes
-            if response.status_code in (429, 503):
-                # Get retry-after header or use exponential backoff
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    time.sleep(float(retry_after))
-                raise ConnectionError(f"Server busy (HTTP {response.status_code})")
+            if not response.ok:
+                raise self._error_from_response(response)
 
-            # Handle successful response
-            if response.ok:
-                return response.json()
-            else:
-                raise ConnectionError(f"HTTP {response.status_code} {response.text}")
+            return response.json()
 
         except requests.exceptions.Timeout:
             raise ConnectionError(
@@ -96,9 +121,17 @@ class HTTPConnectionManager:
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"HTTP request failed: {str(e)}")
 
-    @with_retry(max_retries=DEFAULT_MAX_RETRIES, backoff_ms=DEFAULT_RETRY_BACKOFF_MS)
+    @with_retry(
+        max_retries=DEFAULT_MAX_RETRIES,
+        backoff_ms=DEFAULT_RETRY_BACKOFF_MS,
+        exceptions=(
+            ConnectionError,
+            ToolplaneUnavailableError,
+            ToolplaneResourceExhaustedError,
+        ),
+    )
     def stream_post(self, path: str, payload: Optional[Dict] = None):
-        """Make a streaming POST request."""
+        """Make a streaming POST request, retrying only transport errors."""
         url = self.config.server_url.rstrip("/") + "/" + path
         headers = self._request_headers()
 
@@ -111,15 +144,8 @@ class HTTPConnectionManager:
                 timeout=self.config.request_timeout,
             )
 
-            # Handle backpressure responses
-            if response.status_code in (429, 503):
-                retry_after = response.headers.get("Retry-After")
-                if retry_after:
-                    time.sleep(float(retry_after))
-                raise ConnectionError(f"Server busy (HTTP {response.status_code})")
-
             if response.status_code != 200:
-                raise ConnectionError(f"HTTP {response.status_code} {response.text}")
+                raise self._error_from_response(response)
 
             return response
 

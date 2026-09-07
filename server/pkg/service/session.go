@@ -143,7 +143,7 @@ func (s *SessionsService) CreateSession(userID, name, description, apiKey, reque
 	if requestedID != "" {
 		if _, exists := s.sessions[requestedID]; exists {
 			s.sessionsMutex.RUnlock()
-			return nil, fmt.Errorf("session %s already exists", requestedID)
+			return nil, wrapf(ErrAlreadyExists, "session %s already exists", requestedID)
 		}
 	}
 	s.sessionsMutex.RUnlock()
@@ -212,7 +212,7 @@ func (s *SessionsService) GetSessionByID(sessionID string) (*model.Session, erro
 			return nil, fmt.Errorf("session %s lookup failed: %w", sessionID, err)
 		}
 		if found == nil {
-			return nil, fmt.Errorf("session %s not found", sessionID)
+			return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 		}
 		s.sessionsMutex.Lock()
 		if _, exists := s.sessions[sessionID]; !exists {
@@ -222,7 +222,7 @@ func (s *SessionsService) GetSessionByID(sessionID string) (*model.Session, erro
 		return found, nil
 	}
 
-	return nil, fmt.Errorf("session %s not found", sessionID)
+	return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 }
 
 // ListSessions lists all sessions for a user
@@ -255,7 +255,7 @@ func (s *SessionsService) UpdateSession(sessionID, name, description, namespace 
 
 	session, ok := s.sessions[sessionID]
 	if !ok {
-		return nil, fmt.Errorf("session %s not found", sessionID)
+		return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	// Update fields if provided
@@ -294,7 +294,7 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 	session, ok := s.sessions[sessionID]
 	s.sessionsMutex.RUnlock()
 	if !ok {
-		return fmt.Errorf("session %s not found", sessionID)
+		return wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	userLock := s.userLock(session.CreatedBy)
@@ -306,7 +306,7 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 	session, ok = s.sessions[sessionID]
 	if !ok {
 		s.sessionsMutex.Unlock()
-		return fmt.Errorf("session %s not found", sessionID)
+		return wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 	delete(s.sessions, sessionID)
 	s.sessionsMutex.Unlock()
@@ -365,7 +365,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 	s.sessionsMutex.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("session %s not found", sessionID)
+		return nil, wrapf(ErrNotFound, "session %s not found", sessionID)
 	}
 
 	capabilities, err := model.ParseAPIKeyCapabilitiesStrict(capabilityValues)
@@ -435,12 +435,12 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 	defer s.apiKeysMutex.Unlock()
 
 	if _, ok := s.apiKeys[sessionID]; !ok {
-		return fmt.Errorf("no API keys found for session %s", sessionID)
+		return wrapf(ErrNotFound, "no API keys found for session %s", sessionID)
 	}
 
 	apiKey, ok := s.apiKeys[sessionID][keyID]
 	if !ok {
-		return fmt.Errorf("API key %s not found for session %s", keyID, sessionID)
+		return wrapf(ErrNotFound, "API key %s not found for session %s", keyID, sessionID)
 	}
 
 	// Revoke the API key

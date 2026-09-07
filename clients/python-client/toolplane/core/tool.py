@@ -17,7 +17,7 @@ from toolplane.proto.service_pb2 import (
 from ..common.base_tool_manager import BaseToolManager
 from ..common.utils import parse_json_safe
 from .connection import ConnectionManager
-from .errors import ToolError
+from .errors import ToolError, api_error_from_rpc_error
 
 
 class ToolManager(BaseToolManager):
@@ -70,7 +70,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to register tool {name} with server: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to register tool {name} with server"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to register tool {name} with server: {e}")
 
@@ -100,9 +102,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(
-                f"Failed to unregister tool {name} from server: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to unregister tool {name} from server"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to unregister tool {name} from server: {e}")
 
@@ -120,7 +122,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to get available tools: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context="Failed to get available tools"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to get available tools: {e}")
 
@@ -141,7 +145,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to get tool {tool_id}: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to get tool {tool_id}"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to get tool {tool_id}: {e}")
 
@@ -158,7 +164,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to get tool {tool_name}: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to get tool {tool_name}"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to get tool {tool_name}: {e}")
 
@@ -177,7 +185,7 @@ class ToolManager(BaseToolManager):
             request = DeleteToolRequest(
                 session_id=session_id,
                 tool_id=tool_id,
-                machine_id=str(tool.get("machineId", "") or ""),
+                machine_id=str(tool.get("machine_id", "") or ""),
             )
             response = self.connection_manager.tool_stub.DeleteTool(
                 request, metadata=self.connection_manager.get_metadata()
@@ -195,7 +203,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to delete tool {tool_id}: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to delete tool {tool_id}"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to delete tool {tool_id}: {e}")
 
@@ -221,7 +231,9 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to execute tool {tool_name}: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to execute tool {tool_name}"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
@@ -242,16 +254,19 @@ class ToolManager(BaseToolManager):
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise ToolError(f"Failed to stream tool {tool_name}: {rpc_error}")
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to stream tool {tool_name}"
+            ) from rpc_error
         except Exception as e:
             raise ToolError(f"Failed to stream tool {tool_name}: {e}")
 
     def _handle_rpc_error(self, rpc_error: grpc.RpcError):
-        """Reset connection on recoverable gRPC errors."""
-        if rpc_error.code() in (
-            grpc.StatusCode.UNAVAILABLE,
-            grpc.StatusCode.DEADLINE_EXCEEDED,
-            grpc.StatusCode.INTERNAL,
-            grpc.StatusCode.UNAUTHENTICATED,
-        ):
+        """Reset the channel when the connection itself is broken.
+
+        Only UNAVAILABLE indicates a channel-level failure. Status errors
+        like UNAUTHENTICATED (bad or revoked key) or FAILED_PRECONDITION
+        (state conflict) are deterministic per-call outcomes: recycling the
+        channel would churn reconnection and re-registration for no effect.
+        """
+        if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
             self.connection_manager.mark_unhealthy()

@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -281,7 +282,7 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 		})
 		requestCancel()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get request %s: %w", requestID, err)
+			return nil, FromGRPC("get request", requestID, err)
 		}
 
 		switch request.Status {
@@ -292,12 +293,19 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 			if errMsg == "" {
 				errMsg = "tool execution failed"
 			}
-			return nil, fmt.Errorf("request %s failed: %s", requestID, errMsg)
+			return nil, &Error{
+				Op:        "execute tool",
+				RequestID: requestID,
+				Code:      codes.Internal,
+				Message:   errMsg,
+			}
 		}
 
 		select {
 		case <-execCtx.Done():
-			return nil, fmt.Errorf("timed out waiting for request %s: %w", requestID, execCtx.Err())
+			// status.FromError maps context.DeadlineExceeded to
+			// codes.DeadlineExceeded, so the wait cap surfaces as a typed error.
+			return nil, FromGRPC("wait for request", requestID, execCtx.Err())
 		case <-ticker.C:
 		}
 	}
@@ -408,7 +416,7 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 
 	response, err := c.toolClient.ExecuteTool(execCtx, request)
 	if err != nil {
-		return nil, err
+		return nil, FromGRPC("execute tool", "", err)
 	}
 
 	if response.Error != "" {
@@ -447,14 +455,14 @@ func (c *ToolplaneClient) StreamExecuteTool(
 		Input:     string(paramsJSON),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to start execution stream: %w", err)
+		return nil, FromGRPC("start execution stream", "", err)
 	}
 
 	chunks := make([]*pb.ExecuteToolChunk, 0, 8)
 	for {
 		chunk, recvErr := stream.Recv()
 		if recvErr != nil {
-			return chunks, fmt.Errorf("failed to receive stream chunk: %w", recvErr)
+			return chunks, FromGRPC("receive stream chunk", "", recvErr)
 		}
 
 		chunks = append(chunks, chunk)

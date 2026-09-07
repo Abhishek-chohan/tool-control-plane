@@ -1,11 +1,14 @@
 """Event system interfaces for decoupled component communication."""
 
+import logging
 import weakref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -136,7 +139,7 @@ class EventBus(IEventEmitter):
                 handler.handle_event(event)
             except Exception as e:
                 # Log error but don't stop other handlers
-                print(f"Error in event handler {sub_id}: {e}")
+                logger.warning("Error in event handler %s: %s", sub_id, e)
 
         # Clean up dead references
         for sub_id in dead_refs:

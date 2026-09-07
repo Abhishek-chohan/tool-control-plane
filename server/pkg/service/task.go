@@ -135,7 +135,7 @@ func (s *TasksService) GetTask(taskID string) (*model.Task, error) {
 
 	task, ok := s.tasks[taskID]
 	if !ok {
-		return nil, fmt.Errorf("task with ID %s not found", taskID)
+		return nil, wrapf(ErrNotFound, "task with ID %s not found", taskID)
 	}
 
 	return task, nil
@@ -148,12 +148,12 @@ func (s *TasksService) GetTaskByID(sessionID, taskID string) (*model.Task, error
 
 	task, ok := s.tasks[taskID]
 	if !ok {
-		return nil, fmt.Errorf("task with ID %s not found", taskID)
+		return nil, wrapf(ErrNotFound, "task with ID %s not found", taskID)
 	}
 
 	// Verify the task belongs to the specified session
 	if task.SessionID != sessionID {
-		return nil, fmt.Errorf("task with ID %s not found in session %s", taskID, sessionID)
+		return nil, wrapf(ErrNotFound, "task with ID %s not found in session %s", taskID, sessionID)
 	}
 
 	return task, nil
@@ -181,18 +181,18 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	task, ok := s.tasks[taskID]
 	if !ok {
 		s.tasksMutex.Unlock()
-		return fmt.Errorf("task with ID %s not found", taskID)
+		return wrapf(ErrNotFound, "task with ID %s not found", taskID)
 	}
 
 	// Verify the task belongs to the specified session
 	if task.SessionID != sessionID {
 		s.tasksMutex.Unlock()
-		return fmt.Errorf("task with ID %s not found in session %s", taskID, sessionID)
+		return wrapf(ErrNotFound, "task with ID %s not found in session %s", taskID, sessionID)
 	}
 
 	if task.Status != model.StatusPending && task.Status != model.StatusRunning {
 		s.tasksMutex.Unlock()
-		return fmt.Errorf("cannot cancel task with status %s", task.Status)
+		return wrapf(ErrTaskNotCancellable, "cannot cancel task with status %s", task.Status)
 	}
 
 	task.Status = model.StatusCancelled
@@ -424,7 +424,7 @@ func (s *TasksService) selectMachine(sessionID, toolName string) (*model.Machine
 		return nil, err
 	}
 	if len(machines) == 0 {
-		return nil, fmt.Errorf("No machines available with tool %s", toolName)
+		return nil, wrapf(ErrNoProviderAvailable, "no machines available with tool %s", toolName)
 	}
 	machines = s.machinesService.OrderMachinesByLoad(sessionID, machines)
 	for _, machine := range machines {
@@ -433,7 +433,7 @@ func (s *TasksService) selectMachine(sessionID, toolName string) (*model.Machine
 			return machine, nil
 		}
 	}
-	return nil, fmt.Errorf("all machines at capacity for tool %s", toolName)
+	return nil, wrapf(ErrMachineAtCapacity, "all machines at capacity for tool %s", toolName)
 }
 
 func (s *TasksService) persistTask(task *model.Task) {
