@@ -5,7 +5,7 @@ import {
   type JSONRPCRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { ProtocolError } from 'toolplane-typescript-client';
+import { NotFoundError, ProtocolError } from 'toolplane-typescript-client';
 
 import type { AdapterOptions } from './config';
 import { createAdapterOptionsFromEnv } from './config';
@@ -23,10 +23,15 @@ import {
 } from './protocol';
 import { ADAPTER_INSTRUCTIONS, ADAPTER_NAME, ADAPTER_VERSION } from './resources';
 
-/** gRPC status code NOT_FOUND, carried by ProtocolError.data from the client. */
+/** gRPC status code NOT_FOUND. The client surfaces it as NotFoundError; the
+ * ProtocolError path covers the pre-typed-errors shape. */
 const GRPC_STATUS_NOT_FOUND = 5;
 
 function isNotFoundError(error: unknown): boolean {
+  if (error instanceof NotFoundError) {
+    return true;
+  }
+
   if (!(error instanceof ProtocolError)) {
     return false;
   }

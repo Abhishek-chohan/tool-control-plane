@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -118,17 +119,17 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	// Check if tool exists
 	_, err := s.toolService.GetToolByName(sessionID, toolName)
 	if err != nil {
-		return nil, fmt.Errorf("tool %s not found: %v", toolName, err)
+		return nil, err
 	}
 
 	// Find machines that can handle this tool
 	machines, err := s.machineService.FindMachinesWithTool(sessionID, toolName)
 	if err != nil {
-		return nil, fmt.Errorf("error finding machines: %v", err)
+		return nil, fmt.Errorf("error finding machines: %w", err)
 	}
 
 	if len(machines) == 0 {
-		return nil, fmt.Errorf("no machines available for tool %s", toolName)
+		return nil, wrapf(ErrNoProviderAvailable, "no machines available for tool %s", toolName)
 	}
 
 	resolvedTimeout := requestTimeout
@@ -202,10 +203,10 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
 		}
 		if found == nil {
-			return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+			return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 		}
 		if found.SessionID != sessionID {
-			return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+			return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 		}
 		s.ensureRequestDefaults(found)
 		s.requestsMutex.Lock()
@@ -219,7 +220,7 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 		return found, nil
 	}
 
-	return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+	return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 }
 
 // GetRequestByIDAnySession gets a request by ID without requiring a known session ID.
@@ -243,7 +244,7 @@ func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Req
 			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
 		}
 		if found == nil {
-			return nil, fmt.Errorf("request %s not found", requestID)
+			return nil, wrapf(ErrNotFound, "request %s not found", requestID)
 		}
 		s.ensureRequestDefaults(found)
 		s.requestsMutex.Lock()
@@ -257,7 +258,7 @@ func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Req
 		return found, nil
 	}
 
-	return nil, fmt.Errorf("request %s not found", requestID)
+	return nil, wrapf(ErrNotFound, "request %s not found", requestID)
 }
 
 // ListRequests lists all requests in a session with optional filtering
@@ -372,7 +373,7 @@ func (s *RequestsService) UpdateRequest(
 						"reason": "machine_at_capacity",
 					})
 					s.notifyRequestUpdate(request.ID)
-					return nil, fmt.Errorf("machine %s at capacity", machineID)
+					return nil, wrapf(ErrMachineAtCapacity, "machine %s at capacity", machineID)
 				}
 				reservedSlot = true
 			}
@@ -469,7 +470,7 @@ func (s *RequestsService) updateRequestViaStore(
 				"reason": "machine_at_capacity",
 			})
 			s.notifyRequestUpdate(requeued.ID)
-			return nil, fmt.Errorf("machine %s at capacity", machineID)
+			return nil, wrapf(ErrMachineAtCapacity, "machine %s at capacity", machineID)
 		}
 		reservedSlot = true
 	}
@@ -523,7 +524,7 @@ func (s *RequestsService) mirrorRequestLocked(request *model.Request) {
 // ClaimRequest marks a request as claimed by a machine
 func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (*model.Request, error) {
 	if s.machineService.IsMachineDraining(sessionID, machineID) {
-		return nil, fmt.Errorf("machine %s is draining", machineID)
+		return nil, wrapf(ErrMachineDraining, "machine %s is draining", machineID)
 	}
 
 	// Store-first path: use the guarded claim primitive so the same request
@@ -537,7 +538,17 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 			return nil, fmt.Errorf("persist request claim failed: %w", err)
 		}
 		if !ok {
-			return nil, fmt.Errorf("request %s is not claimable in session %s", requestID, sessionID)
+			// The guarded claim rejects both missing requests and lost claim
+			// races with the same ok=false; re-read to tell them apart so
+			// clients see NOT_FOUND versus FAILED_PRECONDITION. A failed
+			// re-read surfaces as itself (INTERNAL), never as a miss.
+			if _, lookupErr := s.GetRequestByID(sessionID, requestID); lookupErr != nil {
+				if errors.Is(lookupErr, ErrNotFound) {
+					return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+				}
+				return nil, lookupErr
+			}
+			return nil, wrapf(ErrRequestNotClaimable, "request %s is not claimable in session %s", requestID, sessionID)
 		}
 		s.requestsMutex.Lock()
 		if _, exists := s.requests[sessionID]; !exists {
@@ -559,18 +570,18 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 
 	// Check if session exists
 	if _, ok := s.requests[sessionID]; !ok {
-		return nil, fmt.Errorf("no requests found for session %s", sessionID)
+		return nil, wrapf(ErrNotFound, "no requests found for session %s", sessionID)
 	}
 
 	// Get request
 	request, ok := s.requests[sessionID][requestID]
 	if !ok {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 	}
 
 	// Check if request is in a claimable state
 	if request.Status != model.RequestStatusPending {
-		return nil, fmt.Errorf("request %s is already in state %s", requestID, request.Status)
+		return nil, wrapf(ErrRequestNotClaimable, "request %s is already in state %s", requestID, request.Status)
 	}
 
 	// Mark request as claimed
@@ -637,7 +648,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 
 	sessionRequests, ok := s.requests[sessionID]
 	if !ok {
-		return nil, fmt.Errorf("no requests found for session %s", sessionID)
+		return nil, wrapf(ErrNotFound, "no requests found for session %s", sessionID)
 	}
 
 	var oldestRequest *model.Request
@@ -805,18 +816,18 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 
 	// Check if session exists
 	if _, ok := s.requests[sessionID]; !ok {
-		return fmt.Errorf("no requests found for session %s", sessionID)
+		return wrapf(ErrNotFound, "no requests found for session %s", sessionID)
 	}
 
 	// Get request
 	request, ok := s.requests[sessionID][requestID]
 	if !ok {
-		return fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 	}
 
 	// Check if request can be cancelled
 	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
-		return fmt.Errorf("request %s is already in state %s", requestID, request.Status)
+		return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, request.Status)
 	}
 
 	// Cancel request
@@ -1365,12 +1376,12 @@ func (s *RequestsService) RequestMetricsSnapshot() (pending, claimed, running, d
 func (s *RequestsService) getRequestLocked(sessionID, requestID string) (*model.Request, error) {
 	sessionRequests, ok := s.requests[sessionID]
 	if !ok {
-		return nil, fmt.Errorf("no requests found for session %s", sessionID)
+		return nil, wrapf(ErrNotFound, "no requests found for session %s", sessionID)
 	}
 
 	request, ok := sessionRequests[requestID]
 	if !ok {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 	}
 
 	s.ensureRequestDefaults(request)
@@ -1385,7 +1396,7 @@ func (s *RequestsService) getRequestAnySessionLocked(requestID string) (*model.R
 		}
 	}
 
-	return nil, fmt.Errorf("request %s not found", requestID)
+	return nil, wrapf(ErrNotFound, "request %s not found", requestID)
 }
 
 func snapshotRequestStreamLocked(request *model.Request) *RequestStreamSnapshot {

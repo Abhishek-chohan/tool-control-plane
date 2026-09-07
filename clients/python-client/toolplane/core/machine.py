@@ -1,5 +1,6 @@
 """Machine management for Toolplane client."""
 
+import logging
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -17,7 +18,9 @@ from toolplane.proto.service_pb2 import (
 )
 
 from .connection import ConnectionManager
-from .errors import MachineError
+from .errors import MachineError, api_error_from_rpc_error
+
+logger = logging.getLogger(__name__)
 
 
 class MachineManager:
@@ -90,9 +93,9 @@ class MachineManager:
             return [self._normalize_machine(machine) for machine in response.machines]
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise MachineError(
-                f"Failed to list machines for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to list machines for session {session_id}"
+            ) from rpc_error
         except Exception as e:
             raise MachineError(f"Failed to list machines for session {session_id}: {e}")
 
@@ -108,9 +111,10 @@ class MachineManager:
             return self._normalize_machine(response)
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise MachineError(
-                f"Failed to get machine {machine_id} for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error,
+                context=f"Failed to get machine {machine_id} for session {session_id}",
+            ) from rpc_error
         except Exception as e:
             raise MachineError(
                 f"Failed to get machine {machine_id} for session {session_id}: {e}"
@@ -174,9 +178,10 @@ class MachineManager:
                 },
             )
             self._handle_rpc_error(rpc_error)
-            raise MachineError(
-                f"Failed to register machine for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error,
+                context=f"Failed to register machine for session {session_id}",
+            ) from rpc_error
         except Exception as e:
             self._emit_event(
                 EventType.MACHINE_REGISTERED,
@@ -251,9 +256,10 @@ class MachineManager:
                 },
             )
             self._handle_rpc_error(rpc_error)
-            raise MachineError(
-                f"Failed to unregister machine for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error,
+                context=f"Failed to unregister machine for session {session_id}",
+            ) from rpc_error
         except Exception as e:
             self._emit_event(
                 EventType.MACHINE_UNREGISTERED,
@@ -291,9 +297,9 @@ class MachineManager:
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
-            raise MachineError(
-                f"Failed to drain machine for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to drain machine for session {session_id}"
+            ) from rpc_error
         except Exception as e:
             raise MachineError(f"Failed to drain machine for session {session_id}: {e}")
 
@@ -373,22 +379,23 @@ class MachineManager:
                             sessions_to_recover.append(session_id)
                         with self.machines_lock:
                             self._last_heartbeat[session_id] = now
-                    elif code in (
-                        grpc.StatusCode.UNAVAILABLE,
-                        grpc.StatusCode.DEADLINE_EXCEEDED,
-                        grpc.StatusCode.INTERNAL,
-                        grpc.StatusCode.UNAUTHENTICATED,
-                    ):
+                    elif code == grpc.StatusCode.UNAVAILABLE:
                         self.connection_manager.mark_unhealthy()
                         with self.machines_lock:
                             self._last_heartbeat[session_id] = now
                     else:
-                        print(f"Heartbeat error for session {session_id}: {rpc_error}")
+                        logger.warning(
+                            "Heartbeat error for session %s: %s", session_id, rpc_error
+                        )
                         with self.machines_lock:
                             self._last_heartbeat[session_id] = now
 
                 except Exception as exc:
-                    print(f"Unexpected heartbeat error for session {session_id}: {exc}")
+                    logger.warning(
+                        "Unexpected heartbeat error for session %s: %s",
+                        session_id,
+                        exc,
+                    )
                     with self.machines_lock:
                         self._last_heartbeat[session_id] = now
 
@@ -411,13 +418,13 @@ class MachineManager:
                     pass
 
     def _handle_rpc_error(self, rpc_error: grpc.RpcError):
-        """Handle recoverable RPC errors by resetting the connection."""
-        if rpc_error.code() in (
-            grpc.StatusCode.UNAVAILABLE,
-            grpc.StatusCode.DEADLINE_EXCEEDED,
-            grpc.StatusCode.INTERNAL,
-            grpc.StatusCode.UNAUTHENTICATED,
-        ):
+        """Handle channel-level failures by resetting the connection.
+
+        Only UNAVAILABLE indicates the channel itself is broken. Credential
+        and state errors are deterministic per-call outcomes; recycling the
+        channel (which triggers machine re-registration) cannot fix them.
+        """
+        if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
             self.connection_manager.mark_unhealthy()
 
     def _recover_session(self, session_id: str):
@@ -445,8 +452,10 @@ class MachineManager:
             with self.machines_lock:
                 self._last_recovery_attempt.pop(session_id, None)
 
-            print(
-                f"Recovered machine for session {session_id} with new machine ID {new_machine_id}"
+            logger.info(
+                "Recovered machine for session %s with new machine ID %s",
+                session_id,
+                new_machine_id,
             )
 
             self._emit_event(
@@ -465,4 +474,6 @@ class MachineManager:
                     "error": str(exc),
                 },
             )
-            print(f"Failed to recover machine for session {session_id}: {exc}")
+            logger.warning(
+                "Failed to recover machine for session %s: %s", session_id, exc
+            )

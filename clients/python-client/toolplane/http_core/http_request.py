@@ -1,6 +1,7 @@
 """HTTP request management for Toolplane client."""
 
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -10,8 +11,10 @@ from ..common.constants import (
     DEFAULT_MAX_WORKERS,
     DEFAULT_POLL_INTERVAL,
 )
-from ..core.errors import RequestError
+from ..core.errors import RequestError, ToolplaneFailedPreconditionError
 from .http_connection import HTTPConnectionManager
+
+logger = logging.getLogger(__name__)
 
 # Mirrors toolplane.core.request: renew at one third of the server's default
 # 30s lease TTL so a healthy executor stays ahead of the reaper.
@@ -162,17 +165,18 @@ class HTTPRequestManager:
                         lease["machine_id"],
                         lease["lease_epoch"],
                     )
+                except ToolplaneFailedPreconditionError:
+                    # The lease was reclaimed or expired; stop renewing and
+                    # let the fenced writes surface the loss.
+                    logger.warning(
+                        "Lease for request %s was lost; stopping renewal.",
+                        request_id,
+                    )
+                    self.release_active_lease(request_id)
                 except Exception as e:
-                    # grpc-gateway maps FAILED_PRECONDITION (lost lease) to
-                    # HTTP 400; stop renewing that request and let the fenced
-                    # writes surface the loss.
-                    if "HTTP 400" in str(e):
-                        print(
-                            f"Lease for request {request_id} was lost; stopping renewal."
-                        )
-                        self.release_active_lease(request_id)
-                    else:
-                        print(f"Lease renewal failed for request {request_id}: {e}")
+                    logger.warning(
+                        "Lease renewal failed for request %s: %s", request_id, e
+                    )
 
     def renew_request_lease(
         self, session_id: str, request_id: str, machine_id: str, lease_epoch: int
@@ -501,7 +505,7 @@ class HTTPRequestManager:
         """Submit error result.
 
         A rejection that itself fails fencing (the lease was already lost,
-        surfaced as HTTP 400) is logged rather than propagated.
+        FAILED_PRECONDITION) is logged rather than propagated.
         """
         try:
             self._submit_result(
@@ -513,10 +517,11 @@ class HTTPRequestManager:
                 lease_epoch=lease_epoch,
             )
         except Exception as e:
-            if "HTTP 400" not in str(e):
+            if not isinstance(e, ToolplaneFailedPreconditionError):
                 raise
-            print(
-                f"Could not submit rejection for request {request_id}: lease was lost"
+            logger.warning(
+                "Could not submit rejection for request %s: lease was lost",
+                request_id,
             )
 
     # ---------------- Consumer API ----------------

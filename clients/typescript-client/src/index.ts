@@ -15,10 +15,19 @@ export * from './interfaces';
 // Error classes
 export {
   ToolplaneError,
+  APIError,
+  AlreadyExistsError,
   ConnectionError,
-  TimeoutError,
+  FailedPreconditionError,
+  InvalidArgumentError,
+  NotFoundError,
+  PermissionDeniedError,
   ProtocolError,
-  ValidationError
+  ResourceExhaustedError,
+  TimeoutError,
+  UnauthenticatedError,
+  UnavailableError,
+  ValidationError,
 } from './errors';
 
 // Version info

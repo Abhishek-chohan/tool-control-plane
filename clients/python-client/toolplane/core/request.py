@@ -1,6 +1,7 @@
 """Request management for Toolplane client."""
 
 import json
+import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -21,7 +22,9 @@ from toolplane.proto.service_pb2 import (
 )
 
 from .connection import ConnectionManager
-from .errors import RequestError
+from .errors import RequestError, api_error_from_rpc_error
+
+logger = logging.getLogger(__name__)
 
 # The server grants a 30s lease TTL by default; renewing at one third of that
 # keeps a healthy executor comfortably ahead of the reaper.
@@ -162,19 +165,24 @@ class RequestManager:
                     if rpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION:
                         # The lease was reclaimed or expired: stop renewing and
                         # let the fenced writes surface the loss.
-                        print(
-                            f"Lease for request {request_id} was lost "
-                            f"({rpc_error.code().name}); stopping renewal."
+                        logger.warning(
+                            "Lease for request %s was lost (%s); stopping renewal.",
+                            request_id,
+                            rpc_error.code().name,
                         )
                         self.release_active_lease(request_id)
                     else:
                         # Transient transport error: keep the lease tracked and
                         # retry on the next pass.
-                        print(
-                            f"Lease renewal failed for request {request_id}: {rpc_error}"
+                        logger.warning(
+                            "Lease renewal failed for request %s: %s",
+                            request_id,
+                            rpc_error,
                         )
                 except Exception as e:
-                    print(f"Lease renewal failed for request {request_id}: {e}")
+                    logger.warning(
+                        "Lease renewal failed for request %s: %s", request_id, e
+                    )
 
     def renew_request_lease(
         self, session_id: str, request_id: str, machine_id: str, lease_epoch: int
@@ -246,21 +254,41 @@ class RequestManager:
                         self._execute_request, claimed_req, tools, streaming_tools
                     )
 
-                except Exception:
-                    # Ignore claim errors (request might be claimed by another machine)
-                    pass
+                except grpc.RpcError as rpc_error:
+                    code = rpc_error.code()
+                    if code in (
+                        grpc.StatusCode.FAILED_PRECONDITION,
+                        grpc.StatusCode.NOT_FOUND,
+                    ):
+                        # Lost the claim race (or the request vanished between
+                        # list and claim): expected contention, not an error.
+                        logger.debug(
+                            "Claim race lost for request %s in session %s: %s",
+                            req.id,
+                            session_id,
+                            rpc_error,
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to claim request %s in session %s: %s",
+                            req.id,
+                            session_id,
+                            rpc_error,
+                        )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to claim request %s in session %s: %s",
+                        req.id,
+                        session_id,
+                        e,
+                    )
 
         except grpc.RpcError as rpc_error:
-            if rpc_error.code() in (
-                grpc.StatusCode.UNAVAILABLE,
-                grpc.StatusCode.DEADLINE_EXCEEDED,
-                grpc.StatusCode.INTERNAL,
-                grpc.StatusCode.UNAUTHENTICATED,
-            ):
+            if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
                 self.connection_manager.mark_unhealthy()
-            raise RequestError(
-                f"Failed to poll requests for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to poll requests for session {session_id}"
+            ) from rpc_error
         except Exception as e:
             raise RequestError(f"Failed to poll requests for session {session_id}: {e}")
 
@@ -548,9 +576,10 @@ class RequestManager:
             )
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.FAILED_PRECONDITION:
-                print(
-                    f"Could not submit rejection for request {request_id}: "
-                    f"lease was lost ({rpc_error.code().name})"
+                logger.warning(
+                    "Could not submit rejection for request %s: lease was lost (%s)",
+                    request_id,
+                    rpc_error.code().name,
                 )
             else:
                 raise
