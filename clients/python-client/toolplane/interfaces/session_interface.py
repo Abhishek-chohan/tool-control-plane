@@ -1,8 +1,11 @@
 """Session management interface definitions."""
 
+import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
 
 
 class SessionState(Enum):
@@ -195,7 +198,7 @@ class SessionRegistry:
                     session_id, self._session_metadata[session_id]
                 )
             except Exception as e:
-                print(f"Error in session lifecycle handler: {e}")
+                logger.warning("Error in session lifecycle handler: %s", e)
 
     def unregister_context(self, session_id: str, reason: str = "manual") -> bool:
         """Unregister a session context."""
@@ -207,7 +210,7 @@ class SessionRegistry:
             try:
                 handler.on_session_terminated(session_id, reason)
             except Exception as e:
-                print(f"Error in session lifecycle handler: {e}")
+                logger.warning("Error in session lifecycle handler: %s", e)
 
         del self._contexts[session_id]
         if session_id in self._session_metadata:
@@ -254,7 +257,7 @@ class SessionRegistry:
                         session_id, Exception("Session state changed to ERROR")
                     )
             except Exception as e:
-                print(f"Error in session lifecycle handler: {e}")
+                logger.warning("Error in session lifecycle handler: %s", e)
 
     def get_session_metadata(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get session metadata."""

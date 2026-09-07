@@ -12,7 +12,7 @@ from toolplane.proto.service_pb2 import (
 )
 
 from .connection import ConnectionManager
-from .errors import TaskError
+from .errors import TaskError, api_error_from_rpc_error
 
 
 class TaskManager:
@@ -57,9 +57,9 @@ class TaskManager:
             )
             return self._normalize_task(response)
         except grpc.RpcError as rpc_error:
-            raise TaskError(
-                f"Failed to create task for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to create task for session {session_id}"
+            ) from rpc_error
         except Exception as exc:
             raise TaskError(f"Failed to create task for session {session_id}: {exc}")
 
@@ -74,9 +74,10 @@ class TaskManager:
             )
             return self._normalize_task(response)
         except grpc.RpcError as rpc_error:
-            raise TaskError(
-                f"Failed to get task {task_id} for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error,
+                context=f"Failed to get task {task_id} for session {session_id}",
+            ) from rpc_error
         except Exception as exc:
             raise TaskError(
                 f"Failed to get task {task_id} for session {session_id}: {exc}"
@@ -93,9 +94,9 @@ class TaskManager:
             )
             return [self._normalize_task(task) for task in response.tasks]
         except grpc.RpcError as rpc_error:
-            raise TaskError(
-                f"Failed to list tasks for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to list tasks for session {session_id}"
+            ) from rpc_error
         except Exception as exc:
             raise TaskError(f"Failed to list tasks for session {session_id}: {exc}")
 
@@ -110,9 +111,10 @@ class TaskManager:
             )
             return response.success
         except grpc.RpcError as rpc_error:
-            raise TaskError(
-                f"Failed to cancel task {task_id} for session {session_id}: {rpc_error}"
-            )
+            raise api_error_from_rpc_error(
+                rpc_error,
+                context=f"Failed to cancel task {task_id} for session {session_id}",
+            ) from rpc_error
         except Exception as exc:
             raise TaskError(
                 f"Failed to cancel task {task_id} for session {session_id}: {exc}"

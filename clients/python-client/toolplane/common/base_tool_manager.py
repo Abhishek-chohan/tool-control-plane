@@ -1,5 +1,6 @@
 """Base tool manager class shared between gRPC and HTTP clients."""
 
+import logging
 from abc import ABC, abstractmethod
 from threading import RLock
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -29,6 +30,8 @@ from .utils import (
     sanitize_input,
     validate_tool_name,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class BaseToolManager(ABC):
@@ -258,8 +261,11 @@ class BaseToolManager(ABC):
             except Exception as exc:
                 if "ALREADY_EXISTS" in str(exc).upper():
                     continue
-                print(
-                    f"Warning: Failed to re-register tool {tool_name} for session {session_id}: {exc}"
+                logger.warning(
+                    "Failed to re-register tool %s for session %s: %s",
+                    tool_name,
+                    session_id,
+                    exc,
                 )
 
     def validate_tool_params(

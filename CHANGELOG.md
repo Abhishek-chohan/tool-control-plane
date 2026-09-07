@@ -6,6 +6,37 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Changed
+
+- Domain-error taxonomy: server handlers map failures to gRPC codes through
+  one table (`statusFromDomainError`) instead of inline choices that
+  collapsed distinct conditions into `NOT_FOUND`/`INTERNAL`. Claim
+  contention, draining machines, terminal-state cancels, and missing
+  providers are now `FAILED_PRECONDITION`; capacity requeues are
+  `RESOURCE_EXHAUSTED`; over-maximum timeouts are `OUT_OF_RANGE`; fenced
+  storage misses are `NOT_FOUND`. See
+  `server/docs/release-notes/2026-09-07-typed-errors.md`.
+- Typed SDK errors in all three clients: Python
+  (`ToolplaneAPIError` + per-code subclasses with
+  `code`/`retryable`/`request_id`/`status`, shared by the gRPC and HTTP
+  transports), Go (`client.Error` with `errors.Is` sentinels and
+  `status.Code` passthrough), and TypeScript (`APIError` + per-code
+  subclasses). `retryable` is true only for `UNAVAILABLE` and
+  `RESOURCE_EXHAUSTED`.
+- Python SDK logs through `logging.getLogger("toolplane.…")` instead of
+  writing to stdout; the provider poll loop logs claim contention at debug
+  and unexpected claim failures at warning instead of silently passing.
+- Python gRPC connection resets are restricted to `UNAVAILABLE`: a bad or
+  revoked API key no longer triggers reconnect + re-registration churn.
+- Python HTTP transport retries only transport failures and retryable
+  typed errors — not deterministic 4xx rejections.
+
+### Fixed
+
+- Python `delete_tool` sent an empty `machine_id` (read the normalized tool
+  dict under `machineId` instead of `machine_id`), which the per-machine
+  credential gate rejects.
+
 ### Security
 
 - Capability split: `invoke` (consumer) and `provide` (provider) replace the

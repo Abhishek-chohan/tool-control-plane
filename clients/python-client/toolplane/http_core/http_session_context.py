@@ -1,6 +1,7 @@
 """HTTP session context implementation."""
 
 import json
+import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -12,6 +13,8 @@ from .http_machine import HTTPMachineManager
 from .http_request import HTTPRequestManager
 from .http_session import HTTPSessionManager
 from .http_tool import HTTPToolManager
+
+logger = logging.getLogger(__name__)
 
 
 class HTTPSessionContext:
@@ -43,10 +46,14 @@ class HTTPSessionContext:
         """Register a machine for this session."""
         try:
             self.machine_id = self.machine_manager.register_machine(self.session_id)
-            print(f"Registered machine {self.machine_id} for session {self.session_id}")
+            logger.debug(
+                "Registered machine %s for session %s", self.machine_id, self.session_id
+            )
             return True
         except Exception as e:
-            print(f"Error registering machine for session {self.session_id}: {e}")
+            logger.warning(
+                "Error registering machine for session %s: %s", self.session_id, e
+            )
             return False
 
     def register_tool(
@@ -75,9 +82,11 @@ class HTTPSessionContext:
                 stream,
                 tags,
             )
-            print(
-                f"Registered tool '{name}' for session {self.session_id}"
-                + (" (streaming)" if stream else "")
+            logger.debug(
+                "Registered tool %s%s for session %s",
+                name,
+                " (streaming)" if stream else "",
+                self.session_id,
             )
         except Exception as e:
             raise ToolplaneError(
@@ -255,7 +264,7 @@ class HTTPSessionContext:
             self.session_manager.remove_session_context(self.session_id)
 
         except Exception as e:
-            print(f"Error cleaning up session {self.session_id}: {e}")
+            logger.warning("Error cleaning up session %s: %s", self.session_id, e)
 
     def poll_requests(self):
         """Poll for requests in this session."""
@@ -272,7 +281,9 @@ class HTTPSessionContext:
                 self.session_id, self.machine_id, tools, streaming_tools
             )
         except Exception as e:
-            print(f"Error polling requests for session {self.session_id}: {e}")
+            logger.warning(
+                "Error polling requests for session %s: %s", self.session_id, e
+            )
 
     # New methods for user session management
     def list_user_sessions(

@@ -3,7 +3,7 @@ import json
 import re
 from typing import Any, Dict, List, Tuple
 
-from toolplane import ToolplaneHTTP
+from toolplane import ToolplaneHTTP, ToolplaneAPIError
 
 
 def _parse_maybe_json(value: Any) -> Any:
@@ -289,6 +289,9 @@ class HttpConformanceAdapter:
 
     def _normalize_fenced_error(self, exc: Exception) -> Dict[str, Any]:
         message = str(exc)
+        # Typed SDK errors carry the authoritative gRPC status name.
+        if isinstance(exc, ToolplaneAPIError):
+            return {"errorCode": exc.code.lower(), "errorMessage": message}
         status_match = re.search(r"HTTP (\d{3})", message)
         if status_match:
             code = self._GATEWAY_STATUS_TO_CODE.get(int(status_match.group(1)))
@@ -490,6 +493,8 @@ class HttpConformanceAdapter:
         }
 
     def _normalize_resume_error_code(self, exc: Exception) -> str:
+        if isinstance(exc, ToolplaneAPIError):
+            return exc.code.lower()
         message = str(exc)
         match = re.search(r"(\{.*\})", message)
         if match:

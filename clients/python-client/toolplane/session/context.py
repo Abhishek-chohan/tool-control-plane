@@ -1,6 +1,9 @@
+import logging
 from typing import Any, Callable, Dict, List
 
 from toolplane.utils import generate_schema_from_function
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["SessionContext"]
 
@@ -106,16 +109,20 @@ class SessionContext:
     def start(self):
         """Start monitoring this session for requests."""
         if not self.machine_id:
-            print(f"No machine registered for session {self.session_id}. Cannot start.")
+            logger.warning(
+                "No machine registered for session %s. Cannot start.", self.session_id
+            )
             return False
 
-        print(
-            f"Started monitoring session {self.session_id} with machine {self.machine_id}"
+        logger.info(
+            "Started monitoring session %s with machine %s",
+            self.session_id,
+            self.machine_id,
         )
-        print(f"Registered tools: {list(self.tools.keys())}")
+        logger.debug("Registered tools: %s", list(self.tools.keys()))
         return True
 
     def stop(self):
         """Stop monitoring this session and cleanup."""
         self.client._cleanup_session(self)
-        print(f"Stopped and cleaned up session {self.session_id}")
+        logger.debug("Stopped and cleaned up session %s", self.session_id)

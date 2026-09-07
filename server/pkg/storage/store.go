@@ -32,6 +32,11 @@ var ErrLeaseConflict = errors.New("storage: lease conflict: caller does not hold
 // already in a terminal state (done/failure).
 var ErrRequestTerminal = errors.New("storage: request is already in a terminal state")
 
+// ErrNotFound reports that the targeted row does not exist. Fenced
+// primitives return it (wrapped with detail) so callers can distinguish a
+// missing entity from a lease rejection without parsing messages.
+var ErrNotFound = errors.New("storage: not found")
+
 // Store provides persistence for core server models.
 type Store struct {
 	db     *sql.DB

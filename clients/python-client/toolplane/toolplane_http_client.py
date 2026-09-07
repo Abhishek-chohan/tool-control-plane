@@ -1,5 +1,6 @@
 """Modular HTTP Toolplane client implementation."""
 
+import logging
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -20,6 +21,8 @@ from .http_core import (
     HTTPToolManager,
     ToolplaneError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ToolplaneHTTP:
@@ -124,7 +127,7 @@ class ToolplaneHTTP:
                     register_machine=register_machine,
                 )
             except Exception as e:
-                print(f"Failed to initialize session {session_id}: {e}")
+                logger.warning("Failed to initialize session %s: %s", session_id, e)
 
     def ensure_session_context(
         self,
@@ -210,7 +213,7 @@ class ToolplaneHTTP:
                 namespace=namespace or self.config.session_namespace,
             )
 
-            print(f"Created new session: {created_session_id}")
+            logger.info("Created new session: %s", created_session_id)
 
             context = self.ensure_session_context(
                 created_session_id,
@@ -559,7 +562,7 @@ class ToolplaneHTTP:
                 time.sleep(self.config.poll_interval)
 
             except Exception as e:
-                print(f"Error in main loop: {e}")
+                logger.warning("Error in main loop: %s", e)
                 import traceback
 
                 traceback.print_exc()

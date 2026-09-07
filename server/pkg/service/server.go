@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"toolplane/cmd/server/auth"
 	"toolplane/pkg/model"
-	"toolplane/pkg/storage"
 	proto "toolplane/proto"
 )
 
@@ -97,7 +95,7 @@ func (s *GRPCServer) GetToolById(ctx context.Context, req *proto.GetToolByIdRequ
 	// Get tool by ID
 	tool, err := s.toolService.GetToolByID(req.SessionId, req.ToolId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get tool: %v", err)
+		return nil, statusFromDomainError("get tool", err)
 	}
 
 	return &proto.GetToolResponse{
@@ -110,7 +108,7 @@ func (s *GRPCServer) GetToolByName(ctx context.Context, req *proto.GetToolByName
 	// Get tool by name
 	tool, err := s.toolService.GetToolByName(req.SessionId, req.ToolName)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get tool: %v", err)
+		return nil, statusFromDomainError("get tool", err)
 	}
 
 	return &proto.GetToolResponse{
@@ -123,7 +121,7 @@ func (s *GRPCServer) DeleteTool(ctx context.Context, req *proto.DeleteToolReques
 	// Delete tool
 	err := s.toolService.DeleteTool(req.SessionId, req.ToolId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to delete tool: %v", err)
+		return nil, statusFromDomainError("delete tool", err)
 	}
 
 	return &proto.DeleteToolResponse{
@@ -136,7 +134,7 @@ func (s *GRPCServer) UpdateToolPing(ctx context.Context, req *proto.UpdateToolPi
 	// Update tool ping
 	tool, err := s.toolService.UpdateToolPing(req.SessionId, req.ToolId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to update tool ping: %v", err)
+		return nil, statusFromDomainError("update tool ping", err)
 	}
 
 	return convertModelToolToProto(tool), nil
@@ -152,14 +150,14 @@ func (s *GRPCServer) CreateSession(ctx context.Context, req *proto.CreateSession
 	session, err := s.sessionService.CreateSession(req.UserId, req.Name, req.Description, req.ApiKey, req.SessionId, req.Namespace)
 	if err != nil {
 		// If session already exists, return existing session
-		if strings.Contains(err.Error(), "already exists") {
+		if errors.Is(err, ErrAlreadyExists) {
 			existing, getErr := s.sessionService.GetSessionByID(req.SessionId)
 			if getErr != nil {
 				return nil, status.Errorf(codes.Internal, "session %s exists but failed to retrieve: %v", req.SessionId, getErr)
 			}
 			return &proto.CreateSessionResponse{Session: convertPublicSessionToProto(existing)}, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
 		}
-		return nil, status.Errorf(codes.Internal, "failed to create session: %v", err)
+		return nil, statusFromDomainError("create session", err)
 	}
 
 	return &proto.CreateSessionResponse{Session: convertPublicSessionToProto(session)}, nil
@@ -170,7 +168,7 @@ func (s *GRPCServer) GetSession(ctx context.Context, req *proto.GetSessionReques
 	// Get session
 	session, err := s.sessionService.GetSessionByID(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get session: %v", err)
+		return nil, statusFromDomainError("get session", err)
 	}
 
 	return convertPublicSessionToProto(session), nil
@@ -200,7 +198,7 @@ func (s *GRPCServer) UpdateSession(ctx context.Context, req *proto.UpdateSession
 	// Update session
 	session, err := s.sessionService.UpdateSession(req.SessionId, req.Name, req.Description, req.Namespace)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to update session: %v", err)
+		return nil, statusFromDomainError("update session", err)
 	}
 
 	return convertPublicSessionToProto(session), nil
@@ -211,7 +209,7 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *proto.DeleteSession
 	// Delete session
 	err := s.sessionService.DeleteSession(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to delete session: %v", err)
+		return nil, statusFromDomainError("delete session", err)
 	}
 
 	return &proto.DeleteSessionResponse{
@@ -312,16 +310,13 @@ func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRe
 	// Get the user ID from the session
 	session, err := s.sessionService.GetSessionByID(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get session: %v", err)
+		return nil, statusFromDomainError("get session", err)
 	}
 
 	// Create API key
 	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities)
 	if err != nil {
-		if errors.Is(err, model.ErrUnsupportedAPIKeyCapability) || errors.Is(err, model.ErrAPIKeyCapabilitiesRequired) {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to create API key: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to create API key: %v", err)
+		return nil, statusFromDomainError("create API key", err)
 	}
 
 	return convertPublicAPIKeyToProto(apiKey, true), nil
@@ -351,7 +346,7 @@ func (s *GRPCServer) RevokeApiKey(ctx context.Context, req *proto.RevokeApiKeyRe
 	// Revoke API key
 	err := s.sessionService.RevokeApiKey(req.SessionId, req.KeyId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to revoke API key: %v", err)
+		return nil, statusFromDomainError("revoke API key", err)
 	}
 
 	return &proto.RevokeApiKeyResponse{
@@ -406,11 +401,9 @@ func (s *GRPCServer) RegisterMachine(ctx context.Context, req *proto.RegisterMac
 	)
 	if err != nil {
 		// Credential rejection (takeover attempt / mismatch) is an authz
-		// outcome, not a precondition; everything else is a server fault.
-		if errors.Is(err, ErrMachineCredentialRejected) {
-			return nil, status.Errorf(codes.PermissionDenied, "failed to register machine: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to register machine: %v", err)
+		// outcome, not a precondition; a draining machine refuses work;
+		// everything else is a server fault.
+		return nil, statusFromDomainError("register machine", err)
 	}
 
 	protoMachine := convertModelMachineToProto(machine)
@@ -444,7 +437,7 @@ func (s *GRPCServer) GetMachine(ctx context.Context, req *proto.GetMachineReques
 	// Get machine
 	machine, err := s.machineService.GetMachineByID(req.SessionId, req.MachineId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get machine: %v", err)
+		return nil, statusFromDomainError("get machine", err)
 	}
 
 	return convertModelMachineToProto(machine), nil
@@ -455,7 +448,7 @@ func (s *GRPCServer) UpdateMachinePing(ctx context.Context, req *proto.UpdateMac
 	// Update machine ping
 	machine, err := s.machineService.UpdateMachinePing(req.SessionId, req.MachineId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to update machine ping: %v", err)
+		return nil, statusFromDomainError("update machine ping", err)
 	}
 
 	return convertModelMachineToProto(machine), nil
@@ -466,7 +459,7 @@ func (s *GRPCServer) UnregisterMachine(ctx context.Context, req *proto.Unregiste
 	// Unregister machine
 	err := s.machineService.UnregisterMachine(req.SessionId, req.MachineId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to unregister machine: %v", err)
+		return nil, statusFromDomainError("unregister machine", err)
 	}
 
 	return &proto.UnregisterMachineResponse{
@@ -483,10 +476,7 @@ func (s *GRPCServer) CreateRequest(ctx context.Context, req *proto.CreateRequest
 	// Create request
 	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
-		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
-			return nil, status.Errorf(codes.InvalidArgument, "failed to create request: %v", err)
-		}
-		return nil, status.Errorf(codes.Internal, "failed to create request: %v", err)
+		return nil, statusFromDomainError("create request", err)
 	}
 
 	return convertModelRequestToProto(request), nil
@@ -497,7 +487,7 @@ func (s *GRPCServer) GetRequest(ctx context.Context, req *proto.GetRequestReques
 	// Get request
 	request, err := s.requestService.GetRequestByID(req.SessionId, req.RequestId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get request: %v", err)
+		return nil, statusFromDomainError("get request", err)
 	}
 
 	return convertModelRequestToProto(request), nil
@@ -550,7 +540,7 @@ func (s *GRPCServer) UpdateRequest(ctx context.Context, req *proto.UpdateRequest
 		model.ResultType(req.ResultType),
 	)
 	if err != nil {
-		return nil, fencedWriteStatusError("update request", err)
+		return nil, statusFromDomainError("update request", err)
 	}
 
 	return convertModelRequestToProto(request), nil
@@ -561,7 +551,7 @@ func (s *GRPCServer) ClaimRequest(ctx context.Context, req *proto.ClaimRequestRe
 	// Claim request
 	request, err := s.requestService.ClaimRequest(req.SessionId, req.RequestId, req.MachineId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to claim request: %v", err)
+		return nil, statusFromDomainError("claim request", err)
 	}
 
 	return convertModelRequestToProto(request), nil
@@ -572,7 +562,7 @@ func (s *GRPCServer) CancelRequest(ctx context.Context, req *proto.CancelRequest
 	// Cancel request
 	err := s.requestService.CancelRequest(req.SessionId, req.RequestId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to cancel request: %v", err)
+		return nil, statusFromDomainError("cancel request", err)
 	}
 
 	return &proto.CancelRequestResponse{
@@ -608,7 +598,7 @@ func (s *GRPCServer) SubmitRequestResult(ctx context.Context, req *proto.SubmitR
 		meta,
 	)
 	if err != nil {
-		return nil, fencedWriteStatusError("submit request result", err)
+		return nil, statusFromDomainError("submit request result", err)
 	}
 
 	return &proto.SubmitRequestResultResponse{
@@ -628,7 +618,7 @@ func (s *GRPCServer) AppendRequestChunks(ctx context.Context, req *proto.AppendR
 		model.ResultType(req.ResultType),
 	)
 	if err != nil {
-		return nil, fencedWriteStatusError("append request chunks", err)
+		return nil, statusFromDomainError("append request chunks", err)
 	}
 
 	return &proto.AppendRequestChunksResponse{
@@ -645,21 +635,10 @@ func (s *GRPCServer) RenewRequestLease(ctx context.Context, req *proto.RenewRequ
 		req.LeaseEpoch,
 	)
 	if err != nil {
-		return nil, fencedWriteStatusError("renew request lease", err)
+		return nil, statusFromDomainError("renew request lease", err)
 	}
 
 	return convertModelRequestToProto(renewed), nil
-}
-
-// fencedWriteStatusError maps fenced provider-write failures to gRPC codes:
-// a rejected lease grant or a write against a terminal request is
-// FAILED_PRECONDITION (typed and actionable), while lookup failures keep the
-// historical NOT_FOUND mapping.
-func fencedWriteStatusError(action string, err error) error {
-	if errors.Is(err, storage.ErrLeaseConflict) || errors.Is(err, storage.ErrRequestTerminal) {
-		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
-	}
-	return status.Errorf(codes.NotFound, "failed to %s: %v", action, err)
 }
 
 // GetRequestChunks implements the gRPC GetRequestChunks method
@@ -667,7 +646,7 @@ func (s *GRPCServer) GetRequestChunks(ctx context.Context, req *proto.GetRequest
 	// Get request chunks
 	window, err := s.requestService.GetRequestChunks(req.SessionId, req.RequestId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get request chunks: %v", err)
+		return nil, statusFromDomainError("get request chunks", err)
 	}
 
 	return &proto.GetRequestChunksResponse{
@@ -721,14 +700,6 @@ func marshalExecuteToolResult(result interface{}) string {
 	return string(encoded)
 }
 
-func requestReplayStatusError(action string, err error) error {
-	var expired *RequestStreamExpiredError
-	if errors.As(err, &expired) {
-		return status.Errorf(codes.OutOfRange, "failed to %s: %v", action, err)
-	}
-	return status.Errorf(codes.NotFound, "failed to %s: %v", action, err)
-}
-
 // ======================
 // Execution Methods (Belongs to ToolService)
 // ======================
@@ -738,10 +709,7 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 	// Create a request for the tool execution
 	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
-		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
-			return nil, status.Errorf(codes.InvalidArgument, "tool execution failed: %v", err)
-		}
-		return nil, status.Errorf(codes.NotFound, "tool execution failed: %v", err)
+		return nil, statusFromDomainError("execute tool", err)
 	}
 
 	// Return initial response
@@ -760,10 +728,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 	// Create a request for the tool execution
 	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
 	if err != nil {
-		if errors.Is(err, ErrRequestTimeoutOutOfRange) {
-			return status.Errorf(codes.InvalidArgument, "tool execution failed: %v", err)
-		}
-		return status.Errorf(codes.NotFound, "tool execution failed: %v", err)
+		return statusFromDomainError("execute tool", err)
 	}
 
 	// Poll for updates and stream them back
@@ -774,7 +739,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 	for {
 		snapshot, err := s.requestService.GetRequestReplayStream(request.SessionID, request.ID, lastSeq)
 		if err != nil {
-			return requestReplayStatusError("stream request", err)
+			return statusFromDomainError("stream request", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
 			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
@@ -823,7 +788,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 	for {
 		snapshot, err := s.requestService.GetRequestReplayStreamAnySession(req.RequestId, lastSeq)
 		if err != nil {
-			return requestReplayStatusError("resume stream", err)
+			return statusFromDomainError("resume stream", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
 			return status.Errorf(codes.Internal, "failed to send resumed chunk: %v", err)
@@ -861,7 +826,7 @@ func (s *GRPCServer) CreateTask(ctx context.Context, req *proto.CreateTaskReques
 	// Create task
 	task, err := s.tasksService.CreateTask(req.SessionId, req.ToolName, req.Input)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to create task: %v", err)
+		return nil, statusFromDomainError("create task", err)
 	}
 
 	protoTask := convertModelTaskToProto(task)
@@ -876,7 +841,7 @@ func (s *GRPCServer) GetTask(ctx context.Context, req *proto.GetTaskRequest) (*p
 	// Get task
 	task, err := s.tasksService.GetTaskByID(req.SessionId, req.TaskId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to get task: %v", err)
+		return nil, statusFromDomainError("get task", err)
 	}
 
 	protoTask := convertModelTaskToProto(task)
@@ -914,7 +879,7 @@ func (s *GRPCServer) CancelTask(ctx context.Context, req *proto.CancelTaskReques
 	// Cancel task
 	err := s.tasksService.CancelTask(req.SessionId, req.TaskId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "failed to cancel task: %v", err)
+		return nil, statusFromDomainError("cancel task", err)
 	}
 
 	return &proto.CancelTaskResponse{
