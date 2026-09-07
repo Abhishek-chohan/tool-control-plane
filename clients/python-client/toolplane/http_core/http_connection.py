@@ -24,6 +24,19 @@ class HTTPConnectionManager:
         self.session = requests.Session()
         self.connected = False
         self.current_buffer_size = 0
+        # Per-machine credential for provide-scoped RPCs; set by the machine
+        # registration that minted it.
+        self.machine_token: Optional[str] = None
+
+    def set_machine_token(self, token: str):
+        """Store the per-machine credential minted at registration."""
+        self.machine_token = token or None
+
+    def _request_headers(self) -> Dict:
+        headers = self.config.get_headers()
+        if self.machine_token:
+            headers["X-Toolplane-Machine-Token"] = self.machine_token
+        return headers
 
     def connect(self) -> bool:
         """Test connection to HTTP server."""
@@ -51,7 +64,7 @@ class HTTPConnectionManager:
     def _post(self, path: str, payload: Optional[Dict] = None) -> Any:
         """Make a POST request with retry logic and backpressure handling."""
         url = self.config.server_url.rstrip("/") + "/" + path
-        headers = self.config.get_headers()
+        headers = self._request_headers()
 
         try:
             response = self.session.post(
@@ -87,7 +100,7 @@ class HTTPConnectionManager:
     def stream_post(self, path: str, payload: Optional[Dict] = None):
         """Make a streaming POST request."""
         url = self.config.server_url.rstrip("/") + "/" + path
-        headers = self.config.get_headers()
+        headers = self._request_headers()
 
         try:
             response = self.session.post(

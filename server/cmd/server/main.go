@@ -120,7 +120,11 @@ func main() {
 		log.Fatalf("failed to configure gRPC transport: %v", err)
 	}
 	if authenticateAPIKey != nil {
-		authorizer := auth.NewAPIKeyAuthorizer(authenticateAPIKey, tracer)
+		authorizer := auth.NewAPIKeyAuthorizer(
+			authenticateAPIKey,
+			tracer,
+			auth.WithMachineTokenAuth(machineSvc.AuthorizeMachineToken),
+		)
 		serverOptions = append(serverOptions,
 			grpc.UnaryInterceptor(authorizer.UnaryInterceptor()),
 			grpc.StreamInterceptor(authorizer.StreamInterceptor()),

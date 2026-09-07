@@ -16,7 +16,7 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at FROM machines`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines`)
 	if err != nil {
 		return nil, fmt.Errorf("query machines: %w", err)
 	}
@@ -25,8 +25,8 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	var machines []*model.Machine
 	for rows.Next() {
 		m := &model.Machine{}
-		var sdkVersion, sdkLanguage, ip sql.NullString
-		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt); err != nil {
+		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
 			return nil, fmt.Errorf("scan machine: %w", err)
 		}
 		if sdkVersion.Valid {
@@ -38,9 +38,42 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 		if ip.Valid {
 			m.IP = ip.String
 		}
+		if tokenHash.Valid {
+			m.TokenHash = tokenHash.String
+		}
 		machines = append(machines, m)
 	}
 	return machines, rows.Err()
+}
+
+// GetMachine fetches a single machine by ID (nil when absent). The returned
+// copy never carries a machine token plaintext.
+func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machine, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE id=$1`, machineID)
+	m := &model.Machine{}
+	var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+	if err := row.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get machine: %w", err)
+	}
+	if sdkVersion.Valid {
+		m.SDKVersion = sdkVersion.String
+	}
+	if sdkLanguage.Valid {
+		m.SDKLanguage = sdkLanguage.String
+	}
+	if ip.Valid {
+		m.IP = ip.String
+	}
+	if tokenHash.Valid {
+		m.TokenHash = tokenHash.String
+	}
+	return m, nil
 }
 
 func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
@@ -48,16 +81,17 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO machines (id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        INSERT INTO machines (id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             sdk_version = EXCLUDED.sdk_version,
             sdk_language = EXCLUDED.sdk_language,
             ip = EXCLUDED.ip,
             created_at = EXCLUDED.created_at,
-            last_ping_at = EXCLUDED.last_ping_at
-    `, machine.ID, machine.SessionID, nullString(machine.SDKVersion), nullString(machine.SDKLanguage), nullString(machine.IP), machine.CreatedAt, machine.LastPingAt)
+            last_ping_at = EXCLUDED.last_ping_at,
+            token_hash = EXCLUDED.token_hash
+    `, machine.ID, machine.SessionID, nullString(machine.SDKVersion), nullString(machine.SDKLanguage), nullString(machine.IP), machine.CreatedAt, machine.LastPingAt, nullString(machine.TokenHash))
 	if err != nil {
 		return fmt.Errorf("upsert machine: %w", err)
 	}
@@ -78,7 +112,7 @@ func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit i
 	if s == nil {
 		return nil, nil
 	}
-	query := `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at FROM machines WHERE last_ping_at < $1 ORDER BY last_ping_at ASC`
+	query := `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE last_ping_at < $1 ORDER BY last_ping_at ASC`
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -95,8 +129,8 @@ func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit i
 	var machines []*model.Machine
 	for rows.Next() {
 		m := &model.Machine{}
-		var sdkVersion, sdkLanguage, ip sql.NullString
-		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt); err != nil {
+		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
 			return nil, fmt.Errorf("scan stale machine: %w", err)
 		}
 		if sdkVersion.Valid {
@@ -107,6 +141,9 @@ func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit i
 		}
 		if ip.Valid {
 			m.IP = ip.String
+		}
+		if tokenHash.Valid {
+			m.TokenHash = tokenHash.String
 		}
 		machines = append(machines, m)
 	}

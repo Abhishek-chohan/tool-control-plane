@@ -90,6 +90,10 @@ type Storer interface {
 
 	// Machines
 	AllMachines(ctx context.Context) ([]*model.Machine, error)
+	// GetMachine fetches a single machine by ID regardless of session;
+	// returns nil when absent. Used by the machine-token gate's cross-replica
+	// read-through.
+	GetMachine(ctx context.Context, machineID string) (*model.Machine, error)
 	SaveMachine(ctx context.Context, machine *model.Machine) error
 	DeleteMachine(ctx context.Context, machineID string) error
 	ListStaleMachines(ctx context.Context, cutoff time.Time, limit int) ([]*model.Machine, error)

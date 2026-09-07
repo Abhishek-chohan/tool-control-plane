@@ -148,6 +148,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
 		`ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS draining BOOLEAN NOT NULL DEFAULT FALSE`,
+		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS token_hash TEXT`,
 	}
 
 	tx, err := s.db.BeginTx(ctx, nil)

@@ -497,14 +497,19 @@ func (x *ApiKey) GetKeyPreview() string {
 
 // Machine definition
 type Machine struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	SdkVersion    string                 `protobuf:"bytes,3,opt,name=sdk_version,json=sdkVersion,proto3" json:"sdk_version,omitempty"`
-	SdkLanguage   string                 `protobuf:"bytes,4,opt,name=sdk_language,json=sdkLanguage,proto3" json:"sdk_language,omitempty"`
-	Ip            string                 `protobuf:"bytes,5,opt,name=ip,proto3" json:"ip,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	LastPingAt    string                 `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SessionId   string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	SdkVersion  string                 `protobuf:"bytes,3,opt,name=sdk_version,json=sdkVersion,proto3" json:"sdk_version,omitempty"`
+	SdkLanguage string                 `protobuf:"bytes,4,opt,name=sdk_language,json=sdkLanguage,proto3" json:"sdk_language,omitempty"`
+	Ip          string                 `protobuf:"bytes,5,opt,name=ip,proto3" json:"ip,omitempty"`
+	CreatedAt   string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	LastPingAt  string                 `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
+	// Per-machine credential, returned exactly once by RegisterMachine on the
+	// registration that minted it (empty otherwise). Provide-scoped RPCs must
+	// present it via the x-toolplane-machine-token metadata/header when the
+	// server runs session-key auth. Stored server-side only as a hash.
+	MachineToken  string `protobuf:"bytes,8,opt,name=machine_token,json=machineToken,proto3" json:"machine_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -584,6 +589,13 @@ func (x *Machine) GetCreatedAt() string {
 func (x *Machine) GetLastPingAt() string {
 	if x != nil {
 		return x.LastPingAt
+	}
+	return ""
+}
+
+func (x *Machine) GetMachineToken() string {
+	if x != nil {
+		return x.MachineToken
 	}
 	return ""
 }
@@ -1139,9 +1151,12 @@ func (x *GetToolResponse) GetTool() *Tool {
 
 // DeleteToolRequest
 type DeleteToolRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolId        string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolId    string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	// Owning machine; provide-scoped RPCs must present the per-machine
+	// credential alongside this ID in session-key auth mode.
+	MachineId     string `protobuf:"bytes,3,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1186,6 +1201,13 @@ func (x *DeleteToolRequest) GetSessionId() string {
 func (x *DeleteToolRequest) GetToolId() string {
 	if x != nil {
 		return x.ToolId
+	}
+	return ""
+}
+
+func (x *DeleteToolRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
 	}
 	return ""
 }
@@ -1237,9 +1259,12 @@ func (x *DeleteToolResponse) GetSuccess() bool {
 
 // UpdateToolPingRequest
 type UpdateToolPingRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolId        string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolId    string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	// Owning machine; provide-scoped RPCs must present the per-machine
+	// credential alongside this ID in session-key auth mode.
+	MachineId     string `protobuf:"bytes,3,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1284,6 +1309,13 @@ func (x *UpdateToolPingRequest) GetSessionId() string {
 func (x *UpdateToolPingRequest) GetToolId() string {
 	if x != nil {
 		return x.ToolId
+	}
+	return ""
+}
+
+func (x *UpdateToolPingRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
 	}
 	return ""
 }
@@ -2176,7 +2208,7 @@ type CreateApiKeyRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	// Supported values are read, execute, and admin. Capabilities are
+	// Supported values are read, invoke, provide, and admin. Capabilities are
 	// REQUIRED: an empty list is rejected with INVALID_ARGUMENT so keys are
 	// always minted least-privilege and explicit.
 	Capabilities  []string `protobuf:"bytes,3,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
@@ -4565,7 +4597,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"revoked_at\x18\a \x01(\tR\trevokedAt\x12\"\n" +
 	"\fcapabilities\x18\b \x03(\tR\fcapabilities\x12\x1f\n" +
 	"\vkey_preview\x18\t \x01(\tR\n" +
-	"keyPreview\"\xcd\x01\n" +
+	"keyPreview\"\xf2\x01\n" +
 	"\aMachine\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4577,7 +4609,8 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12 \n" +
 	"\flast_ping_at\x18\a \x01(\tR\n" +
-	"lastPingAt\"\xfa\x03\n" +
+	"lastPingAt\x12#\n" +
+	"\rmachine_token\x18\b \x01(\tR\fmachineToken\"\xfa\x03\n" +
 	"\aRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4630,17 +4663,21 @@ const file_proto_service_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\"0\n" +
 	"\x0fGetToolResponse\x12\x1d\n" +
-	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"K\n" +
+	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"j\n" +
 	"\x11DeleteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
-	"\atool_id\x18\x02 \x01(\tR\x06toolId\".\n" +
+	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\".\n" +
 	"\x12DeleteToolResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"O\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"n\n" +
 	"\x15UpdateToolPingRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
-	"\atool_id\x18\x02 \x01(\tR\x06toolId\"\xbb\x01\n" +
+	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\"\xbb\x01\n" +
 	"\x14CreateSessionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
