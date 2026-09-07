@@ -24,10 +24,18 @@ import {
 import { ProviderRuntime } from '../provider_runtime';
 
 import {
+  AlreadyExistsError,
   ConnectionError,
-  ToolplaneError,
+  FailedPreconditionError,
+  InvalidArgumentError,
+  NotFoundError,
+  PermissionDeniedError,
   ProtocolError,
+  ResourceExhaustedError,
   TimeoutError,
+  ToolplaneError,
+  UnauthenticatedError,
+  UnavailableError,
 } from '../errors';
 
 import {
@@ -739,6 +747,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<ProtoRequest>(
       (metadata, options, callback) => this.requestsClient!.getRequest(request, metadata, options, callback),
       `failed to retrieve request ${requestId}`,
+      requestId,
     );
 
     return this.normalizeRequest(response);
@@ -758,6 +767,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<GetRequestChunksResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.getRequestChunks(request, metadata, options, callback),
       `failed to fetch chunks for request ${requestId}`,
+      requestId,
     );
 
     return {
@@ -840,6 +850,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<ProtoRequest>(
       (metadata, options, callback) => this.requestsClient!.claimRequest(request, metadata, options, callback),
       `failed to claim request ${requestId}`,
+      requestId,
     );
 
     return this.normalizeRequest(response);
@@ -866,6 +877,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<AppendRequestChunksResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.appendRequestChunks(request, metadata, options, callback),
       `failed to append chunks for request ${requestId}`,
+      requestId,
     );
 
     return response.getSuccess();
@@ -896,6 +908,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<SubmitRequestResultResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.submitRequestResult(request, metadata, options, callback),
       `failed to submit result for request ${requestId}`,
+      requestId,
     );
 
     return response.getSuccess();
@@ -918,6 +931,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<ProtoRequest>(
       (metadata, options, callback) => this.requestsClient!.renewRequestLease(request, metadata, options, callback),
       `failed to renew lease for request ${requestId}`,
+      requestId,
     );
 
     return this.normalizeRequest(response);
@@ -933,6 +947,7 @@ export class ToolplaneClient {
     const response = await this.invokeGRPCUnary<CancelRequestResponseMessage>(
       (metadata, options, callback) => this.requestsClient!.cancelRequest(request, metadata, options, callback),
       `failed to cancel request ${requestId}`,
+      requestId,
     );
 
     return response.getSuccess();
@@ -1022,6 +1037,7 @@ export class ToolplaneClient {
       const response = await this.invokeGRPCUnary<ProtoRequest>(
         (metadata, options, callback) => this.requestsClient!.getRequest(request, metadata, options, callback),
         `failed to fetch request ${requestId}`,
+        requestId,
       );
 
       switch (response.getStatus()) {
@@ -1029,7 +1045,7 @@ export class ToolplaneClient {
           return response;
         case 'failure': {
           const errorMessage = response.getError() || `request ${requestId} failed`;
-          throw new ToolplaneError(errorMessage);
+          throw new FailedPreconditionError(errorMessage, { requestId, status: 'failure' });
         }
         default:
           await sleep(REQUEST_POLL_INTERVAL_MS);
@@ -1111,11 +1127,12 @@ export class ToolplaneClient {
       callback: (error: grpc.ServiceError | null, response: T) => void,
     ) => grpc.ClientUnaryCall,
     context: string,
+    requestId?: string,
   ): Promise<T> {
     return new Promise((resolve, reject) => {
       callFactory(this.createMetadata(), this.grpcCallOptions(), (error, response) => {
         if (error) {
-          reject(this.translateGRPCError(error, context));
+          reject(this.translateGRPCError(error, context, requestId));
           return;
         }
 
@@ -1124,24 +1141,39 @@ export class ToolplaneClient {
     });
   }
 
-  private translateGRPCError(error: grpc.ServiceError, context: string): ToolplaneError {
+  // Maps a gRPC failure to a typed error: one class per status so callers can
+  // branch with instanceof instead of parsing messages. Deterministic codes
+  // (auth, arguments, state conflicts, missing entities) are never retryable.
+  private translateGRPCError(error: grpc.ServiceError, context: string, requestId?: string): ToolplaneError {
     const message = error.details || error.message || context;
+    const ctx = requestId ? { requestId, data: error } : { data: error };
+    const prefixed = `${context}: ${message}`;
 
     switch (error.code) {
-      case grpc.status.DEADLINE_EXCEEDED:
-        return new TimeoutError(`${context}: ${message}`, error);
-      case grpc.status.UNAVAILABLE:
-      case grpc.status.CANCELLED:
-        return new ConnectionError(`${context}: ${message}`, error);
-      case grpc.status.UNAUTHENTICATED:
-      case grpc.status.PERMISSION_DENIED:
-      case grpc.status.INVALID_ARGUMENT:
-      case grpc.status.FAILED_PRECONDITION:
       case grpc.status.NOT_FOUND:
+        return new NotFoundError(prefixed, ctx);
+      case grpc.status.INVALID_ARGUMENT:
+      case grpc.status.OUT_OF_RANGE:
+        return new InvalidArgumentError(prefixed, ctx);
+      case grpc.status.FAILED_PRECONDITION:
+      case grpc.status.ABORTED:
+        return new FailedPreconditionError(prefixed, ctx);
+      case grpc.status.RESOURCE_EXHAUSTED:
+        return new ResourceExhaustedError(prefixed, ctx);
+      case grpc.status.UNAUTHENTICATED:
+        return new UnauthenticatedError(prefixed, ctx);
+      case grpc.status.PERMISSION_DENIED:
+        return new PermissionDeniedError(prefixed, ctx);
       case grpc.status.ALREADY_EXISTS:
-        return new ProtocolError(`${context}: ${message}`, error);
+        return new AlreadyExistsError(prefixed, ctx);
+      case grpc.status.UNAVAILABLE:
+        return new UnavailableError(prefixed, ctx);
+      case grpc.status.DEADLINE_EXCEEDED:
+        return new TimeoutError(prefixed, error);
+      case grpc.status.CANCELLED:
+        return new ConnectionError(prefixed, error);
       default:
-        return new ToolplaneError(`${context}: ${message}`, error.code, error);
+        return new ToolplaneError(prefixed, error.code, error);
     }
   }
 

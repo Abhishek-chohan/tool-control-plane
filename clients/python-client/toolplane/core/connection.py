@@ -1,5 +1,6 @@
 """Connection management for Toolplane client."""
 
+import logging
 import random
 import threading
 import time
@@ -18,6 +19,8 @@ from toolplane.proto.service_pb2_grpc import (
 
 from .config import ClientConfig
 from .errors import ConnectionError
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -51,7 +54,7 @@ class ConnectionManager:
             try:
                 self.channel.close()
             except Exception as e:
-                print(f"Error closing channel: {e}")
+                logger.debug("Error closing channel: %s", e)
         self._reset_stubs()
         self.connected = False
         self.connection_state = "failed"
@@ -158,8 +161,11 @@ class ConnectionManager:
                     if attempt > 0:
                         delay = self._calculate_delay(attempt - 1)
                         time.sleep(delay)
-                        print(
-                            f"Retry attempt {attempt}/{self.max_retries} after {delay:.2f}s delay"
+                        logger.debug(
+                            "Retry attempt %d/%d after %.2fs delay",
+                            attempt,
+                            self.max_retries,
+                            delay,
                         )
 
                     self.connection_state = "connecting"
@@ -175,13 +181,13 @@ class ConnectionManager:
                     self.connected = True
                     self.connection_state = "connected"
                     self.consecutive_failures = 0
-                    print(f"Successfully connected to {target}")
+                    logger.info("Successfully connected to %s", target)
                     return True
 
                 except Exception as e:
                     last_exception = e
                     self.consecutive_failures += 1
-                    print(f"Connection attempt {attempt + 1} failed: {e}")
+                    logger.warning("Connection attempt %d failed: %s", attempt + 1, e)
                     self._cleanup_failed_connection()
 
                     if attempt < self.max_retries and self._should_retry(attempt, e):
@@ -199,7 +205,7 @@ class ConnectionManager:
                 try:
                     self.channel.close()
                 except Exception as e:
-                    print(f"Error closing channel: {e}")
+                    logger.debug("Error closing channel: %s", e)
             self._reset_stubs()
             self.connected = False
             self.connection_state = "disconnected"
@@ -253,7 +259,7 @@ class ConnectionManager:
                 try:
                     self.channel.close()
                 except Exception as e:
-                    print(f"Error closing unhealthy channel: {e}")
+                    logger.debug("Error closing unhealthy channel: %s", e)
             self._reset_stubs()
             self.connected = False
             self.connection_state = "disconnected"

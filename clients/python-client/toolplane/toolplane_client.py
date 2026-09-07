@@ -1,8 +1,11 @@
 """Modular Toolplane client implementation."""
 
+import logging
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     from .common import (
@@ -165,7 +168,7 @@ class Toolplane:
                     register_machine=register_machine,
                 )
             except Exception as e:
-                print(f"Failed to initialize session {session_id}: {e}")
+                logger.warning("Failed to initialize session %s: %s", session_id, e)
 
     def ensure_session_context(
         self,
@@ -251,7 +254,7 @@ class Toolplane:
                 namespace=namespace or self.config.session_namespace,
             )
 
-            print(f"Created new session: {created_session_id}")
+            logger.info("Created new session: %s", created_session_id)
 
             context = self.ensure_session_context(
                 created_session_id,
@@ -597,7 +600,7 @@ class Toolplane:
                 time.sleep(self.config.poll_interval)
 
             except Exception as e:
-                print(f"Error in main loop: {e}")
+                logger.warning("Error in main loop: %s", e)
                 time.sleep(1)
 
     def __enter__(self):

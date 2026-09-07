@@ -47,12 +47,12 @@ func selectRequestForUpdate(ctx context.Context, tx *sql.Tx, sessionID, requestI
 	req, err := scanRequestRow(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+			return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 		}
 		return nil, err
 	}
 	if req.SessionID != sessionID {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	return req, nil
 }
@@ -66,7 +66,7 @@ func selectRequestForUpdate(ctx context.Context, tx *sql.Tx, sessionID, requestI
 // passed the request may already be reclaimed.
 func (s *Store) RenewRequestLease(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, leaseDuration time.Duration) (*model.Request, error) {
 	if s == nil {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	var renewed *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
@@ -120,7 +120,7 @@ func (s *Store) RenewRequestLease(ctx context.Context, sessionID, requestID, mac
 // with ErrRequestTerminal (keeping the historical "already in state" message).
 func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, result interface{}, resultType model.ResultType, meta map[string]string) (*model.Request, error) {
 	if s == nil {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	var submitted *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
@@ -190,7 +190,7 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 // AppendRequestChunksFenced appends stream chunks as the current lease holder.
 func (s *Store) AppendRequestChunksFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, chunks []string) (*model.Request, error) {
 	if s == nil {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	var updated *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
@@ -223,7 +223,7 @@ func (s *Store) AppendRequestChunksFenced(ctx context.Context, sessionID, reques
 // the refreshed lease deadline for the running transition.
 func (s *Store) UpdateRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, status model.RequestStatus, result interface{}, resultType model.ResultType, leaseDuration time.Duration) (*model.Request, error) {
 	if s == nil {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	var updated *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
@@ -291,7 +291,7 @@ func (s *Store) UpdateRequestFenced(ctx context.Context, sessionID, requestID, m
 // visible again after the retry backoff.
 func (s *Store) RequeueRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, reason string, backoff time.Duration) (*model.Request, error) {
 	if s == nil {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
 	}
 	var requeued *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {

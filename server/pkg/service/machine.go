@@ -18,11 +18,6 @@ type machineDrainRequestTracker interface {
 	ActiveRequestsForMachine(sessionID, machineID string) int
 }
 
-// ErrMachineCredentialRejected reports a failed per-machine credential check:
-// re-registration takeover attempts and credential mismatches on
-// provide-scoped calls. Callers should surface it as PERMISSION_DENIED.
-var ErrMachineCredentialRejected = errors.New("machine credential rejected")
-
 type machineDrainState struct {
 	done chan struct{}
 	once sync.Once
@@ -122,7 +117,7 @@ func (s *MachinesService) RegisterMachine(
 	presentedToken string,
 ) (*model.Machine, error) {
 	if machineID != "" && s.IsMachineDraining(sessionID, machineID) {
-		return nil, fmt.Errorf("machine %s is draining", machineID)
+		return nil, wrapf(ErrMachineDraining, "machine %s is draining", machineID)
 	}
 
 	s.machinesMutex.Lock()
@@ -297,13 +292,13 @@ func (s *MachinesService) GetMachineByID(sessionID, machineID string) (*model.Ma
 
 	// Check if session exists
 	if _, ok := s.machines[sessionID]; !ok {
-		return nil, fmt.Errorf("no machines found for session %s", sessionID)
+		return nil, wrapf(ErrNotFound, "no machines found for session %s", sessionID)
 	}
 
 	// Get machine
 	machine, ok := s.machines[sessionID][machineID]
 	if !ok {
-		return nil, fmt.Errorf("machine %s not found in session %s", machineID, sessionID)
+		return nil, wrapf(ErrNotFound, "machine %s not found in session %s", machineID, sessionID)
 	}
 
 	return machine, nil
@@ -397,12 +392,12 @@ func (s *MachinesService) UpdateMachinePing(sessionID, machineID string) (*model
 	defer s.machinesMutex.Unlock()
 
 	if _, ok := s.machines[sessionID]; !ok {
-		return nil, fmt.Errorf("no machines found for session %s", sessionID)
+		return nil, wrapf(ErrNotFound, "no machines found for session %s", sessionID)
 	}
 
 	machine, ok := s.machines[sessionID][machineID]
 	if !ok {
-		return nil, fmt.Errorf("machine %s not found in session %s", machineID, sessionID)
+		return nil, wrapf(ErrNotFound, "machine %s not found in session %s", machineID, sessionID)
 	}
 
 	machine.UpdatePing()
@@ -480,21 +475,21 @@ func (s *MachinesService) FindMachinesWithTool(sessionID, toolName string) ([]*m
 
 	tool, err := s.toolService.GetToolByName(sessionID, toolName)
 	if err != nil {
-		return nil, fmt.Errorf("tool not found: %v", err)
+		return nil, wrapf(ErrNotFound, "tool not found: %v", err)
 	}
 
 	if tool.MachineID == "" {
-		return nil, fmt.Errorf("tool %s is not associated with any machine", toolName)
+		return nil, wrapf(ErrNoProviderAvailable, "tool %s is not associated with any machine", toolName)
 	}
 
 	sessionMachines, ok := s.machines[sessionID]
 	if !ok {
-		return nil, fmt.Errorf("no machines found for session %s", sessionID)
+		return nil, wrapf(ErrNoProviderAvailable, "no machines found for session %s", sessionID)
 	}
 
 	machine, ok := sessionMachines[tool.MachineID]
 	if !ok {
-		return nil, fmt.Errorf("machine %s for tool %s not registered", tool.MachineID, toolName)
+		return nil, wrapf(ErrNoProviderAvailable, "machine %s for tool %s not registered", tool.MachineID, toolName)
 	}
 
 	return []*model.Machine{machine}, nil

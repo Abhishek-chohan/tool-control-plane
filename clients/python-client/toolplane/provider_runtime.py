@@ -1,8 +1,11 @@
 """Explicit provider runtime for machine-backed execution."""
 
+import logging
 import threading
 import time
 from typing import Any, Callable, Iterable, List, Optional, Set
+
+logger = logging.getLogger(__name__)
 
 try:
     from .core.errors import ConnectionError, ToolplaneError
@@ -216,7 +219,7 @@ class ProviderRuntime:
             try:
                 self.poll_once()
             except Exception as exc:
-                print(f"Error in provider runtime loop: {exc}")
+                logger.warning("Error in provider runtime loop: %s", exc)
             time.sleep(self._poll_interval)
 
     def __enter__(self) -> "ProviderRuntime":
