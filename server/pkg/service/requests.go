@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -539,9 +540,13 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 		if !ok {
 			// The guarded claim rejects both missing requests and lost claim
 			// races with the same ok=false; re-read to tell them apart so
-			// clients see NOT_FOUND versus FAILED_PRECONDITION.
+			// clients see NOT_FOUND versus FAILED_PRECONDITION. A failed
+			// re-read surfaces as itself (INTERNAL), never as a miss.
 			if _, lookupErr := s.GetRequestByID(sessionID, requestID); lookupErr != nil {
-				return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+				if errors.Is(lookupErr, ErrNotFound) {
+					return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+				}
+				return nil, lookupErr
 			}
 			return nil, wrapf(ErrRequestNotClaimable, "request %s is not claimable in session %s", requestID, sessionID)
 		}
