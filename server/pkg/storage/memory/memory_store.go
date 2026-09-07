@@ -233,6 +233,16 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	return out, nil
 }
 
+func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machine, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, ok := s.machines[machineID]
+	if !ok || m == nil {
+		return nil, nil
+	}
+	return cloneMachine(m), nil
+}
+
 func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
 	if machine == nil {
 		return nil
@@ -622,6 +632,9 @@ func cloneMachine(m *model.Machine) *model.Machine {
 		return nil
 	}
 	c := *m
+	// Machine tokens are return-once credentials; stored/returned copies
+	// never carry the plaintext.
+	c.Token = ""
 	return &c
 }
 

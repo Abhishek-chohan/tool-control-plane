@@ -383,6 +383,11 @@ message Machine {
   string ip = 5;
   string created_at = 6;
   string last_ping_at = 7;
+  // Per-machine credential, returned exactly once by RegisterMachine on the
+  // registration that minted it (empty otherwise). Provide-scoped RPCs must
+  // present it via the x-toolplane-machine-token metadata/header when the
+  // server runs session-key auth. Stored server-side only as a hash.
+  string machine_token = 8;
 }
 
 // Request definition
@@ -457,6 +462,9 @@ message GetToolResponse {
 message DeleteToolRequest {
   string session_id = 1;
   string tool_id = 2;
+  // Owning machine; provide-scoped RPCs must present the per-machine
+  // credential alongside this ID in session-key auth mode.
+  string machine_id = 3;
 }
 
 // DeleteToolResponse
@@ -468,6 +476,9 @@ message DeleteToolResponse {
 message UpdateToolPingRequest {
   string session_id = 1;
   string tool_id = 2;
+  // Owning machine; provide-scoped RPCs must present the per-machine
+  // credential alongside this ID in session-key auth mode.
+  string machine_id = 3;
 }
 
 // CreateSessionRequest
@@ -577,7 +588,7 @@ message DeleteSessionResponse {
 message CreateApiKeyRequest {
   string session_id = 1;
   string name = 2;
-  // Supported values are read, execute, and admin. Capabilities are
+  // Supported values are read, invoke, provide, and admin. Capabilities are
   // REQUIRED: an empty list is rejected with INVALID_ARGUMENT so keys are
   // always minted least-privilege and explicit.
   repeated string capabilities = 3;

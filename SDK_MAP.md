@@ -108,7 +108,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `BulkDeleteSessions` | `full`: `bulk_delete_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `GetSessionStats` | `full`: `get_session_stats()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `InvalidateSession` | `full`: `invalidate_session()` | `unsupported` | `unsupported` | Session-wide kill switch (admin scope): revokes every live API key of the session so no credential authenticates again. `RefreshSessionToken` was removed — it fabricated a token that authenticated nothing |
-| `CreateApiKey` | `full`: `create_api_key()` | `full`: `CreateAPIKey()` | `full`: `createApiKey()` | Capabilities are required and must be non-empty (least-privilege minting; the read+execute+admin default is gone). Covered by `conformance/cases/api_key_lifecycle.json` |
+| `CreateApiKey` | `full`: `create_api_key()` | `full`: `CreateAPIKey()` | `full`: `createApiKey()` | Capabilities are required and must be non-empty (least-privilege minting; the read+execute+admin default is gone). Values: `read`, `invoke` (consumer), `provide` (provider), `admin`; the legacy `execute` is accepted and expands to invoke+provide. Covered by `conformance/cases/api_key_lifecycle.json` |
 | `ListApiKeys` | `full`: `list_api_keys()` | `full`: `ListAPIKeys()` | `full`: `listApiKeys()` | Covered by `conformance/cases/api_key_lifecycle.json` |
 | `RevokeApiKey` | `full`: `revoke_api_key()` | `full`: `RevokeAPIKey()` | `full`: `revokeApiKey()` | Covered by `conformance/cases/api_key_lifecycle.json` |
 
@@ -116,7 +116,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | RPC | Python | Go | TypeScript | Notes / conformance |
 | --- | --- | --- | --- | --- |
-| `RegisterMachine` | `partial`: provider lifecycle via explicit `ProviderRuntime` | `full`: `RegisterMachine()` | `full`: `registerMachine()` plus `ProviderRuntime.createSession()` / `ProviderRuntime.attachSession()` | Python and TypeScript both own provider registration through explicit runtime surfaces; direct TypeScript machine wrappers remain public |
+| `RegisterMachine` | `partial`: provider lifecycle via explicit `ProviderRuntime` | `full`: `RegisterMachine()` | `full`: `registerMachine()` plus `ProviderRuntime.createSession()` / `ProviderRuntime.attachSession()` | Python and TypeScript both own provider registration through explicit runtime surfaces; direct TypeScript machine wrappers remain public. The registration response carries the once-only per-machine credential (`machine_token`), which the maintained runtimes capture and present on provide-scoped calls (`provide` capability) automatically |
 | `ListMachines` | `full`: `list_machines()` | `full`: `ListMachines()` | `full`: `listMachines()` | Covered by `conformance/cases/machine_lifecycle.json` |
 | `GetMachine` | `full`: `get_machine()` | `full`: `GetMachine()` | `full`: `getMachine()` | Covered by `conformance/cases/machine_lifecycle.json` |
 | `UpdateMachinePing` | `partial`: explicit provider heartbeat thread | `unsupported` | `full`: `updateMachinePing()` plus `ProviderRuntime` heartbeat loop | TypeScript now exposes the provider heartbeat RPC directly and uses it in the maintained runtime |

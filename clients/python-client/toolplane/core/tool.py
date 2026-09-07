@@ -86,9 +86,12 @@ class ToolManager(BaseToolManager):
                 tool_request, metadata=self.connection_manager.get_metadata()
             )
 
-            # Delete the tool
+            # Delete the tool. machine_id makes this a properly-attributed
+            # provide-scoped call (per-machine credential in metadata).
             delete_request = DeleteToolRequest(
-                session_id=session_id, tool_id=tool_response.tool.id
+                session_id=session_id,
+                tool_id=tool_response.tool.id,
+                machine_id=tool_response.tool.machine_id,
             )
 
             self.connection_manager.tool_stub.DeleteTool(
@@ -171,7 +174,11 @@ class ToolManager(BaseToolManager):
             except Exception:
                 tool_name = None
 
-            request = DeleteToolRequest(session_id=session_id, tool_id=tool_id)
+            request = DeleteToolRequest(
+                session_id=session_id,
+                tool_id=tool_id,
+                machine_id=str(tool.get("machineId", "") or ""),
+            )
             response = self.connection_manager.tool_stub.DeleteTool(
                 request, metadata=self.connection_manager.get_metadata()
             )

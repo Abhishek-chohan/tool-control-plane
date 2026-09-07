@@ -113,6 +113,13 @@ class HTTPMachineManager:
             response = self.connection_manager.register_machine(payload)
             actual_machine_id = response.get("id", machine_id)
 
+            # The registration response carries the per-machine credential
+            # exactly once; store it so subsequent provide-scoped calls
+            # present it (see HTTPConnectionManager._request_headers).
+            machine_token = response.get("machineToken", "")
+            if machine_token:
+                self.connection_manager.set_machine_token(machine_token)
+
             with self.machines_lock:
                 self.machines[session_id] = actual_machine_id
                 self._last_heartbeat[session_id] = time.time()

@@ -153,9 +153,10 @@ The maintained isolation boundary is session-scoped.
 - Session ownership is keyed by `CreatedBy` plus the persisted user-to-session mapping.
 - Machines, tools, requests, and tasks are all scoped to a single session ID.
 - API keys are session-scoped credentials, not global tenancy credentials.
-- Session-owned API keys carry explicit `read`, `execute`, or `admin` capabilities, and server authorization binds them to the owning session or user scope per RPC.
+- Session-owned API keys carry explicit `read`, `invoke`, `provide`, or `admin` capabilities, and server authorization binds them to the owning session or user scope per RPC. `invoke` authorizes consumer operations (create requests, execute tools, cancel); `provide` authorizes provider operations (register machines/tools, claim, submit, renew lease, drain). The legacy `execute` value is still accepted and expands to `invoke`+`provide`.
+- Provider identity is per-machine: `RegisterMachine` mints a once-only machine credential, and provide-scoped RPCs must present it (`x-toolplane-machine-token`) in session-key mode. Re-registering an existing machine ID requires the credential, closing machine-ID takeover.
 - API-key secrets are returned only from `CreateApiKey`; `ListApiKeys` is metadata-only and exposes `key_preview` plus `capabilities` instead of replaying the secret.
-- Python-only admin helpers such as bulk delete, stats, token refresh, and invalidation remain explicitly labeled `admin` scope in `SDK_MAP.md`; they are not implied portable SDK guarantees.
+- Python-only admin helpers such as bulk delete, stats, and invalidation remain explicitly labeled `admin` scope in `SDK_MAP.md`; they are not implied portable SDK guarantees.
 - Proxy throttling provides the current platform guardrails for request volume by API key and client IP. Per-machine load protection remains enforced by the server runtime's machine-capacity tracking.
 
 ## Canonical Runtime Flow

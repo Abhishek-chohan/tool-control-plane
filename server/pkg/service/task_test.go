@@ -24,7 +24,7 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 
 	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
 
 	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
 		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
