@@ -405,7 +405,12 @@ func (s *GRPCServer) RegisterMachine(ctx context.Context, req *proto.RegisterMac
 		presentedToken,
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "failed to register machine: %v", err)
+		// Credential rejection (takeover attempt / mismatch) is an authz
+		// outcome, not a precondition; everything else is a server fault.
+		if errors.Is(err, ErrMachineCredentialRejected) {
+			return nil, status.Errorf(codes.PermissionDenied, "failed to register machine: %v", err)
+		}
+		return nil, status.Errorf(codes.Internal, "failed to register machine: %v", err)
 	}
 
 	protoMachine := convertModelMachineToProto(machine)

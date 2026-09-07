@@ -44,6 +44,8 @@ type MachineTokenAuthorizer func(sessionID, machineID, token string) error
 // RPCs when session-key auth is active. Fixed mode (single trusted dev key)
 // and auth-disabled mode are exempt: production refuses both, so the gate
 // covers exactly the multi-credential deployments where hijacking matters.
+// machine_id is required: a provide-scoped request without machine identity
+// cannot be attributed to a credential and is rejected.
 func (a *APIKeyAuthorizer) authorizeMachineToken(ctx context.Context, principal *model.AuthPrincipal, req interface{}, policy MethodPolicy) error {
 	if a.machineTokenAuth == nil {
 		return nil
@@ -56,11 +58,11 @@ func (a *APIKeyAuthorizer) authorizeMachineToken(ctx context.Context, principal 
 	}
 	machineRequest, ok := req.(machineScopedRequest)
 	if !ok {
-		return nil
+		return status.Error(codes.PermissionDenied, "provide-scoped RPC requires machine identity")
 	}
 	machineID := machineRequest.GetMachineId()
 	if machineID == "" {
-		return nil
+		return status.Error(codes.PermissionDenied, "provide-scoped RPC requires machine_id and the per-machine credential")
 	}
 	sessionID := machineRequest.GetSessionId()
 	if err := a.machineTokenAuth(sessionID, machineID, MachineTokenFromContext(ctx)); err != nil {

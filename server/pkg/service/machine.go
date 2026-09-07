@@ -18,6 +18,11 @@ type machineDrainRequestTracker interface {
 	ActiveRequestsForMachine(sessionID, machineID string) int
 }
 
+// ErrMachineCredentialRejected reports a failed per-machine credential check:
+// re-registration takeover attempts and credential mismatches on
+// provide-scoped calls. Callers should surface it as PERMISSION_DENIED.
+var ErrMachineCredentialRejected = errors.New("machine credential rejected")
+
 type machineDrainState struct {
 	done chan struct{}
 	once sync.Once
@@ -141,11 +146,11 @@ func (s *MachinesService) RegisterMachine(
 		case existing.TokenHash == "":
 			// Pre-token machine: bind the first presented credential.
 			if presentedToken == "" {
-				return nil, fmt.Errorf("machine %s has no bound credential; re-registration must present one to bind", id)
+				return nil, fmt.Errorf("%w: machine %s has no bound credential; re-registration must present one to bind", ErrMachineCredentialRejected, id)
 			}
 			existing.TokenHash = model.HashAPIKeySecret(presentedToken)
 		case !existing.MatchesMachineToken(presentedToken):
-			return nil, fmt.Errorf("machine %s is already registered with a different credential", id)
+			return nil, fmt.Errorf("%w: machine %s is already registered with a different credential", ErrMachineCredentialRejected, id)
 		}
 		// Update existing machine
 		existing.SDKVersion = sdkVersion
@@ -216,9 +221,11 @@ func (s *MachinesService) RegisterMachine(
 }
 
 // AuthorizeMachineToken validates a presented per-machine credential for a
-// provide-scoped call. Unknown machines pass (registration may create them);
-// token-less machines bind the first credential; otherwise the credential
-// must match. Session binding is enforced by the caller's API key policy.
+// provide-scoped call. Unknown machines pass (registration may create them)
+// after a store read-through so a machine registered on another replica is
+// still validated here; token-less machines bind the first credential;
+// otherwise the credential must match. Session binding is enforced by the
+// caller's API key policy.
 func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token string) error {
 	if machineID == "" {
 		return nil
@@ -229,8 +236,30 @@ func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token stri
 	s.machinesMutex.RUnlock()
 
 	if !ok || machine == nil {
-		// Not registered (yet): a fresh RegisterMachine will mint or bind.
-		return nil
+		if s.store != nil {
+			// Cross-replica read-through: a machine registered on another
+			// instance must not bypass the gate here.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			stored, err := s.store.GetMachine(ctx, machineID)
+			cancel()
+			if err == nil && stored != nil && stored.SessionID == sessionID {
+				s.machinesMutex.Lock()
+				if _, exists := s.machines[sessionID]; !exists {
+					s.machines[sessionID] = make(map[string]*model.Machine)
+				}
+				if cached, exists := s.machines[sessionID][machineID]; exists {
+					machine = cached
+				} else {
+					s.machines[sessionID][machineID] = stored
+					machine = stored
+				}
+				s.machinesMutex.Unlock()
+			}
+		}
+		if machine == nil {
+			// Not registered anywhere (yet): a fresh RegisterMachine mints.
+			return nil
+		}
 	}
 	if machine.TokenHash == "" {
 		if token == "" {
@@ -249,7 +278,7 @@ func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token stri
 		return nil
 	}
 	if !machine.MatchesMachineToken(token) {
-		return fmt.Errorf("machine %s credential mismatch", machineID)
+		return fmt.Errorf("%w: machine %s credential mismatch", ErrMachineCredentialRejected, machineID)
 	}
 	return nil
 }
