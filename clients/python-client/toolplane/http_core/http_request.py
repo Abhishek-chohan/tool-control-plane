@@ -579,13 +579,35 @@ class HTTPRequestManager:
                 if isinstance(chunk, dict) and isinstance(chunk.get("result"), dict):
                     chunk = chunk["result"]
 
-                error_text = chunk.get("error", "") or ""
+                error_frame = chunk.get("error")
+                if isinstance(error_frame, dict):
+                    # The gateway wraps the gRPC status (with its numeric
+                    # code) in the error frame; surface the real code rather
+                    # than guessing.
+                    raise api_error_from_http_response(
+                        400,
+                        json.dumps({"error": error_frame}),
+                        context=f"Failed to resume stream for request {request_id}",
+                    )
+                error_text = error_frame if isinstance(error_frame, str) else ""
                 if error_text:
                     raise api_error_from_http_response(
                         400,
-                        json.dumps({"error": {"code": 11, "message": error_text}}),
+                        json.dumps({"message": error_text}),
                         context=f"Failed to resume stream for request {request_id}",
                     )
+
+                if chunk.get("isFinal"):
+                    # The final marker is part of the stream contract even
+                    # when it carries no chunk payload.
+                    yield {
+                        "seq": int(chunk.get("seq", 0) or 0),
+                        "request_id": chunk.get("requestId", request_id),
+                        "chunk": chunk.get("chunk") or "",
+                        "is_final": True,
+                        "error": "",
+                    }
+                    return
 
                 value = chunk.get("chunk")
                 if value not in (None, ""):
@@ -593,11 +615,9 @@ class HTTPRequestManager:
                         "seq": int(chunk.get("seq", 0) or 0),
                         "request_id": chunk.get("requestId", request_id),
                         "chunk": value,
-                        "is_final": bool(chunk.get("isFinal", False)),
+                        "is_final": False,
                         "error": "",
                     }
-                if chunk.get("isFinal"):
-                    return
         finally:
             if response is not None:
                 response.close()

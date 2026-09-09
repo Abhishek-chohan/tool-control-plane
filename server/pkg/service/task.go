@@ -116,18 +116,26 @@ func (s *TasksService) CreateTask(sessionID, toolName, input, idempotencyKey str
 	task := model.NewTask(sessionID, toolName, input)
 	task.IdempotencyKey = idempotencyKey
 
-	// Store the task
+	// Persist-first so the store stays authoritative: a persist failure
+	// surfaces instead of leaving the local cache divergent, and a
+	// cross-replica key race (unique violation) returns the winner's task
+	// without scheduling this duplicate.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
+		if err := s.store.SaveTask(ctx, task); err != nil {
+			if idempotencyKey != "" && storage.IsUniqueViolation(err) {
+				if existing := s.findTaskByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
+					return existing, nil
+				}
+			}
+			return nil, fmt.Errorf("persist task create failed: %w", err)
+		}
+	}
+
 	s.tasksMutex.Lock()
 	s.tasks[task.ID] = task
 	s.tasksMutex.Unlock()
-
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveTask(ctx, task); err != nil {
-			log.Printf("persist task create failed: %v", err)
-		}
-	}
 
 	s.recordTaskEvent(task, trace.EventTaskCreated, nil)
 
@@ -154,7 +162,7 @@ func (s *TasksService) findTaskByIdempotencyKey(sessionID, idempotencyKey string
 	if s.store == nil {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 	defer cancel()
 	found, err := s.store.GetTaskByIdempotencyKey(ctx, sessionID, idempotencyKey)
 	if err != nil || found == nil {

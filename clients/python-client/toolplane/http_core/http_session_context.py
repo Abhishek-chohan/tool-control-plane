@@ -215,15 +215,16 @@ class HTTPSessionContext:
         except ToolplaneInvalidArgumentError:
             # The retained window moved past our position; the full result is
             # still fetchable by polling the original request.
-            pass
-        return self._stream_via_polling(
-            tool_name,
-            callback,
-            params,
-            idempotency_key,
-            request_id=request_id,
-            skip=len(all_chunks),
-        )
+            self._stream_via_polling(
+                tool_name,
+                callback,
+                params,
+                idempotency_key,
+                request_id=request_id,
+                skip=len(all_chunks),
+                accumulate=all_chunks,
+            )
+        return all_chunks
 
     def _stream_via_polling(
         self,
@@ -233,21 +234,23 @@ class HTTPSessionContext:
         idempotency_key: str = "",
         request_id: Optional[str] = None,
         skip: int = 0,
+        accumulate: Optional[List] = None,
     ):
         """Stream via polling fallback.
 
         When request_id is given, polls that request; otherwise invokes the
         tool (under idempotency_key when provided) and polls the result.
         skip suppresses the first skip chunks, which the caller already
-        delivered.
+        delivered. When accumulate is given, polled chunks append to it so
+        callers keep the chunks they already delivered.
         """
         if request_id is None:
             request_id = self.tool_manager.execute_tool(
                 self.session_id, tool_name, params, idempotency_key
             )
 
-        all_chunks = []
-        last_chunk_count = 0
+        all_chunks = accumulate if accumulate is not None else []
+        last_chunk_count = skip
 
         while True:
             status = self.get_request_status(request_id)
