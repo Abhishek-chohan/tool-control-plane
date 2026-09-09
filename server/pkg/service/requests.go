@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -316,6 +317,10 @@ func (s *RequestsService) ListRequests(
 			filtered = append(filtered, req)
 		}
 	}
+
+	// Map iteration is unordered: sort before paginating so pages are
+	// stable and the store's oldest-first ordering survives the cache.
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].CreatedAt.Before(filtered[j].CreatedAt) })
 
 	// Apply pagination
 	if limit <= 0 {
