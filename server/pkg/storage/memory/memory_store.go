@@ -29,6 +29,7 @@ type Store struct {
 	requests     map[string]*model.Request      // by ID
 	machines     map[string]*model.Machine      // by ID
 	tasks        map[string]*model.Task         // by ID
+	taskOwners   map[string]string              // taskID -> owning instance
 	tools        map[string]*model.Tool         // by ID
 	sessions     map[string]*model.Session      // by ID
 	apiKeys      map[string]*model.ApiKey       // by ID
@@ -46,6 +47,7 @@ func New() *Store {
 		requests:     make(map[string]*model.Request),
 		machines:     make(map[string]*model.Machine),
 		tasks:        make(map[string]*model.Task),
+		taskOwners:   make(map[string]string),
 		tools:        make(map[string]*model.Tool),
 		sessions:     make(map[string]*model.Session),
 		apiKeys:      make(map[string]*model.ApiKey),
@@ -397,6 +399,7 @@ func (s *Store) DeleteTask(ctx context.Context, taskID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.tasks, taskID)
+	delete(s.taskOwners, taskID)
 	return nil
 }
 
@@ -417,19 +420,75 @@ func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
 	return out, nil
 }
 
-func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error) {
+func (s *Store) FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL time.Duration, limit int) ([]*model.Task, error) {
+	if limit <= 0 {
+		limit = 32
+	}
+	leaseCutoff := now.Add(-leaseTTL)
+	var out []*model.Task
+	for _, t := range s.tasks {
+		if len(out) >= limit {
+			break
+		}
+		if t.DeadLetter {
+			continue
+		}
+		switch t.Status {
+		case model.StatusCompleted, model.StatusFailed, model.StatusCancelled:
+			continue
+		}
+		if t.NextAttemptAt != nil && t.NextAttemptAt.After(now) {
+			continue
+		}
+		if owner, owned := s.taskOwners[t.ID]; owned && owner != "" && t.UpdatedAt.After(leaseCutoff) {
+			continue
+		}
+		out = append(out, cloneTask(t))
+	}
+	return out, nil
+}
+
+func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID, instanceID string, leaseTTL time.Duration) (*model.Task, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.tasks[taskID]
 	if !ok {
 		return nil, false, nil
 	}
-	cutoff := time.Now().Add(-minAge)
-	if t.UpdatedAt.After(cutoff) {
-		return nil, false, nil // recently touched; don't claim
+	// Acquire when unowned, or when the previous owner's lease (its last
+	// touch + TTL) has expired: a live owner keeps the task.
+	owner, owned := s.taskOwners[taskID]
+	now := time.Now()
+	if owned && owner != "" && t.UpdatedAt.After(now.Add(-leaseTTL)) {
+		return nil, false, nil // owned and leased; don't steal
+	}
+	s.taskOwners[taskID] = instanceID
+	t.UpdatedAt = now
+	return cloneTask(t), true, nil
+}
+
+func (s *Store) RenewTaskAdoption(ctx context.Context, taskID, instanceID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tasks[taskID]
+	if !ok || s.taskOwners[taskID] != instanceID {
+		return false, nil
 	}
 	t.UpdatedAt = time.Now()
-	return cloneTask(t), true, nil
+	return true, nil
+}
+
+func (s *Store) ReleaseTaskAdoption(ctx context.Context, taskID, instanceID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.taskOwners[taskID] != instanceID {
+		return nil
+	}
+	delete(s.taskOwners, taskID)
+	if t, ok := s.tasks[taskID]; ok {
+		t.UpdatedAt = time.Now()
+	}
+	return nil
 }
 
 // ---------------- Sessions ----------------
