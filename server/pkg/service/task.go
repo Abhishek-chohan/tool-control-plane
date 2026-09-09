@@ -813,7 +813,11 @@ func (s *TasksService) setCurrentRequestID(task *model.Task, requestID string) {
 	task.CurrentRequestID = requestID
 	task.UpdatedAt = time.Now()
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// Chunk-replay reads on other replicas fall back to the previous
+		// request id until the next durable write.
+		log.Printf("task %s current-request link not durable: %v", task.ID, err)
+	}
 }
 
 func (s *TasksService) taskExecutionSnapshot(taskID string) (string, context.CancelFunc) {
