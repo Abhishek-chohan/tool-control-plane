@@ -295,6 +295,30 @@ const requestColumns = "id, session_id, tool_name, status, input, result, result
 // GetRequest fetches a single request by ID regardless of session. It supports
 // store-backed reads when a request is not present in the local cache, which is
 // required for multi-instance visibility.
+// ListRequestsBySession returns every request in a session, oldest first,
+// regardless of the caller's local cache. The service uses it as the
+// read-through when another replica created requests this one has not seen.
+func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE session_id=$1 ORDER BY created_at ASC`, requestColumns), sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("query requests by session: %w", err)
+	}
+	defer rows.Close()
+
+	var requests []*model.Request
+	for rows.Next() {
+		req, err := scanRequestRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, req)
+	}
+	return requests, rows.Err()
+}
+
 func (s *Store) GetRequest(ctx context.Context, requestID string) (*model.Request, error) {
 	if s == nil {
 		return nil, nil

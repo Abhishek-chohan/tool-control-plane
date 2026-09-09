@@ -43,6 +43,23 @@ type Task struct {
 	CurrentRequestID string `json:"currentRequestId,omitempty"`
 }
 
+// Clone returns a copy safe to hand out of the service's cache: the struct
+// is copied field-by-field and the time pointers get fresh copies, so
+// callers reading the clone never race with the service mutating the
+// cached original.
+func (t *Task) Clone() *Task {
+	cloned := *t
+	if t.CompletedAt != nil {
+		v := *t.CompletedAt
+		cloned.CompletedAt = &v
+	}
+	if t.NextAttemptAt != nil {
+		v := *t.NextAttemptAt
+		cloned.NextAttemptAt = &v
+	}
+	return &cloned
+}
+
 // NewTask creates a new task
 func NewTask(sessionID, toolName, input string) *Task {
 	now := time.Now()

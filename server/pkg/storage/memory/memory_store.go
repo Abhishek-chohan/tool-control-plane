@@ -14,6 +14,7 @@ package memory
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -149,6 +150,19 @@ func (s *Store) GetRequest(ctx context.Context, requestID string) (*model.Reques
 	return cloneRequest(r), nil
 }
 
+func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*model.Request
+	for _, r := range s.requests {
+		if r.SessionID == sessionID {
+			out = append(out, cloneRequest(r))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
 func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineID string, leaseDuration time.Duration) (*model.Request, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -258,6 +272,9 @@ func (s *Store) DeleteMachine(ctx context.Context, machineID string) error {
 	defer s.mu.Unlock()
 	delete(s.machines, machineID)
 	delete(s.machineTools, machineID)
+	// Match the Postgres store, where the drain flag is a column on the
+	// deleted row: removing the machine ends any drain state with it.
+	delete(s.draining, machineID)
 	return nil
 }
 
@@ -409,6 +426,19 @@ func (s *Store) GetSession(ctx context.Context, sessionID string) (*model.Sessio
 	return cloneSession(sess), nil
 }
 
+func (s *Store) InsertSessionIfAbsent(ctx context.Context, session *model.Session) (bool, error) {
+	if session == nil {
+		return false, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.sessions[session.ID]; exists {
+		return false, nil
+	}
+	s.sessions[session.ID] = cloneSession(session)
+	return true, nil
+}
+
 func (s *Store) SaveSession(ctx context.Context, session *model.Session) error {
 	if session == nil {
 		return nil
@@ -477,6 +507,17 @@ func (s *Store) AllApiKeys(ctx context.Context) ([]*model.ApiKey, error) {
 		out = append(out, cloneApiKey(k))
 	}
 	return out, nil
+}
+
+func (s *Store) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.ApiKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, k := range s.apiKeys {
+		if k.KeyHash == keyHash {
+			return cloneApiKey(k), nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *Store) SaveApiKey(ctx context.Context, key *model.ApiKey) error {

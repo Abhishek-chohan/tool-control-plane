@@ -29,6 +29,12 @@ type SessionsService struct {
 	// only ever contains live grants.
 	keyIndex map[string]*model.ApiKey
 
+	// keyVerifiedAt records when keyIndex entries were last confirmed
+	// against the store. Guarded by apiKeysMutex. Entries older than
+	// apiKeyRevalidationInterval are re-read so revocations and session
+	// deletions made on other replicas propagate within the interval.
+	keyVerifiedAt map[string]time.Time
+
 	// In-memory mapping of users to sessions
 	userSessions      map[string][]string // map[userID][]sessionID
 	userSessionsMutex sync.RWMutex
@@ -46,12 +52,13 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 	}
 
 	svc := &SessionsService{
-		sessions:     make(map[string]*model.Session),
-		apiKeys:      make(map[string]map[string]*model.ApiKey),
-		keyIndex:     make(map[string]*model.ApiKey),
-		userSessions: make(map[string][]string),
-		tracer:       tracer,
-		store:        store,
+		sessions:      make(map[string]*model.Session),
+		apiKeys:       make(map[string]map[string]*model.ApiKey),
+		keyIndex:      make(map[string]*model.ApiKey),
+		keyVerifiedAt: make(map[string]time.Time),
+		userSessions:  make(map[string][]string),
+		tracer:        tracer,
+		store:         store,
 	}
 	if store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -85,6 +92,7 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 				svc.apiKeys[key.SessionID][key.ID] = key
 				if !key.IsRevoked() {
 					svc.keyIndex[key.KeyHash] = key
+					svc.keyVerifiedAt[key.KeyHash] = time.Now()
 				}
 			}
 		}
@@ -162,8 +170,17 @@ func (s *SessionsService) CreateSession(userID, name, description, apiKey, reque
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
-		if err := s.store.SaveSession(ctx, session); err != nil {
+		// Insert-if-absent dedups across replicas: two instances racing to
+		// create the same client-supplied session ID agree on one winner and
+		// the loser reports AlreadyExists instead of overwriting the row.
+		inserted, err := s.store.InsertSessionIfAbsent(ctx, session)
+		if err != nil {
 			log.Printf("persist session create failed: %v", err)
+		} else if !inserted {
+			s.sessionsMutex.Lock()
+			delete(s.sessions, session.ID)
+			s.sessionsMutex.Unlock()
+			return nil, wrapf(ErrAlreadyExists, "session %s already exists", session.ID)
 		}
 	}
 
@@ -333,6 +350,7 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 	for _, apiKey := range s.apiKeys[sessionID] {
 		if apiKey != nil {
 			delete(s.keyIndex, apiKey.KeyHash)
+			delete(s.keyVerifiedAt, apiKey.KeyHash)
 		}
 	}
 	delete(s.apiKeys, sessionID)
@@ -387,6 +405,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 	// Store API key
 	s.apiKeys[sessionID][apiKey.ID] = apiKey
 	s.keyIndex[apiKey.KeyHash] = apiKey
+	s.keyVerifiedAt[apiKey.KeyHash] = time.Now()
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -446,6 +465,7 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 	// Revoke the API key
 	apiKey.Revoke()
 	delete(s.keyIndex, apiKey.KeyHash)
+	delete(s.keyVerifiedAt, apiKey.KeyHash)
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -483,6 +503,7 @@ func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, 
 	keyHash := model.HashAPIKeySecret(normalizedKey)
 	s.apiKeysMutex.RLock()
 	matchedKey := s.keyIndex[keyHash]
+	verifiedAt := s.keyVerifiedAt[keyHash]
 	s.apiKeysMutex.RUnlock()
 
 	if matchedKey == nil {
@@ -490,6 +511,21 @@ func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, 
 	}
 	if matchedKey.IsRevoked() {
 		return nil, fmt.Errorf("api key is revoked")
+	}
+
+	// Revalidate against the store when the cached grant is stale so a
+	// revocation or session deletion performed on another replica stops
+	// authenticating within apiKeyRevalidationInterval. A store error keeps
+	// the cached grant (availability over revocation latency) and retries on
+	// the next authentication.
+	if s.store != nil && time.Since(verifiedAt) > apiKeyRevalidationInterval {
+		matchedKey = s.revalidateAPIKeyLocked(keyHash, matchedKey)
+		if matchedKey == nil {
+			return nil, fmt.Errorf("api key not found")
+		}
+		if matchedKey.IsRevoked() {
+			return nil, fmt.Errorf("api key is revoked")
+		}
 	}
 	matchedSessionID := matchedKey.SessionID
 
@@ -508,6 +544,40 @@ func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, 
 		Capabilities: append([]model.APIKeyCapability(nil), matchedKey.Capabilities...),
 		TokenPreview: matchedKey.KeyPreview,
 	}, nil
+}
+
+// apiKeyRevalidationInterval bounds how long a cached API-key grant stays
+// trusted without a store confirmation. Revocations propagate to every
+// replica within roughly this interval. It is a variable so tests can
+// shorten it instead of sleeping.
+var apiKeyRevalidationInterval = 5 * time.Second
+
+// revalidateAPIKeyLocked re-reads the key by hash from the store and refreshes
+// the cache. It returns the (possibly replaced) live key, or nil when the key
+// is gone or revoked — the caller treats both as authentication failure and
+// the cache entries are dropped so the index only holds live grants.
+func (s *SessionsService) revalidateAPIKeyLocked(keyHash string, cached *model.ApiKey) *model.ApiKey {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+	defer cancel()
+	fresh, err := s.store.GetAPIKeyByHash(ctx, keyHash)
+	if err != nil {
+		log.Printf("api key revalidation lookup failed: %v", err)
+		return cached
+	}
+	if fresh == nil || fresh.IsRevoked() {
+		s.apiKeysMutex.Lock()
+		if current, ok := s.keyIndex[keyHash]; ok && current == cached {
+			delete(s.keyIndex, keyHash)
+			delete(s.keyVerifiedAt, keyHash)
+		}
+		s.apiKeysMutex.Unlock()
+		return nil
+	}
+	s.apiKeysMutex.Lock()
+	s.keyIndex[keyHash] = fresh
+	s.keyVerifiedAt[keyHash] = time.Now()
+	s.apiKeysMutex.Unlock()
+	return fresh
 }
 
 // ValidateApiKey validates an API key and returns the session ID if valid
@@ -672,6 +742,7 @@ func (s *SessionsService) InvalidateSession(sessionID, reason string) (int, erro
 		}
 		apiKey.Revoke()
 		delete(s.keyIndex, apiKey.KeyHash)
+		delete(s.keyVerifiedAt, apiKey.KeyHash)
 		keys = append(keys, apiKey)
 	}
 	s.apiKeysMutex.Unlock()
