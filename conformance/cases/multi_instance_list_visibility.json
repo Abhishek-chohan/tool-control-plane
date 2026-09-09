@@ -1,0 +1,21 @@
+{
+  "id": "multi_instance_list_visibility",
+  "feature": "multi_instance",
+  "description": "Two server replicas sharing one Postgres store: a request created on instance A appears in instance B's ListRequests listing without any local write on B having mirrored it. This exercises the ListRequests store read-through end to end, the process-level counterpart to the Go-side TestListRequestsSeesOtherReplicaCreates proof. Requires TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1 plus TOOLPLANE_DATABASE_URL so the conformance bootstrap boots a second server replica.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-multi-instance-list-session",
+    "description": "session for multi-instance list visibility fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_multi_instance_list_tool",
+    "tool_description": "conformance multi-instance list tool",
+    "params": {
+      "message": "list-visibility"
+    }
+  },
+  "expected": {
+    "request_visible_on_instance_b": true,
+    "list_visible_on_instance_b": true
+  },
+  "tags": ["multi_instance", "request", "list"]
+}

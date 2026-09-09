@@ -138,26 +138,13 @@ jobs:
         working-directory: server
         run: go mod download
 
-      # Enforces the focused test packages the maintained docs cite as proof
-      # (pkg/mcp, cmd/proxy, pkg/observability, cmd/server/auth) alongside the
-      # rest of the server suite, under the race detector where it is clean.
-      # Runs in memory-storage mode: Postgres-backed variants stay with the
-      # release gate's focused runtime slice and skip here without
+      # Full server suite under the race detector, every package. Runs in
+      # memory-storage mode: Postgres-backed variants stay with the release
+      # gate's focused runtime slice and skip here without
       # TOOLPLANE_DATABASE_URL.
-      #
-      # pkg/service is temporarily excluded from the -race leg: the service
-      # hands out live cached *model.Request/*model.Task pointers that callers
-      # read outside the service lock (TestTasksService* fails under -race).
-      # The clone-at-the-boundary fix is scheduled with the store-backed read
-      # model work; until then pkg/service still runs every commit, just
-      # without the detector.
       - name: Run Go server tests (race detector)
         working-directory: server
-        run: go test $(go list ./... | grep -v 'toolplane/pkg/service$') -count=1 -race
-
-      - name: Run Go server tests (pkg/service)
-        working-directory: server
-        run: go test ./pkg/service/... -count=1
+        run: go test ./... -count=1 -race
 
   python-unit:
     name: Python Unit Tests

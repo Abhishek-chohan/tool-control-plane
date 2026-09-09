@@ -143,8 +143,10 @@ func TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeu
 		t.Fatal("expected machine to be marked draining")
 	}
 
-	claimed.VisibleAt = time.Now().Add(-time.Second)
-	claimed.UpdatedAt = time.Now().Add(-time.Second)
+	mutateCachedRequestForTest(requestService, claimed.ID, func(r *model.Request) {
+		r.VisibleAt = time.Now().Add(-time.Second)
+		r.UpdatedAt = time.Now().Add(-time.Second)
+	})
 	requestService.markStalledRequests()
 
 	select {

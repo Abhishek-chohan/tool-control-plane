@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -177,7 +178,7 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 
 	s.notifyRequestUpdate(request.ID)
 
-	return request, nil
+	return request.Clone(), nil
 }
 
 // GetRequestByID gets a request by ID. On a cache miss it falls back to the
@@ -185,15 +186,14 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 // read-through), then populates the local cache.
 func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Request, error) {
 	s.requestsMutex.RLock()
-	sessionRequests, ok := s.requests[sessionID]
-	if ok {
-		if request, ok := sessionRequests[requestID]; ok {
-			s.ensureRequestDefaults(request)
-			s.requestsMutex.RUnlock()
-			return request, nil
-		}
-	}
+	cloned, lookupErr := s.cloneRequestLocked(sessionID, requestID)
 	s.requestsMutex.RUnlock()
+	if lookupErr == nil {
+		// Normalize the private copy, not the cached original: mutating
+		// shared state under a read lock races with concurrent readers.
+		s.ensureRequestDefaults(cloned)
+		return cloned, nil
+	}
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -214,7 +214,9 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 			s.requests[sessionID] = make(map[string]*model.Request)
 		}
 		if _, exists := s.requests[sessionID][requestID]; !exists {
-			s.requests[sessionID][requestID] = found
+			// Cache a clone: the store-fresh object stays private to this
+			// caller, so returning it below cannot alias the shared cache.
+			s.requests[sessionID][requestID] = found.Clone()
 		}
 		s.requestsMutex.Unlock()
 		return found, nil
@@ -227,14 +229,12 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 // On a cache miss it falls back to the store (multi-instance read-through).
 func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Request, error) {
 	s.requestsMutex.RLock()
-	for _, sessionRequests := range s.requests {
-		if request, ok := sessionRequests[requestID]; ok {
-			s.ensureRequestDefaults(request)
-			s.requestsMutex.RUnlock()
-			return request, nil
-		}
-	}
+	cloned, lookupErr := s.cloneRequestAnySessionLocked(requestID)
 	s.requestsMutex.RUnlock()
+	if lookupErr == nil {
+		s.ensureRequestDefaults(cloned)
+		return cloned, nil
+	}
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
@@ -252,7 +252,7 @@ func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Req
 			s.requests[found.SessionID] = make(map[string]*model.Request)
 		}
 		if _, exists := s.requests[found.SessionID][requestID]; !exists {
-			s.requests[found.SessionID][requestID] = found
+			s.requests[found.SessionID][requestID] = found.Clone()
 		}
 		s.requestsMutex.Unlock()
 		return found, nil
@@ -269,6 +269,27 @@ func (s *RequestsService) ListRequests(
 	limit int,
 	offset int,
 ) ([]*model.Request, error) {
+	// Store-first when a store is configured: the store is authoritative, so
+	// requests created on other replicas are visible here without waiting
+	// for a local write to mirror them. Results mirror into the local cache
+	// to keep the cache warm for single-instance reads.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
+		stored, err := s.store.ListRequestsBySession(ctx, sessionID)
+		if err != nil {
+			return nil, fmt.Errorf("persist request list failed: %w", err)
+		}
+		s.requestsMutex.Lock()
+		if _, ok := s.requests[sessionID]; !ok {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		for _, req := range stored {
+			s.requests[sessionID][req.ID] = req.Clone()
+		}
+		s.requestsMutex.Unlock()
+	}
+
 	s.requestsMutex.RLock()
 	defer s.requestsMutex.RUnlock()
 
@@ -297,6 +318,10 @@ func (s *RequestsService) ListRequests(
 		}
 	}
 
+	// Map iteration is unordered: sort before paginating so pages are
+	// stable and the store's oldest-first ordering survives the cache.
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].CreatedAt.Before(filtered[j].CreatedAt) })
+
 	// Apply pagination
 	if limit <= 0 {
 		limit = 10 // Default limit
@@ -317,7 +342,13 @@ func (s *RequestsService) ListRequests(
 		return []*model.Request{}, nil
 	}
 
-	return filtered[offset:end], nil
+	// Hand out clones: callers iterate outside the service lock while
+	// background paths mutate the cached originals.
+	cloned := make([]*model.Request, 0, end-offset)
+	for _, req := range filtered[offset:end] {
+		cloned = append(cloned, req.Clone())
+	}
+	return cloned, nil
 }
 
 // UpdateRequest is a fenced provider write: it updates a request's status,
@@ -433,7 +464,7 @@ func (s *RequestsService) UpdateRequest(
 
 	s.notifyRequestUpdate(request.ID)
 
-	return request, nil
+	return request.Clone(), nil
 }
 
 // updateRequestViaStore is the store-backed fenced UpdateRequest path: capacity
@@ -515,6 +546,7 @@ func (s *RequestsService) mirrorRequestLocked(request *model.Request) {
 	if request == nil {
 		return
 	}
+	request = request.Clone()
 	if _, exists := s.requests[request.SessionID]; !exists {
 		s.requests[request.SessionID] = make(map[string]*model.Request)
 	}
@@ -554,7 +586,7 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 		if _, exists := s.requests[sessionID]; !exists {
 			s.requests[sessionID] = make(map[string]*model.Request)
 		}
-		s.requests[sessionID][claimed.ID] = claimed
+		s.requests[sessionID][claimed.ID] = claimed.Clone()
 		s.requestsMutex.Unlock()
 
 		s.recordRequestEvent(claimed, trace.EventRequestClaimed, machineID, map[string]any{
@@ -606,7 +638,7 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 
 	s.notifyRequestUpdate(request.ID)
 
-	return request, nil
+	return request.Clone(), nil
 }
 
 // ClaimPendingRequest finds and claims a pending request for a machine
@@ -637,7 +669,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 		if _, ok := s.requests[req.SessionID]; !ok {
 			s.requests[req.SessionID] = make(map[string]*model.Request)
 		}
-		s.requests[req.SessionID][req.ID] = req
+		s.requests[req.SessionID][req.ID] = req.Clone()
 		s.requestsMutex.Unlock()
 		s.notifyRequestUpdate(req.ID)
 		return req, nil
@@ -971,7 +1003,7 @@ func (s *RequestsService) RenewRequestLease(
 	})
 	s.notifyRequestUpdate(request.ID)
 
-	return request, nil
+	return request.Clone(), nil
 }
 
 // GetRequestChunks gets the current retained chunk window for a request.
@@ -988,7 +1020,7 @@ func (s *RequestsService) GetRequestStream(sessionID, requestID string) (*Reques
 	s.requestsMutex.RLock()
 	defer s.requestsMutex.RUnlock()
 
-	request, err := s.getRequestLocked(sessionID, requestID)
+	request, err := s.cloneRequestLocked(sessionID, requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -1001,7 +1033,7 @@ func (s *RequestsService) GetRequestStreamAnySession(requestID string) (*Request
 	s.requestsMutex.RLock()
 	defer s.requestsMutex.RUnlock()
 
-	request, err := s.getRequestAnySessionLocked(requestID)
+	request, err := s.cloneRequestAnySessionLocked(requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,7 +1046,7 @@ func (s *RequestsService) GetRequestReplayStream(sessionID, requestID string, la
 	s.requestsMutex.RLock()
 	defer s.requestsMutex.RUnlock()
 
-	request, err := s.getRequestLocked(sessionID, requestID)
+	request, err := s.cloneRequestLocked(sessionID, requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -1027,7 +1059,7 @@ func (s *RequestsService) GetRequestReplayStreamAnySession(requestID string, las
 	s.requestsMutex.RLock()
 	defer s.requestsMutex.RUnlock()
 
-	request, err := s.getRequestAnySessionLocked(requestID)
+	request, err := s.cloneRequestAnySessionLocked(requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -1388,11 +1420,26 @@ func (s *RequestsService) getRequestLocked(sessionID, requestID string) (*model.
 	return request, nil
 }
 
-func (s *RequestsService) getRequestAnySessionLocked(requestID string) (*model.Request, error) {
+// cloneRequestLocked returns a private copy of the cached request, safe to
+// read or normalize after the lock is released. Callers must hold
+// s.requestsMutex (read or write); the copy inherits the cached state as-is.
+func (s *RequestsService) cloneRequestLocked(sessionID, requestID string) (*model.Request, error) {
+	sessionRequests, ok := s.requests[sessionID]
+	if !ok {
+		return nil, wrapf(ErrNotFound, "no requests found for session %s", sessionID)
+	}
+	request, ok := sessionRequests[requestID]
+	if !ok {
+		return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+	}
+	return request.Clone(), nil
+}
+
+// cloneRequestAnySessionLocked is cloneRequestLocked without a known session.
+func (s *RequestsService) cloneRequestAnySessionLocked(requestID string) (*model.Request, error) {
 	for _, sessionRequests := range s.requests {
 		if request, ok := sessionRequests[requestID]; ok {
-			s.ensureRequestDefaults(request)
-			return request, nil
+			return request.Clone(), nil
 		}
 	}
 

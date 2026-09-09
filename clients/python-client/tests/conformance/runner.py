@@ -334,6 +334,20 @@ def _execute_multi_instance_case(
                     f"collided with the first {request_id!r}"
                 )
 
+        # Instance B: the listing read path must also see A's request.
+        # This exercises ListRequests' store read-through: a request created
+        # on another replica appears in B's listing without any local write
+        # on B having mirrored it.
+        if expected.get("list_visible_on_instance_b", False):
+            listed_b = adapter_b.list_requests(session_id, {"limit": 20})
+            ids_b = {entry.get("id") for entry in listed_b if isinstance(entry, dict)}
+            if request_id not in ids_b:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: request {request_id} missing "
+                    f"from instance B listing {ids_b} (ListRequests "
+                    "store read-through failed)"
+                )
+
         # Instance A: both requests are visible from A's read path.
         if expected.get("both_requests_listed_on_a", False):
             listed = adapter_a.list_requests(session_id, {"limit": 20})

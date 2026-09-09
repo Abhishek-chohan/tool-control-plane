@@ -86,8 +86,9 @@ func TestRenewRequestLeasePreventsReclaimAndAbsoluteCapStillBounds(t *testing.T)
 	// Forge 35 seconds of elapsed time (past the 30s lease TTL) while staying
 	// inside the 45s absolute timeout: without the renewal above the request
 	// would be reclaimable now; with it, the reaper must leave it alone.
-	live := renewed
-	live.LeasedAt = ptrTime(time.Now().Add(-35 * time.Second))
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.LeasedAt = ptrTime(time.Now().Add(-35 * time.Second))
+	})
 	requestService.markStalledRequests()
 	afterReap, err := requestService.GetRequestByID(sessionID, request.ID)
 	if err != nil {
@@ -99,7 +100,9 @@ func TestRenewRequestLeasePreventsReclaimAndAbsoluteCapStillBounds(t *testing.T)
 
 	// Once the lease deadline passes without a further renewal, the reaper
 	// reclaims as usual.
-	live.VisibleAt = time.Now().Add(-time.Second)
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.VisibleAt = time.Now().Add(-time.Second)
+	})
 	requestService.markStalledRequests()
 	requeued, err := requestService.GetRequestByID(sessionID, request.ID)
 	if err != nil {
@@ -134,9 +137,10 @@ func TestRenewRequestLeaseCannotCrossAbsoluteTimeout(t *testing.T) {
 	}
 
 	// Forge the absolute deadline into the past: renewal is now refused.
-	live := renewed
-	live.LeasedAt = ptrTime(time.Now().Add(-time.Hour))
-	live.VisibleAt = time.Now().Add(-time.Second)
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.LeasedAt = ptrTime(time.Now().Add(-time.Hour))
+		r.VisibleAt = time.Now().Add(-time.Second)
+	})
 	if _, err := requestService.RenewRequestLease(sessionID, request.ID, machineID, claimed.LeaseEpoch); !errors.Is(err, storage.ErrLeaseConflict) {
 		t.Fatalf("renewal past the absolute timeout should fail with ErrLeaseConflict, got: %v", err)
 	}
@@ -166,7 +170,9 @@ func TestFencedWritesAfterReclaim(t *testing.T) {
 	staleEpoch := firstClaim.LeaseEpoch
 
 	// Force lease expiry and let the reaper requeue.
-	firstClaim.VisibleAt = time.Now().Add(-time.Second)
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.VisibleAt = time.Now().Add(-time.Second)
+	})
 	requestService.markStalledRequests()
 	requeued, err := requestService.GetRequestByID(sessionID, request.ID)
 	if err != nil || requeued.Status != model.RequestStatusPending {

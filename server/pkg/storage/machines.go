@@ -90,7 +90,8 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
             ip = EXCLUDED.ip,
             created_at = EXCLUDED.created_at,
             last_ping_at = EXCLUDED.last_ping_at,
-            token_hash = EXCLUDED.token_hash
+            token_hash = EXCLUDED.token_hash,
+            draining = false -- fresh registration: clear any stale drain flag
     `, machine.ID, machine.SessionID, nullString(machine.SDKVersion), nullString(machine.SDKLanguage), nullString(machine.IP), machine.CreatedAt, machine.LastPingAt, nullString(machine.TokenHash))
 	if err != nil {
 		return fmt.Errorf("upsert machine: %w", err)

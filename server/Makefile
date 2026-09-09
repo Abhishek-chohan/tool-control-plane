@@ -104,12 +104,9 @@ conformance-python:
 python-unit:
 	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py toolplane/toolkits/standalone_tools -q
 
-# Server suite under the race detector. pkg/service is excluded from the race
-# leg until the clone-at-the-boundary fix lands (the service hands out live
-# cached model pointers read outside the lock); it still runs, without -race.
+# Server suite under the race detector, every package.
 test-race:
-	go test $$(go list ./... | grep -v 'toolplane/pkg/service$$') -count=1 -race
-	go test ./pkg/service/... -count=1
+	go test ./... -count=1 -race
 
 conformance-python-grpc:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k grpc -q
