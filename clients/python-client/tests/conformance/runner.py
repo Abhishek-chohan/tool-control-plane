@@ -729,10 +729,31 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                 tool_name=tool_name,
                 description=request.get("tool_description", "conformance request tool"),
             )
+            idempotency_key = request.get("idempotency_key", "")
             request_id = adapter.create_request(
-                session_id, tool_name, request.get("params", {})
+                session_id, tool_name, request.get("params", {}), idempotency_key
             )
             assert_request_id_non_empty(request_id, case_id, transport)
+
+            if expected.get("retry_returns_same_request", False):
+                retry_id = adapter.create_request(
+                    session_id, tool_name, request.get("params", {}), idempotency_key
+                )
+                if retry_id != request_id:
+                    raise AssertionError(
+                        f"[{transport}] {case_id}: retry with idempotency key "
+                        f"{idempotency_key!r} returned {retry_id!r}, want the "
+                        f"original request {request_id!r}"
+                    )
+            if expected.get("different_key_distinct_request", False):
+                distinct_id = adapter.create_request(
+                    session_id, tool_name, request.get("params", {}), idempotency_key + "-other"
+                )
+                if distinct_id == request_id:
+                    raise AssertionError(
+                        f"[{transport}] {case_id}: a different idempotency key "
+                        f"returned the original request {request_id!r}"
+                    )
 
             request_status = adapter.get_request_status(session_id, request_id)
             if "status_equals" in expected:

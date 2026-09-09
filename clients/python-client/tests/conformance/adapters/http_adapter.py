@@ -171,8 +171,12 @@ class HttpConformanceAdapter:
     def delete_tool(self, session_id: str, tool_id: str) -> bool:
         return self.client.delete_tool(session_id, tool_id)
 
-    def create_request(self, session_id: str, tool_name: str, params: Dict[str, Any]) -> str:
-        request_id = self.client.create_request(session_id, tool_name, json.dumps(params))
+    def create_request(
+        self, session_id: str, tool_name: str, params: Dict[str, Any], idempotency_key: str = ""
+    ) -> str:
+        request_id = self.client.create_request(
+            session_id, tool_name, json.dumps(params), idempotency_key
+        )
         self._request_sessions[request_id] = session_id
         return request_id
 

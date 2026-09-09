@@ -329,12 +329,24 @@ class Toolplane:
             namespace=namespace,
         )
 
-    def create_request(self, session_id: str, tool_name: str, input_data: str) -> str:
-        """Create a new request in a session."""
+    def create_request(
+        self,
+        session_id: str,
+        tool_name: str,
+        input_data: str,
+        idempotency_key: str = "",
+    ) -> str:
+        """Create a new request in a session.
+
+        idempotency_key, when set, dedups creates within the session:
+        retrying with the same key returns the original request.
+        """
         if not self.connection_manager.connected:
             if not self.connect():
                 raise ConnectionError("Failed to connect to server")
-        return self.request_manager.create_request(session_id, tool_name, input_data)
+        return self.request_manager.create_request(
+            session_id, tool_name, input_data, idempotency_key=idempotency_key
+        )
 
     def list_requests(
         self,

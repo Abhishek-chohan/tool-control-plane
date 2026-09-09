@@ -43,6 +43,10 @@ type ToolplaneClient struct {
 	userID     string
 	apiKey     string
 	tlsConfig  GRPCTLSConfig
+	// executionTimeout bounds ExecuteTool waits and execution streams.
+	// Defaults to defaultGRPCExecutionTimeout; override with
+	// WithExecutionTimeout.
+	executionTimeout time.Duration
 
 	// gRPC client fields
 	grpcConn       *grpc.ClientConn
@@ -56,12 +60,13 @@ type ToolplaneClient struct {
 // NewToolplaneClient creates a new Toolplane client
 func NewToolplaneClient(protocol ClientProtocol, serverHost string, serverPort int, sessionID, userID, apiKey string, opts ...ClientOption) (*ToolplaneClient, error) {
 	client := &ToolplaneClient{
-		protocol:   protocol,
-		serverHost: serverHost,
-		serverPort: serverPort,
-		sessionID:  sessionID,
-		userID:     userID,
-		apiKey:     apiKey,
+		protocol:         protocol,
+		serverHost:       serverHost,
+		serverPort:       serverPort,
+		sessionID:        sessionID,
+		userID:           userID,
+		apiKey:           apiKey,
+		executionTimeout: defaultGRPCExecutionTimeout,
 	}
 
 	if protocol != ProtocolGRPC {
@@ -268,7 +273,7 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 		return nil, err
 	}
 
-	execCtx, cancel := c.grpcContext(ctx, defaultGRPCExecutionTimeout)
+	execCtx, cancel := c.executionContext(ctx)
 	defer cancel()
 
 	ticker := time.NewTicker(defaultRequestPollInterval)
@@ -351,7 +356,7 @@ func (c *ToolplaneClient) Ping() (string, error) {
 
 // Add performs addition
 func (c *ToolplaneClient) Add(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "add", map[string]interface{}{"a": a, "b": b})
+	request, err := c.executeToolGRPC(context.Background(), "add", map[string]interface{}{"a": a, "b": b}, "")
 	if err != nil {
 		return 0, err
 	}
@@ -360,7 +365,7 @@ func (c *ToolplaneClient) Add(a, b float64) (float64, error) {
 
 // Subtract performs subtraction
 func (c *ToolplaneClient) Subtract(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "subtract", map[string]interface{}{"a": a, "b": b})
+	request, err := c.executeToolGRPC(context.Background(), "subtract", map[string]interface{}{"a": a, "b": b}, "")
 	if err != nil {
 		return 0, err
 	}
@@ -369,7 +374,7 @@ func (c *ToolplaneClient) Subtract(a, b float64) (float64, error) {
 
 // Multiply performs multiplication
 func (c *ToolplaneClient) Multiply(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "multiply", map[string]interface{}{"a": a, "b": b})
+	request, err := c.executeToolGRPC(context.Background(), "multiply", map[string]interface{}{"a": a, "b": b}, "")
 	if err != nil {
 		return 0, err
 	}
@@ -378,7 +383,7 @@ func (c *ToolplaneClient) Multiply(a, b float64) (float64, error) {
 
 // Divide performs division
 func (c *ToolplaneClient) Divide(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "divide", map[string]interface{}{"a": a, "b": b})
+	request, err := c.executeToolGRPC(context.Background(), "divide", map[string]interface{}{"a": a, "b": b}, "")
 	if err != nil {
 		return 0, err
 	}
@@ -387,15 +392,11 @@ func (c *ToolplaneClient) Divide(a, b float64) (float64, error) {
 
 // ExecuteTool executes a tool via gRPC and waits for the final request result.
 func (c *ToolplaneClient) ExecuteTool(ctx context.Context, toolName string, params map[string]interface{}) (*pb.Request, error) {
-	if c.protocol != ProtocolGRPC {
-		return nil, fmt.Errorf("tool execution only supported with gRPC protocol")
-	}
-
-	return c.executeToolGRPC(ctx, toolName, params)
+	return c.ExecuteToolWithKey(ctx, toolName, params, "")
 }
 
 // executeToolGRPC executes a tool via gRPC and waits for the final request result.
-func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, params map[string]interface{}) (*pb.Request, error) {
+func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, params map[string]interface{}, idempotencyKey string) (*pb.Request, error) {
 	if err := c.ensureGRPCConnected(); err != nil {
 		return nil, err
 	}
@@ -406,12 +407,13 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 	}
 
 	request := &pb.ExecuteToolRequest{
-		SessionId: c.sessionID,
-		ToolName:  toolName,
-		Input:     string(paramsJSON),
+		SessionId:      c.sessionID,
+		ToolName:       toolName,
+		Input:          string(paramsJSON),
+		IdempotencyKey: idempotencyKey,
 	}
 
-	execCtx, cancel := c.grpcContext(ctx, defaultGRPCCallTimeout)
+	execCtx, cancel := c.executionContext(ctx)
 	defer cancel()
 
 	response, err := c.toolClient.ExecuteTool(execCtx, request)
@@ -430,6 +432,84 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 	return c.waitForRequestCompletion(ctx, response.RequestId)
 }
 
+// executionContext derives the bounded context for an execution-lifecycle
+// call: the caller's deadline when set, otherwise the configured execution
+// timeout.
+func (c *ToolplaneClient) executionContext(parent context.Context) (context.Context, context.CancelFunc) {
+	if _, ok := parent.Deadline(); ok {
+		return context.WithCancel(parent)
+	}
+	timeout := c.executionTimeout
+	if timeout <= 0 {
+		// Clients constructed directly (tests) without the constructor
+		// default keep the standard cap.
+		timeout = defaultGRPCExecutionTimeout
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
+// ExecuteToolWithKey is ExecuteTool with an idempotency key: retrying the
+// same key returns the original request instead of executing the tool again.
+func (c *ToolplaneClient) ExecuteToolWithKey(ctx context.Context, toolName string, params map[string]interface{}, idempotencyKey string) (*pb.Request, error) {
+	if c.protocol != ProtocolGRPC {
+		return nil, fmt.Errorf("tool execution only supported with gRPC protocol")
+	}
+
+	return c.executeToolGRPC(ctx, toolName, params, idempotencyKey)
+}
+
+// ResumeStream replays a request's retained chunks that follow lastSeq and
+// streams live chunks until the final marker. OnChunk (optional) observes
+// each chunk as it arrives; the full in-order slice is returned.
+func (c *ToolplaneClient) ResumeStream(
+	ctx context.Context,
+	requestID string,
+	lastSeq int32,
+	onChunk func(*pb.ExecuteToolChunk) error,
+) ([]*pb.ExecuteToolChunk, error) {
+	if err := c.ensureGRPCConnected(); err != nil {
+		return nil, err
+	}
+
+	streamCtx, cancel := c.executionContext(ctx)
+	defer cancel()
+
+	stream, err := c.toolClient.ResumeStream(streamCtx, &pb.ResumeStreamRequest{
+		RequestId: requestID,
+		LastSeq:   lastSeq,
+	})
+	if err != nil {
+		return nil, FromGRPC("resume stream", requestID, err)
+	}
+
+	chunks := make([]*pb.ExecuteToolChunk, 0, 8)
+	for {
+		chunk, recvErr := stream.Recv()
+		if recvErr != nil {
+			return chunks, FromGRPC("resume stream chunk", requestID, recvErr)
+		}
+
+		chunks = append(chunks, chunk)
+		if onChunk != nil {
+			if callbackErr := onChunk(chunk); callbackErr != nil {
+				return chunks, callbackErr
+			}
+		}
+
+		if chunk.GetIsFinal() {
+			if chunk.GetError() != "" {
+				return chunks, &Error{
+					Op:        "resume stream",
+					RequestID: requestID,
+					Code:      codes.Internal,
+					Message:   chunk.GetError(),
+				}
+			}
+			return chunks, nil
+		}
+	}
+}
+
 // StreamExecuteTool consumes a live gRPC execution stream in-order.
 func (c *ToolplaneClient) StreamExecuteTool(
 	ctx context.Context,
@@ -446,7 +526,7 @@ func (c *ToolplaneClient) StreamExecuteTool(
 		return nil, fmt.Errorf("failed to marshal parameters: %w", err)
 	}
 
-	streamCtx, cancel := c.grpcContext(ctx, defaultGRPCExecutionTimeout)
+	streamCtx, cancel := c.executionContext(ctx)
 	defer cancel()
 
 	stream, err := c.toolClient.StreamExecuteTool(streamCtx, &pb.ExecuteToolRequest{

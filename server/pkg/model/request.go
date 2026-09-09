@@ -55,11 +55,14 @@ type Request struct {
 	// successful claim and must be echoed by the lease holder on fenced writes
 	// (update/submit/append/renew). It is retained after the request reaches a
 	// terminal state so late writes from a stale executor can still be rejected.
-	LeaseEpoch int64     `json:"leaseEpoch"`
-	LastError  string    `json:"lastError,omitempty"`
-	DeadLetter bool      `json:"deadLetter"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	LeaseEpoch int64 `json:"leaseEpoch"`
+	// IdempotencyKey, when set by the caller, dedups creates within the
+	// session: re-creating with the same key returns the original request.
+	IdempotencyKey string    `json:"idempotencyKey,omitempty"`
+	LastError      string    `json:"lastError,omitempty"`
+	DeadLetter     bool      `json:"deadLetter"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // NewRequest creates a new request

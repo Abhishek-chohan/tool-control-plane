@@ -2840,6 +2840,9 @@ type ExecuteToolRequest struct {
 	// Zero or negative uses the server default; values above the server maximum
 	// are rejected.
 	TimeoutSeconds int32 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	// Optional caller-chosen dedup key: retrying the same call with the same
+	// key returns the original request instead of executing the tool again.
+	IdempotencyKey string `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2900,6 +2903,13 @@ func (x *ExecuteToolRequest) GetTimeoutSeconds() int32 {
 		return x.TimeoutSeconds
 	}
 	return 0
+}
+
+func (x *ExecuteToolRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
 }
 
 // ExecuteToolResponse
@@ -3068,6 +3078,10 @@ type CreateRequestRequest struct {
 	// Zero or negative uses the server default; values above the server maximum
 	// are rejected.
 	TimeoutSeconds int32 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	// Optional caller-chosen dedup key: within a session, creating a request
+	// with a key that already exists returns the existing request instead of
+	// enqueueing duplicate work.
+	IdempotencyKey string `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -3128,6 +3142,13 @@ func (x *CreateRequestRequest) GetTimeoutSeconds() int32 {
 		return x.TimeoutSeconds
 	}
 	return 0
+}
+
+func (x *CreateRequestRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
 }
 
 // GetRequestRequest
@@ -4242,12 +4263,16 @@ func (x *Task) GetCurrentRequestId() string {
 
 // CreateTaskRequest
 type CreateTaskRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Input         string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolName  string                 `protobuf:"bytes,2,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Input     string                 `protobuf:"bytes,3,opt,name=input,proto3" json:"input,omitempty"` // JSON input as string
+	// Optional caller-chosen dedup key: creating a task with a key that
+	// already exists in the session returns the existing task without
+	// re-executing it.
+	IdempotencyKey string `protobuf:"bytes,4,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateTaskRequest) Reset() {
@@ -4297,6 +4322,13 @@ func (x *CreateTaskRequest) GetToolName() string {
 func (x *CreateTaskRequest) GetInput() string {
 	if x != nil {
 		return x.Input
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
 	}
 	return ""
 }
@@ -4788,13 +4820,14 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\"5\n" +
 	"\x19UnregisterMachineResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x8f\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xb8\x01\n" +
 	"\x12ExecuteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
-	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\"\x9b\x01\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\x12'\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\x9b\x01\n" +
 	"\x13ExecuteToolResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
@@ -4809,13 +4842,14 @@ const file_proto_service_proto_rawDesc = "" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x14\n" +
 	"\x05chunk\x18\x03 \x01(\tR\x05chunk\x12\x19\n" +
 	"\bis_final\x18\x04 \x01(\bR\aisFinal\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"\x91\x01\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\"\xba\x01\n" +
 	"\x14CreateRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
-	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\"Q\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\x12'\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"Q\n" +
 	"\x11GetRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4928,12 +4962,13 @@ const file_proto_service_proto_rawDesc = "" +
 	"updated_at\x18\n" +
 	" \x01(\tR\tupdatedAt\x12!\n" +
 	"\fcompleted_at\x18\v \x01(\tR\vcompletedAt\x12,\n" +
-	"\x12current_request_id\x18\f \x01(\tR\x10currentRequestId\"e\n" +
+	"\x12current_request_id\x18\f \x01(\tR\x10currentRequestId\"\x8e\x01\n" +
 	"\x11CreateTaskRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05input\x18\x03 \x01(\tR\x05input\"H\n" +
+	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
+	"\x0fidempotency_key\x18\x04 \x01(\tR\x0eidempotencyKey\"H\n" +
 	"\x0eGetTaskRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +

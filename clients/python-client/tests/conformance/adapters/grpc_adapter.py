@@ -152,8 +152,12 @@ class GrpcConformanceAdapter:
     def delete_tool(self, session_id: str, tool_id: str) -> bool:
         return self.client.delete_tool(session_id, tool_id)
 
-    def create_request(self, session_id: str, tool_name: str, params: Dict[str, Any]) -> str:
-        return self.client.create_request(session_id, tool_name, json.dumps(params))
+    def create_request(
+        self, session_id: str, tool_name: str, params: Dict[str, Any], idempotency_key: str = ""
+    ) -> str:
+        return self.client.create_request(
+            session_id, tool_name, json.dumps(params), idempotency_key
+        )
 
     def start_streaming_request(
         self, session_id: str, tool_name: str, params: Dict[str, Any]

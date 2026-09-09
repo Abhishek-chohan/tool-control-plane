@@ -474,7 +474,7 @@ func (s *GRPCServer) UnregisterMachine(ctx context.Context, req *proto.Unregiste
 // CreateRequest implements the gRPC CreateRequest method
 func (s *GRPCServer) CreateRequest(ctx context.Context, req *proto.CreateRequestRequest) (*proto.Request, error) {
 	// Create request
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds), req.IdempotencyKey)
 	if err != nil {
 		return nil, statusFromDomainError("create request", err)
 	}
@@ -707,7 +707,7 @@ func marshalExecuteToolResult(result interface{}) string {
 // ExecuteTool implements the gRPC ExecuteTool method
 func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequest) (*proto.ExecuteToolResponse, error) {
 	// Create a request for the tool execution
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds), req.IdempotencyKey)
 	if err != nil {
 		return nil, statusFromDomainError("execute tool", err)
 	}
@@ -726,7 +726,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 	}
 
 	// Create a request for the tool execution
-	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds))
+	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds), req.IdempotencyKey)
 	if err != nil {
 		return statusFromDomainError("execute tool", err)
 	}
@@ -824,7 +824,7 @@ func (s *GRPCServer) HealthCheck(ctx context.Context, req *proto.HealthCheckRequ
 // CreateTask implements the gRPC CreateTask method
 func (s *GRPCServer) CreateTask(ctx context.Context, req *proto.CreateTaskRequest) (*proto.Task, error) {
 	// Create task
-	task, err := s.tasksService.CreateTask(req.SessionId, req.ToolName, req.Input)
+	task, err := s.tasksService.CreateTask(req.SessionId, req.ToolName, req.Input, req.IdempotencyKey)
 	if err != nil {
 		return nil, statusFromDomainError("create task", err)
 	}

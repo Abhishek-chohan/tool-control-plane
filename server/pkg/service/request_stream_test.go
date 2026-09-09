@@ -19,7 +19,7 @@ import (
 func TestGRPCServerGetRequestChunksReturnsRetainedWindowMetadata(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"stream"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"stream"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestGRPCServerGetRequestChunksReturnsRetainedWindowMetadata(t *testing.T) {
 func TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"resume"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"resume"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestGRPCServerResumeStreamReplaysRetainedWindowAndFinalMarker(t *testing.T)
 func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"expired"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"expired"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestGRPCServerResumeStreamReturnsOutOfRangeWhenRetainedWindowExpired(t *tes
 func TestGRPCServerResumeStreamReplaysTrimmedRetainedWindowAndFinalMarker(t *testing.T) {
 	server, requestService, sessionID := newRequestStreamTestServer(t)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trimmed"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trimmed"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

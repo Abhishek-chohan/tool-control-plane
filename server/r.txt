@@ -1,0 +1,224 @@
+go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20250303144028-a0af3efb3deb
+go: downloading github.com/google/uuid v1.6.0
+go: downloading golang.org/x/sys v0.30.0
+go: downloading golang.org/x/net v0.35.0
+go: downloading github.com/jackc/pgx/v5 v5.6.0
+go: downloading github.com/jackc/puddle/v2 v2.2.1
+go: downloading golang.org/x/crypto v0.33.0
+go: downloading github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a
+go: downloading github.com/jackc/pgpassfile v1.0.0
+go: downloading golang.org/x/sync v0.11.0
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:33d9f1de-cfd9-4cdc-8050-73745c455680 MachineID:machine-coherence-drain SessionID:sess-coherence-drain Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.659436376 +0000 UTC m=+0.009737426 LastPingAt:2026-09-09 21:29:32.659436376 +0000 UTC m=+0.009737426}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-coherence-drain, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:e7bb3fc0-6a82-4afa-b896-f6d1bf3fa7f1 MachineID:machine-coherence-drain SessionID:sess-coherence-drain Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.659656781 +0000 UTC m=+0.009957823 LastPingAt:2026-09-09 21:29:32.659656781 +0000 UTC m=+0.009957823}
+2026/09/09 21:29:32 machine machine-coherence-drain registered tool echo (e7bb3fc0-6a82-4afa-b896-f6d1bf3fa7f1)
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:4de65b11-8681-48d7-b3ec-4f2b8e957f4a MachineID:7a1a1cba-cf63-41fc-8418-6acb56b9ce4e SessionID:sess-taxonomy Name:echo Description:echo Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.713550646 +0000 UTC m=+0.063851696 LastPingAt:2026-09-09 21:29:32.713550646 +0000 UTC m=+0.063851696}
+2026/09/09 21:29:32 machine 7a1a1cba-cf63-41fc-8418-6acb56b9ce4e registered tool echo (4de65b11-8681-48d7-b3ec-4f2b8e957f4a)
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:08eb2899-01e4-4978-acf7-d1ae53773875 MachineID:d8724ebf-690d-43a1-9e86-30bea1d0203a SessionID:sess-taxonomy Name:echo Description:echo Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.714068426 +0000 UTC m=+0.064369467 LastPingAt:2026-09-09 21:29:32.714068426 +0000 UTC m=+0.064369467}
+2026/09/09 21:29:32 machine d8724ebf-690d-43a1-9e86-30bea1d0203a registered tool echo (08eb2899-01e4-4978-acf7-d1ae53773875)
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:4ce0bd55-f0bb-4a35-a22d-74216825942a MachineID:75ee3485-918d-4d5c-b789-933f8d90421a SessionID:sess-taxonomy Name:echo Description:echo Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.714481581 +0000 UTC m=+0.064782631 LastPingAt:2026-09-09 21:29:32.714481581 +0000 UTC m=+0.064782631}
+2026/09/09 21:29:32 machine 75ee3485-918d-4d5c-b789-933f8d90421a registered tool echo (4ce0bd55-f0bb-4a35-a22d-74216825942a)
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: orphan, tags: []
+2026/09/09 21:29:32 NewTool called with name: orphan, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:373e22bc-a3ec-4885-bba9-06d1b2bee41d MachineID:machine-ghost SessionID:sess-taxonomy Name:orphan Description:orphan tool Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.714703239 +0000 UTC m=+0.065004289 LastPingAt:2026-09-09 21:29:32.714703239 +0000 UTC m=+0.065004289}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:98a6d873-27c1-4304-b603-b93a1b4aef1e MachineID:c503250c-6af8-46d6-9b9b-9e44cc006014 SessionID:sess-taxonomy Name:echo Description:echo Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.715046782 +0000 UTC m=+0.065347832 LastPingAt:2026-09-09 21:29:32.715046782 +0000 UTC m=+0.065347832}
+2026/09/09 21:29:32 machine c503250c-6af8-46d6-9b9b-9e44cc006014 registered tool echo (98a6d873-27c1-4304-b603-b93a1b4aef1e)
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-taxonomy, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:bca88a67-8c04-4e78-a1bb-90a81efa6762 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.715401975 +0000 UTC m=+0.065703025 LastPingAt:2026-09-09 21:29:32.715401975 +0000 UTC m=+0.065703025}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:3b9329dc-e825-40ba-a8eb-81678602da6f MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.71556394 +0000 UTC m=+0.065864990 LastPingAt:2026-09-09 21:29:32.71556394 +0000 UTC m=+0.065864990}
+2026/09/09 21:29:32 machine machine-lease registered tool echo (3b9329dc-e825-40ba-a8eb-81678602da6f)
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:44b308cc-c61b-42da-9f2d-27f8b2f2d85b MachineID:machine-idem-aa SessionID:sess-idem-aa Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.716101089 +0000 UTC m=+0.066402139 LastPingAt:2026-09-09 21:29:32.716101089 +0000 UTC m=+0.066402139}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-idem-aa, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:ffe14a37-874b-46a8-9469-c79ad6170fde MachineID:machine-idem-aa SessionID:sess-idem-aa Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.716276697 +0000 UTC m=+0.066577738 LastPingAt:2026-09-09 21:29:32.716276697 +0000 UTC m=+0.066577738}
+2026/09/09 21:29:32 machine machine-idem-aa registered tool echo (ffe14a37-874b-46a8-9469-c79ad6170fde)
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:36656e84-bcf1-4470-abd0-a815c73cc406 MachineID:machine-task-idem SessionID:sess-task-idem Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.716628608 +0000 UTC m=+0.066929649 LastPingAt:2026-09-09 21:29:32.716628608 +0000 UTC m=+0.066929649}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: sess-task-idem, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:8a78d7c9-0130-4ba2-8390-4e207d934044 MachineID:machine-task-idem SessionID:sess-task-idem Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.716761628 +0000 UTC m=+0.067062669 LastPingAt:2026-09-09 21:29:32.716761628 +0000 UTC m=+0.067062669}
+2026/09/09 21:29:32 machine machine-task-idem registered tool echo (8a78d7c9-0130-4ba2-8390-4e207d934044)
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:613474c2-9f65-49aa-884c-d548f120bc66 MachineID:machine-drain SessionID:session-drain Name:echo Description:echo tool Schema:{\"type\":\"object\"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.738446579 +0000 UTC m=+0.088747638 LastPingAt:2026-09-09 21:29:32.738446579 +0000 UTC m=+0.088747638}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: session-drain, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:ac748e24-bec0-4b4f-8de0-541c2d344fa0 MachineID:machine-drain SessionID:session-drain Name:echo Description:echo tool Schema:{\"type\":\"object\"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.738699121 +0000 UTC m=+0.089000162 LastPingAt:2026-09-09 21:29:32.738699121 +0000 UTC m=+0.089000162}
+2026/09/09 21:29:32 machine machine-drain registered tool echo (ac748e24-bec0-4b4f-8de0-541c2d344fa0)
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:8f4396ba-e5fe-46b0-88de-d5b7cc13149d MachineID:machine-drain-claimed SessionID:session-drain-claimed Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.940637677 +0000 UTC m=+0.290938755 LastPingAt:2026-09-09 21:29:32.940637677 +0000 UTC m=+0.290938755}
+2026/09/09 21:29:32 ToolService.RegisterTool called with sessionID: session-drain-claimed, name: echo, tags: []
+2026/09/09 21:29:32 NewTool called with name: echo, tags: []
+2026/09/09 21:29:32 NewTool created tool: &{ID:d92e10d8-05b9-462a-8aa9-1fddba695d7d MachineID:machine-drain-claimed SessionID:session-drain-claimed Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:32.941099083 +0000 UTC m=+0.291400142 LastPingAt:2026-09-09 21:29:32.941099083 +0000 UTC m=+0.291400142}
+2026/09/09 21:29:32 machine machine-drain-claimed registered tool echo (d92e10d8-05b9-462a-8aa9-1fddba695d7d)
+==================
+WARNING: DATA RACE
+Read at 0x00c000318228 by goroutine 83:
+  toolplane/pkg/service.(*RequestsService).ActiveRequestsForMachine()
+      /repo/pkg/service/requests.go:1135 +0x267
+  toolplane/pkg/service.(*MachinesService).hasActiveRequestsForMachine()
+      /repo/pkg/service/machine.go:696 +0xaa
+  toolplane/pkg/service.(*MachinesService).waitForDrainAndUnregister()
+      /repo/pkg/service/machine.go:679 +0x15e
+  toolplane/pkg/service.(*MachinesService).DrainMachine.gowrap1()
+      /repo/pkg/service/machine.go:341 +0x79
+
+Previous write at 0x00c000318228 by goroutine 79:
+  toolplane/pkg/service.(*RequestsService).handleExpiredRequest()
+      /repo/pkg/service/requests.go:1578 +0x78a
+  toolplane/pkg/service.(*RequestsService).markStalledRequests()
+      /repo/pkg/service/requests.go:1225 +0x8e4
+  toolplane/pkg/service.TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt()
+      /repo/pkg/service/machine_test.go:150 +0x7b5
+  testing.tRunner()
+      /usr/local/go/src/testing/testing.go:1792 +0x225
+  testing.(*T).Run.gowrap1()
+      /usr/local/go/src/testing/testing.go:1851 +0x44
+
+Goroutine 83 (running) created at:
+  toolplane/pkg/service.(*MachinesService).DrainMachine()
+      /repo/pkg/service/machine.go:341 +0x70a
+  toolplane/pkg/service.TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt.func1()
+      /repo/pkg/service/machine_test.go:133 +0x9d
+
+Goroutine 79 (running) created at:
+  testing.(*T).Run()
+      /usr/local/go/src/testing/testing.go:1851 +0x8f2
+  testing.runTests.func1()
+      /usr/local/go/src/testing/testing.go:2279 +0x85
+  testing.tRunner()
+      /usr/local/go/src/testing/testing.go:1792 +0x225
+  testing.runTests()
+      /usr/local/go/src/testing/testing.go:2277 +0x96c
+  testing.(*M).Run()
+      /usr/local/go/src/testing/testing.go:2142 +0xeea
+  main.main()
+      _testmain.go:139 +0x164
+==================
+--- FAIL: TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeuesIt (0.15s)
+    testing.go:1490: race detected during execution of test
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:27ebed37-6199-4c69-ad44-3704c420db0f MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.094591865 +0000 UTC m=+0.444892906 LastPingAt:2026-09-09 21:29:33.094591865 +0000 UTC m=+0.444892906}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: sess-aa, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:50d3dbc4-5180-4f36-b9ed-9ed59ef51356 MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.094786283 +0000 UTC m=+0.445087324 LastPingAt:2026-09-09 21:29:33.094786283 +0000 UTC m=+0.445087324}
+2026/09/09 21:29:33 machine machine-a registered tool echo (50d3dbc4-5180-4f36-b9ed-9ed59ef51356)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:6d943dba-07ca-4117-8309-fb973bd38cad MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.095227832 +0000 UTC m=+0.445528882 LastPingAt:2026-09-09 21:29:33.095227832 +0000 UTC m=+0.445528882}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: sess-aa, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:34b66117-d300-4ed4-8832-ded867f4951d MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.095879752 +0000 UTC m=+0.446180793 LastPingAt:2026-09-09 21:29:33.095879752 +0000 UTC m=+0.446180793}
+2026/09/09 21:29:33 machine machine-a registered tool echo (34b66117-d300-4ed4-8832-ded867f4951d)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:95ee5f5d-74a4-4fdb-8b7d-30bd0b4c4633 MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.097150488 +0000 UTC m=+0.447451538 LastPingAt:2026-09-09 21:29:33.097150488 +0000 UTC m=+0.447451538}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: sess-aa, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:3d8bdd44-81d2-4352-8aee-4f77bac48700 MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.097434653 +0000 UTC m=+0.447735703 LastPingAt:2026-09-09 21:29:33.097434653 +0000 UTC m=+0.447735703}
+2026/09/09 21:29:33 machine machine-a registered tool echo (3d8bdd44-81d2-4352-8aee-4f77bac48700)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:fe4031f9-bb25-4c2e-867d-957e58dcecc2 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.097911531 +0000 UTC m=+0.448212581 LastPingAt:2026-09-09 21:29:33.097911531 +0000 UTC m=+0.448212581}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:5a435284-427d-48ac-98da-51a7a4264a4f MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.098075742 +0000 UTC m=+0.448376792 LastPingAt:2026-09-09 21:29:33.098075742 +0000 UTC m=+0.448376792}
+2026/09/09 21:29:33 machine machine-lease registered tool echo (5a435284-427d-48ac-98da-51a7a4264a4f)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:2d6abc89-ec6b-479b-ba9e-b2da1c82c304 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.098444145 +0000 UTC m=+0.448745195 LastPingAt:2026-09-09 21:29:33.098444145 +0000 UTC m=+0.448745195}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:91285475-4fa8-487f-991e-b6e23e0a7666 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.098606525 +0000 UTC m=+0.448907575 LastPingAt:2026-09-09 21:29:33.098606525 +0000 UTC m=+0.448907575}
+2026/09/09 21:29:33 machine machine-lease registered tool echo (91285475-4fa8-487f-991e-b6e23e0a7666)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:ec029797-b272-424a-b09b-82a74bc71c7a MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.101423341 +0000 UTC m=+0.451724391 LastPingAt:2026-09-09 21:29:33.101423341 +0000 UTC m=+0.451724391}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:7da7d27a-d14f-414c-a0a4-2412a99f281e MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.101612132 +0000 UTC m=+0.451913182 LastPingAt:2026-09-09 21:29:33.101612132 +0000 UTC m=+0.451913182}
+2026/09/09 21:29:33 machine machine-lease registered tool echo (7da7d27a-d14f-414c-a0a4-2412a99f281e)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:9d014e45-4886-4558-8930-af3e14b2e5db MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.102127162 +0000 UTC m=+0.452428212 LastPingAt:2026-09-09 21:29:33.102127162 +0000 UTC m=+0.452428212}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:8e916f78-173c-4976-ba08-f0a70ec00cd4 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.102300516 +0000 UTC m=+0.452601566 LastPingAt:2026-09-09 21:29:33.102300516 +0000 UTC m=+0.452601566}
+2026/09/09 21:29:33 machine machine-lease registered tool echo (8e916f78-173c-4976-ba08-f0a70ec00cd4)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:01e5a4cf-8441-4673-b453-d8d731eb3d48 MachineID:machine-lease-b SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.102430687 +0000 UTC m=+0.452731737 LastPingAt:2026-09-09 21:29:33.102430687 +0000 UTC m=+0.452731737}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 machine machine-lease-b failed to register tool echo: already exists: tool echo already registered by another machine
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:8078c83b-c469-45ce-bd55-0cff84e2368e MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.103068043 +0000 UTC m=+0.453369093 LastPingAt:2026-09-09 21:29:33.103068043 +0000 UTC m=+0.453369093}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: sess-aa, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:d6405c9c-f78b-4ac6-8611-817001b74491 MachineID:machine-a SessionID:sess-aa Name:echo Description:d Schema:{} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.103278168 +0000 UTC m=+0.453579218 LastPingAt:2026-09-09 21:29:33.103278168 +0000 UTC m=+0.453579218}
+2026/09/09 21:29:33 machine machine-a registered tool echo (d6405c9c-f78b-4ac6-8611-817001b74491)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:941938e5-14c0-46e1-9d7e-2fbc41a846c9 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.103845912 +0000 UTC m=+0.454146962 LastPingAt:2026-09-09 21:29:33.103845912 +0000 UTC m=+0.454146962}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-lease, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:67c6c1b4-b94b-4bca-8607-4c76535397c3 MachineID:machine-lease SessionID:session-lease Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.104015984 +0000 UTC m=+0.454317025 LastPingAt:2026-09-09 21:29:33.104015984 +0000 UTC m=+0.454317025}
+2026/09/09 21:29:33 machine machine-lease registered tool echo (67c6c1b4-b94b-4bca-8607-4c76535397c3)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:27313323-ffc2-45c1-983c-6cca6c9fba42 MachineID:machine-requeue SessionID:session-requeue Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.1046793 +0000 UTC m=+0.454980350 LastPingAt:2026-09-09 21:29:33.1046793 +0000 UTC m=+0.454980350}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-requeue, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:18b217e2-4938-4c80-9c88-d2eba072bd7d MachineID:machine-requeue SessionID:session-requeue Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.104870516 +0000 UTC m=+0.455171566 LastPingAt:2026-09-09 21:29:33.104870516 +0000 UTC m=+0.455171566}
+2026/09/09 21:29:33 machine machine-requeue registered tool echo (18b217e2-4938-4c80-9c88-d2eba072bd7d)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:0424ff6b-ec57-4d6d-a497-b82c25a7b634 MachineID:machine-trace SessionID:session-trace Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.10525662 +0000 UTC m=+0.455557670 LastPingAt:2026-09-09 21:29:33.10525662 +0000 UTC m=+0.455557670}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-trace, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:1b4e3461-0d7c-434e-8249-e8398c53a2d6 MachineID:machine-trace SessionID:session-trace Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.105489432 +0000 UTC m=+0.455790473 LastPingAt:2026-09-09 21:29:33.105489432 +0000 UTC m=+0.455790473}
+2026/09/09 21:29:33 machine machine-trace registered tool echo (1b4e3461-0d7c-434e-8249-e8398c53a2d6)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:a4a3dc6e-6d3a-4d4f-a158-865622abea70 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.10598136 +0000 UTC m=+0.456282410 LastPingAt:2026-09-09 21:29:33.10598136 +0000 UTC m=+0.456282410}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-stream, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:f336fa83-363b-4948-be22-d4138aae3a56 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.106171071 +0000 UTC m=+0.456472121 LastPingAt:2026-09-09 21:29:33.106171071 +0000 UTC m=+0.456472121}
+2026/09/09 21:29:33 machine machine-stream registered tool echo (f336fa83-363b-4948-be22-d4138aae3a56)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:00019978-1161-42c4-a7ca-0de7eb781e92 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.106999914 +0000 UTC m=+0.457300964 LastPingAt:2026-09-09 21:29:33.106999914 +0000 UTC m=+0.457300964}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-stream, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:cf845a19-e695-4307-a76c-d9338a8cc487 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.107137651 +0000 UTC m=+0.457438701 LastPingAt:2026-09-09 21:29:33.107137651 +0000 UTC m=+0.457438701}
+2026/09/09 21:29:33 machine machine-stream registered tool echo (cf845a19-e695-4307-a76c-d9338a8cc487)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:9b76f5b8-682a-4e43-9b9c-a4d3beba9005 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.108795436 +0000 UTC m=+0.459096486 LastPingAt:2026-09-09 21:29:33.108795436 +0000 UTC m=+0.459096486}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-stream, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:59bbf34c-b3ff-4a96-8340-ba4c308e9671 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.10896071 +0000 UTC m=+0.459261760 LastPingAt:2026-09-09 21:29:33.10896071 +0000 UTC m=+0.459261760}
+2026/09/09 21:29:33 machine machine-stream registered tool echo (59bbf34c-b3ff-4a96-8340-ba4c308e9671)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:9ad30ab6-c136-4fe2-8c9b-7a5ee117b593 MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.109755379 +0000 UTC m=+0.460056429 LastPingAt:2026-09-09 21:29:33.109755379 +0000 UTC m=+0.460056429}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-stream, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:38d6732e-b0f9-48e6-9ade-9e7cb4a5e45a MachineID:machine-stream SessionID:session-stream Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.110112429 +0000 UTC m=+0.460413479 LastPingAt:2026-09-09 21:29:33.110112429 +0000 UTC m=+0.460413479}
+2026/09/09 21:29:33 machine machine-stream registered tool echo (38d6732e-b0f9-48e6-9ade-9e7cb4a5e45a)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:6ed39470-14cc-4aff-ab99-ffe49a68b3b3 MachineID:machine-task-cancel SessionID:session-task-cancel Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.112617389 +0000 UTC m=+0.462918439 LastPingAt:2026-09-09 21:29:33.112617389 +0000 UTC m=+0.462918439}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-task-cancel, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:905dcc3d-8e4e-4c24-89ce-3b7670547b7d MachineID:machine-task-cancel SessionID:session-task-cancel Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.11284582 +0000 UTC m=+0.463146870 LastPingAt:2026-09-09 21:29:33.11284582 +0000 UTC m=+0.463146870}
+2026/09/09 21:29:33 machine machine-task-cancel registered tool echo (905dcc3d-8e4e-4c24-89ce-3b7670547b7d)
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:1506f07d-f5d3-4496-b22b-9404ae1fb054 MachineID:machine-task-timeout SessionID:session-task-timeout Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.133920806 +0000 UTC m=+0.484221856 LastPingAt:2026-09-09 21:29:33.133920806 +0000 UTC m=+0.484221856}
+2026/09/09 21:29:33 ToolService.RegisterTool called with sessionID: session-task-timeout, name: echo, tags: []
+2026/09/09 21:29:33 NewTool called with name: echo, tags: []
+2026/09/09 21:29:33 NewTool created tool: &{ID:74617191-8cd6-4b56-a6c1-1dadd1ceeca8 MachineID:machine-task-timeout SessionID:session-task-timeout Name:echo Description:echo tool Schema:{"type":"object"} Config:map[] Tags:[] CreatedAt:2026-09-09 21:29:33.134090562 +0000 UTC m=+0.484391612 LastPingAt:2026-09-09 21:29:33.134090562 +0000 UTC m=+0.484391612}
+2026/09/09 21:29:33 machine machine-task-timeout registered tool echo (74617191-8cd6-4b56-a6c1-1dadd1ceeca8)
+FAIL
+FAIL	toolplane/pkg/service	1.511s
+FAIL

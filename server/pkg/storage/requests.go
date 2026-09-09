@@ -16,7 +16,7 @@ func (s *Store) AllRequests(ctx context.Context) ([]*model.Request, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests`)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+requestColumns+` FROM requests`)
 	if err != nil {
 		return nil, fmt.Errorf("query requests: %w", err)
 	}
@@ -52,8 +52,8 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	leasedAtVal := nullableTime(req.LeasedAt)
 	nextAttempt := nullableTime(req.NextAttemptAt)
 	_, err := s.db.ExecContext(ctx, `
-	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, idempotency_key, created_at, updated_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             tool_name = EXCLUDED.tool_name,
@@ -78,9 +78,10 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
             timeout_seconds = EXCLUDED.timeout_seconds,
             dead_letter = EXCLUDED.dead_letter,
             last_error = EXCLUDED.last_error,
+            idempotency_key = EXCLUDED.idempotency_key,
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at
-	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), req.CreatedAt, req.UpdatedAt)
+	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), nullString(req.IdempotencyKey), req.CreatedAt, req.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("upsert request: %w", err)
 	}
@@ -96,7 +97,7 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
 		queryBuilder := strings.Builder{}
 		args := []interface{}{sessionID, string(model.RequestStatusPending)}
-		queryBuilder.WriteString(`SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW()`)
+		queryBuilder.WriteString(`SELECT ` + requestColumns + ` FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW()`)
 
 		if len(toolNames) > 0 {
 			queryBuilder.WriteString(" AND tool_name IN (")
@@ -201,7 +202,7 @@ func (s *Store) FindExpiredRequests(ctx context.Context, limit int) ([]*model.Re
 	// and ordering by visible_at keeps the reaper from head-of-line blocking:
 	// long-running-but-renewed leases no longer sit at the head of the scan
 	// and starve newer expired rows behind the LIMIT window.
-	query := `SELECT id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at FROM requests WHERE dead_letter=false AND leased_at IS NOT NULL AND (visible_at <= NOW() OR leased_at + timeout_seconds * INTERVAL '1 second' <= NOW()) ORDER BY visible_at ASC`
+	query := `SELECT ` + requestColumns + ` FROM requests WHERE dead_letter=false AND leased_at IS NOT NULL AND (visible_at <= NOW() OR leased_at + timeout_seconds * INTERVAL '1 second' <= NOW()) ORDER BY visible_at ASC`
 	args := []interface{}{}
 	if limit > 0 {
 		query += " LIMIT $1"
@@ -240,7 +241,8 @@ func scanRequestRow(row rowScanner) (*model.Request, error) {
 	var leasedAt sql.NullTime
 	var nextAttempt sql.NullTime
 	var lastError sql.NullString
-	if err := row.Scan(&r.ID, &r.SessionID, &r.ToolName, &r.Status, &r.Input, &resultBytes, &resultType, &errorStr, &execMachineID, &metaBytes, &streamBytes, &r.StreamStartSeq, &r.NextStreamSeq, &r.Attempts, &r.MaxAttempts, &r.BackoffSeconds, &r.VisibleAt, &nextAttempt, &leasedBy, &leasedAt, &r.LeaseEpoch, &r.TimeoutSeconds, &r.DeadLetter, &lastError, &r.CreatedAt, &r.UpdatedAt); err != nil {
+	var idempotencyKey sql.NullString
+	if err := row.Scan(&r.ID, &r.SessionID, &r.ToolName, &r.Status, &r.Input, &resultBytes, &resultType, &errorStr, &execMachineID, &metaBytes, &streamBytes, &r.StreamStartSeq, &r.NextStreamSeq, &r.Attempts, &r.MaxAttempts, &r.BackoffSeconds, &r.VisibleAt, &nextAttempt, &leasedBy, &leasedAt, &r.LeaseEpoch, &r.TimeoutSeconds, &r.DeadLetter, &lastError, &idempotencyKey, &r.CreatedAt, &r.UpdatedAt); err != nil {
 		return nil, fmt.Errorf("scan request: %w", err)
 	}
 	if len(resultBytes) > 0 {
@@ -285,12 +287,15 @@ func scanRequestRow(row rowScanner) (*model.Request, error) {
 	if lastError.Valid {
 		r.LastError = lastError.String
 	}
+	if idempotencyKey.Valid {
+		r.IdempotencyKey = idempotencyKey.String
+	}
 	return r, nil
 }
 
 // requestColumns is the canonical column list used by guarded single-row
 // request reads/updates. It must stay in sync with scanRequestRow.
-const requestColumns = "id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, created_at, updated_at"
+const requestColumns = "id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, idempotency_key, created_at, updated_at"
 
 // GetRequest fetches a single request by ID regardless of session. It supports
 // store-backed reads when a request is not present in the local cache, which is
@@ -298,6 +303,24 @@ const requestColumns = "id, session_id, tool_name, status, input, result, result
 // ListRequestsBySession returns every request in a session, oldest first,
 // regardless of the caller's local cache. The service uses it as the
 // read-through when another replica created requests this one has not seen.
+// GetRequestByIdempotencyKey fetches the request a session created under the
+// given dedup key (nil when absent). CreateRequest uses it to make retries
+// return the original request instead of enqueueing duplicate work.
+func (s *Store) GetRequestByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Request, error) {
+	if s == nil || idempotencyKey == "" {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE session_id=$1 AND idempotency_key=$2`, requestColumns), sessionID, idempotencyKey)
+	req, err := scanRequestRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get request by idempotency key: %w", err)
+	}
+	return req, nil
+}
+
 func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error) {
 	if s == nil {
 		return nil, nil

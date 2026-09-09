@@ -10745,7 +10745,8 @@ proto.api.ExecuteToolRequest.toObject = function(includeInstance, msg) {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     toolName: jspb.Message.getFieldWithDefault(msg, 2, ""),
     input: jspb.Message.getFieldWithDefault(msg, 3, ""),
-    timeoutSeconds: jspb.Message.getFieldWithDefault(msg, 4, 0)
+    timeoutSeconds: jspb.Message.getFieldWithDefault(msg, 4, 0),
+    idempotencyKey: jspb.Message.getFieldWithDefault(msg, 5, "")
   };
 
   if (includeInstance) {
@@ -10797,6 +10798,10 @@ proto.api.ExecuteToolRequest.deserializeBinaryFromReader = function(msg, reader)
     case 4:
       var value = /** @type {number} */ (reader.readInt32());
       msg.setTimeoutSeconds(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setIdempotencyKey(value);
       break;
     default:
       reader.skipField();
@@ -10852,6 +10857,13 @@ proto.api.ExecuteToolRequest.serializeBinaryToWriter = function(message, writer)
   if (f !== 0) {
     writer.writeInt32(
       4,
+      f
+    );
+  }
+  f = message.getIdempotencyKey();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
       f
     );
   }
@@ -10927,6 +10939,24 @@ proto.api.ExecuteToolRequest.prototype.getTimeoutSeconds = function() {
  */
 proto.api.ExecuteToolRequest.prototype.setTimeoutSeconds = function(value) {
   return jspb.Message.setProto3IntField(this, 4, value);
+};
+
+
+/**
+ * optional string idempotency_key = 5;
+ * @return {string}
+ */
+proto.api.ExecuteToolRequest.prototype.getIdempotencyKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.ExecuteToolRequest} returns this
+ */
+proto.api.ExecuteToolRequest.prototype.setIdempotencyKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
 };
 
 
@@ -11465,7 +11495,8 @@ proto.api.CreateRequestRequest.toObject = function(includeInstance, msg) {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     toolName: jspb.Message.getFieldWithDefault(msg, 2, ""),
     input: jspb.Message.getFieldWithDefault(msg, 3, ""),
-    timeoutSeconds: jspb.Message.getFieldWithDefault(msg, 4, 0)
+    timeoutSeconds: jspb.Message.getFieldWithDefault(msg, 4, 0),
+    idempotencyKey: jspb.Message.getFieldWithDefault(msg, 5, "")
   };
 
   if (includeInstance) {
@@ -11517,6 +11548,10 @@ proto.api.CreateRequestRequest.deserializeBinaryFromReader = function(msg, reade
     case 4:
       var value = /** @type {number} */ (reader.readInt32());
       msg.setTimeoutSeconds(value);
+      break;
+    case 5:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setIdempotencyKey(value);
       break;
     default:
       reader.skipField();
@@ -11572,6 +11607,13 @@ proto.api.CreateRequestRequest.serializeBinaryToWriter = function(message, write
   if (f !== 0) {
     writer.writeInt32(
       4,
+      f
+    );
+  }
+  f = message.getIdempotencyKey();
+  if (f.length > 0) {
+    writer.writeString(
+      5,
       f
     );
   }
@@ -11647,6 +11689,24 @@ proto.api.CreateRequestRequest.prototype.getTimeoutSeconds = function() {
  */
 proto.api.CreateRequestRequest.prototype.setTimeoutSeconds = function(value) {
   return jspb.Message.setProto3IntField(this, 4, value);
+};
+
+
+/**
+ * optional string idempotency_key = 5;
+ * @return {string}
+ */
+proto.api.CreateRequestRequest.prototype.getIdempotencyKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 5, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.CreateRequestRequest} returns this
+ */
+proto.api.CreateRequestRequest.prototype.setIdempotencyKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 5, value);
 };
 
 
@@ -15240,7 +15300,8 @@ proto.api.CreateTaskRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     toolName: jspb.Message.getFieldWithDefault(msg, 2, ""),
-    input: jspb.Message.getFieldWithDefault(msg, 3, "")
+    input: jspb.Message.getFieldWithDefault(msg, 3, ""),
+    idempotencyKey: jspb.Message.getFieldWithDefault(msg, 4, "")
   };
 
   if (includeInstance) {
@@ -15289,6 +15350,10 @@ proto.api.CreateTaskRequest.deserializeBinaryFromReader = function(msg, reader) 
       var value = /** @type {string} */ (reader.readString());
       msg.setInput(value);
       break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setIdempotencyKey(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -15336,6 +15401,13 @@ proto.api.CreateTaskRequest.serializeBinaryToWriter = function(message, writer) 
   if (f.length > 0) {
     writer.writeString(
       3,
+      f
+    );
+  }
+  f = message.getIdempotencyKey();
+  if (f.length > 0) {
+    writer.writeString(
+      4,
       f
     );
   }
@@ -15393,6 +15465,24 @@ proto.api.CreateTaskRequest.prototype.getInput = function() {
  */
 proto.api.CreateTaskRequest.prototype.setInput = function(value) {
   return jspb.Message.setProto3StringField(this, 3, value);
+};
+
+
+/**
+ * optional string idempotency_key = 4;
+ * @return {string}
+ */
+proto.api.CreateTaskRequest.prototype.getIdempotencyKey = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 4, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.CreateTaskRequest} returns this
+ */
+proto.api.CreateTaskRequest.prototype.setIdempotencyKey = function(value) {
+  return jspb.Message.setProto3StringField(this, 4, value);
 };
 
 

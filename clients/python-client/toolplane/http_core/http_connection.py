@@ -356,16 +356,28 @@ class HTTPConnectionManager:
         )
 
     # Execution endpoints
-    def execute_tool(self, session_id: str, tool_name: str, input_data: str):
+    def execute_tool(
+        self,
+        session_id: str,
+        tool_name: str,
+        input_data: str,
+        idempotency_key: str = "",
+    ):
         """Execute tool."""
-        return self._post(
-            "api/ExecuteTool",
-            {"sessionId": session_id, "toolName": tool_name, "input": input_data},
-        )
+        payload = {"sessionId": session_id, "toolName": tool_name, "input": input_data}
+        if idempotency_key:
+            payload["idempotencyKey"] = idempotency_key
+        return self._post("api/ExecuteTool", payload)
 
-    def stream_execute_tool(self, session_id: str, tool_name: str, input_data: str):
+    def stream_execute_tool(
+        self,
+        session_id: str,
+        tool_name: str,
+        input_data: str,
+        idempotency_key: str = "",
+    ):
         """Stream execute tool."""
-        return self.stream_post(
-            "api/StreamExecuteTool",
-            {"sessionId": session_id, "toolName": tool_name, "input": input_data},
-        )
+        payload = {"sessionId": session_id, "toolName": tool_name, "input": input_data}
+        if idempotency_key:
+            payload["idempotencyKey"] = idempotency_key
+        return self.stream_post("api/StreamExecuteTool", payload)

@@ -39,7 +39,7 @@ func newLeaseTestStack() (*RequestsService, *MachinesService, string, string) {
 func TestCreateRequestTimeoutOverride(t *testing.T) {
 	requestService, _, sessionID, _ := newLeaseTestStack()
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 120)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 120, "")
 	if err != nil {
 		t.Fatalf("create with override: %v", err)
 	}
@@ -47,11 +47,11 @@ func TestCreateRequestTimeoutOverride(t *testing.T) {
 		t.Fatalf("timeout = %d, want 120", request.TimeoutSeconds)
 	}
 
-	if _, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0); err != nil {
+	if _, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0, ""); err != nil {
 		t.Fatalf("create with default: %v", err)
 	}
 
-	if _, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, int(maxRequestTimeout.Seconds())+1); !errors.Is(err, ErrRequestTimeoutOutOfRange) {
+	if _, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, int(maxRequestTimeout.Seconds())+1, ""); !errors.Is(err, ErrRequestTimeoutOutOfRange) {
 		t.Fatalf("over-maximum timeout should fail with ErrRequestTimeoutOutOfRange, got: %v", err)
 	}
 }
@@ -59,7 +59,7 @@ func TestCreateRequestTimeoutOverride(t *testing.T) {
 func TestRenewRequestLeasePreventsReclaimAndAbsoluteCapStillBounds(t *testing.T) {
 	requestService, _, sessionID, machineID := newLeaseTestStack()
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRenewRequestLeaseCannotCrossAbsoluteTimeout(t *testing.T) {
 
 	// Absolute timeout of 2 seconds: renewal must be capped at leased_at+2s
 	// and refused entirely once that deadline has passed.
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 2)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 2, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -159,7 +159,7 @@ func TestFencedWritesAfterReclaim(t *testing.T) {
 		t.Fatalf("register machine B: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestActiveActiveFencedWritesAcrossInstances(t *testing.T) {
 	machineB := model.NewMachine("sess-aa", "machine-b", "1.0", "go", "127.0.0.1")
 	_ = store.SaveMachine(context.Background(), machineB)
 
-	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0)
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0, "")
 	if err != nil {
 		t.Fatalf("CreateRequest on A: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestGRPCServerFencedWritesMapLeaseConflictToFailedPrecondition(t *testing.T
 	machineService := NewMachinesService(context.Background(), toolService, trace.NopTracer(), nil)
 	server := NewGRPCServer(toolService, nil, machineService, requestService, nil)
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

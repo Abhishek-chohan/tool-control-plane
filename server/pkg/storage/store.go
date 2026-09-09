@@ -81,6 +81,10 @@ type Storer interface {
 	// It supports store-backed reads when a request is not present in the local
 	// cache (multi-instance visibility).
 	GetRequest(ctx context.Context, requestID string) (*model.Request, error)
+	// GetRequestByIdempotencyKey fetches the request a session created under
+	// the given dedup key (nil when absent); CreateRequest uses it to make
+	// retries return the original request instead of duplicate work.
+	GetRequestByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Request, error)
 	// ListRequestsBySession returns every request in a session, oldest first.
 	// It is the read-through for ListRequests when other replicas created
 	// requests this instance has not seen.
@@ -117,6 +121,10 @@ type Storer interface {
 	AllTasks(ctx context.Context) ([]*model.Task, error)
 	SaveTask(ctx context.Context, task *model.Task) error
 	DeleteTask(ctx context.Context, taskID string) error
+	// GetTaskByIdempotencyKey fetches the task a session created under the
+	// given dedup key (nil when absent); CreateTask uses it to make retries
+	// return the original task without re-executing it.
+	GetTaskByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Task, error)
 	// FindNonTerminalTasks returns tasks that are not in a terminal state
 	// (done/failed/cancelled). Used on startup to re-adopt in-flight work.
 	FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
@@ -269,7 +277,19 @@ func (s *Store) attemptSerializableTx(ctx context.Context, fn func(*sql.Tx) erro
 	return nil
 }
 
+// IsUniqueViolation reports whether err carries Postgres SQLSTATE 23505
+// (unique_violation). Callers use it to detect insert races that a re-read
+// resolves.
+func IsUniqueViolation(err error) bool {
+	var sqlStater interface{ SQLState() string }
+	if errors.As(err, &sqlStater) {
+		return sqlStater.SQLState() == "23505"
+	}
+	return false
+}
+
 // isSerializationFailure reports whether err carries Postgres SQLSTATE 40001
+
 // (serialization_failure). pgx errors expose the SQLState method.
 func isSerializationFailure(err error) bool {
 	var sqlStater interface{ SQLState() string }

@@ -1,12 +1,13 @@
 """Session context implementation."""
 
 import logging
+import uuid
 from typing import Any, Callable, Dict, List, Optional
 
 from toolplane.utils.schema import generate_schema_from_function
 
 from .connection import ConnectionManager
-from .errors import ToolplaneError
+from .errors import ToolplaneError, ToolplaneInvalidArgumentError
 from .machine import MachineManager
 from .request import RequestManager
 from .session import SessionManager
@@ -104,15 +105,28 @@ class SessionContext:
             raise ToolplaneError(f"Failed to async invoke tool {tool_name}: {e}")
 
     def stream(self, tool_name: str, callback: Callable[[Any, bool], None], **params):
-        """Stream tool execution."""
-        try:
-            all_chunks = []
+        """Stream tool execution.
 
-            # Try direct streaming first
+        The stream is resumable: if the direct stream fails mid-flight, the
+        fallback resumes from the last received sequence number (or, when it
+        died before the first chunk, re-invokes under the same idempotency
+        key so the server returns the original request). A tool that
+        completed with an error is never re-executed.
+        """
+        idempotency_key = uuid.uuid4().hex
+        all_chunks = []
+        request_id = None
+        last_seq = 0
+
+        try:
             try:
                 for chunk in self.tool_manager.stream_tool(
-                    self.session_id, tool_name, params
+                    self.session_id, tool_name, params, idempotency_key
                 ):
+                    if chunk.request_id:
+                        request_id = chunk.request_id
+                    if chunk.seq:
+                        last_seq = max(last_seq, chunk.seq)
                     callback(chunk.chunk, chunk.is_final)
                     all_chunks.append(chunk.chunk)
 
@@ -124,19 +138,96 @@ class SessionContext:
 
                 return all_chunks
 
+            except ToolplaneError:
+                # The tool itself failed (or the stream completed with an
+                # error marker): re-executing it would be a side-effect
+                # duplication, so surface the failure.
+                raise
             except Exception:
-                # Fall back to polling
-                return self._stream_via_polling(tool_name, callback, params)
+                # Transport failure mid-stream: resume from the last sequence
+                # number the server acknowledges.
+                if request_id:
+                    return self._resume_stream(
+                        request_id,
+                        last_seq,
+                        callback,
+                        all_chunks,
+                        tool_name,
+                        params,
+                        idempotency_key,
+                    )
+                # The stream died before any chunk arrived. The server may
+                # already have created the request; re-invoking under the same
+                # idempotency key returns that request instead of executing
+                # the tool a second time.
+                return self._stream_via_polling(
+                    tool_name, callback, params, idempotency_key
+                )
 
+        except ToolplaneError:
+            raise
         except Exception as e:
             raise ToolplaneError(f"Failed to stream tool {tool_name}: {e}")
 
-    def _stream_via_polling(self, tool_name: str, callback: Callable, params: Dict):
-        """Stream via polling fallback."""
-        request_id = self.ainvoke(tool_name, **params)
+    def _resume_stream(
+        self,
+        request_id: str,
+        last_seq: int,
+        callback: Callable,
+        all_chunks: List,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str,
+    ):
+        """Continue a broken stream from the last acknowledged sequence."""
+        try:
+            for chunk in self.request_manager.resume_stream(
+                self.session_id, request_id, last_seq
+            ):
+                value = chunk["chunk"]
+                if value not in ("", None):
+                    callback(value, chunk["is_final"])
+                    all_chunks.append(value)
+                if chunk["error"]:
+                    raise ToolplaneError(f"Streaming error: {chunk['error']}")
+                if chunk["is_final"]:
+                    return all_chunks
+        except ToolplaneInvalidArgumentError:
+            # The retained window moved past our position; the full result is
+            # still fetchable by polling the original request.
+            pass
+        return self._stream_via_polling(
+            tool_name,
+            callback,
+            params,
+            idempotency_key,
+            request_id=request_id,
+            skip=len(all_chunks),
+        )
+
+    def _stream_via_polling(
+        self,
+        tool_name: str,
+        callback: Callable,
+        params: Dict,
+        idempotency_key: str = "",
+        request_id: Optional[str] = None,
+        skip: int = 0,
+    ):
+        """Stream via polling fallback.
+
+        When request_id is given, polls that request; otherwise invokes the
+        tool (under idempotency_key when provided) and polls the result.
+        skip suppresses the first skip chunks, which the caller already
+        delivered.
+        """
+        if request_id is None:
+            request_id = self.tool_manager.execute_tool(
+                self.session_id, tool_name, params, idempotency_key
+            )
 
         all_chunks = []
-        last_chunk_count = 0
+        last_chunk_count = skip
 
         while True:
             status = self.get_request_status(request_id)
