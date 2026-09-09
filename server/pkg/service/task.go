@@ -30,8 +30,10 @@ const (
 	taskAdoptionLeaseTTL      = 30 * time.Second
 	taskAdoptionRenewInterval = 10 * time.Second
 	taskAdoptionSweepInterval = 5 * time.Second
-	taskCleanupInterval       = 30 * time.Minute
-	taskRetentionAge          = 24 * time.Hour
+	// taskAdoptionSweepBatch bounds the work one sweep tick takes on.
+	taskAdoptionSweepBatch = 32
+	taskCleanupInterval    = 30 * time.Minute
+	taskRetentionAge       = 24 * time.Hour
 )
 
 type taskExecutionState struct {
@@ -184,30 +186,18 @@ func (s *TasksService) adoptDueTasks() {
 		case <-ticker.C:
 		}
 
-		s.tasksMutex.RLock()
-		locallyExecuting := make(map[string]struct{}, len(s.executions))
-		s.execMutex.RLock()
-		for id := range s.executions {
-			locallyExecuting[id] = struct{}{}
-		}
-		s.execMutex.RUnlock()
-		s.tasksMutex.RUnlock()
-
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
-		candidates, err := s.store.FindNonTerminalTasks(ctx)
+		// The targeted adoptable query answers due-ness and ownership in the
+		// store: a task this instance is executing holds a fresh adoption
+		// lease (renewed every taskAdoptionRenewInterval), so it is filtered
+		// out server-side and no local execution map is consulted.
+		candidates, err := s.store.FindAdoptableTasks(ctx, time.Now(), taskAdoptionLeaseTTL, taskAdoptionSweepBatch)
 		if err != nil {
 			log.Printf("task adoption sweep scan failed: %v", err)
 			cancel()
 			continue
 		}
-		adopted := 0
 		for _, task := range candidates {
-			if _, local := locallyExecuting[task.ID]; local {
-				continue
-			}
-			if !s.taskAttemptDue(task) {
-				continue
-			}
 			claimed, ok, claimErr := s.store.ClaimTaskForAdoption(ctx, task.ID, s.instanceID, taskAdoptionLeaseTTL)
 			if claimErr != nil {
 				log.Printf("task adoption sweep claim %s failed: %v", task.ID, claimErr)
@@ -216,11 +206,9 @@ func (s *TasksService) adoptDueTasks() {
 			if !ok {
 				continue
 			}
-			adopted++
 			go s.executeTask(claimed)
 		}
 		cancel()
-		_ = adopted
 	}
 }
 

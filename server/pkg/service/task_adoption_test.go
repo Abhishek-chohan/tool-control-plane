@@ -197,8 +197,15 @@ func TestTaskCreateDispatchesThroughFenceAndCompletes(t *testing.T) {
 				t.Fatalf("task completed with the wrong result: %q", task.Result)
 			}
 			// Terminal: ownership released so the sweep does not consider it.
-			if _, err := store.RenewTaskAdoption(context.Background(), created.ID, tasksSvc.instanceID); err != nil {
+			// Terminal states release ownership: renewal by the finished
+			// owner must now fail, proving the sweep will not skip this task
+			// as someone else's live work.
+			renewed, err := store.RenewTaskAdoption(context.Background(), created.ID, tasksSvc.instanceID)
+			if err != nil {
 				t.Fatalf("post-terminal renewal errored: %v", err)
+			}
+			if renewed {
+				t.Fatal("terminal task still holds its adoption lease")
 			}
 			break
 		}
