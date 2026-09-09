@@ -93,6 +93,29 @@ func (s *Store) SaveSession(ctx context.Context, session *model.Session) error {
 	return nil
 }
 
+// InsertSessionIfAbsent inserts the session only when its ID is free,
+// returning inserted=false when a row already exists. It is the
+// cross-replica dedup primitive for CreateSession: two replicas racing to
+// create the same client-supplied ID agree on exactly one winner.
+func (s *Store) InsertSessionIfAbsent(ctx context.Context, session *model.Session) (bool, error) {
+	if s == nil || session == nil {
+		return false, nil
+	}
+	result, err := s.db.ExecContext(ctx, `
+        INSERT INTO sessions (id, name, description, namespace, created_at, created_by, api_key)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        ON CONFLICT (id) DO NOTHING
+    `, session.ID, session.Name, session.Description, nullString(session.Namespace), session.CreatedAt, session.CreatedBy, nullString(session.ApiKey))
+	if err != nil {
+		return false, fmt.Errorf("insert session if absent: %w", err)
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("insert session if absent: rows affected: %w", err)
+	}
+	return inserted > 0, nil
+}
+
 func (s *Store) DeleteSession(ctx context.Context, sessionID string) error {
 	if s == nil {
 		return nil
@@ -161,45 +184,73 @@ func (s *Store) AllApiKeys(ctx context.Context) ([]*model.ApiKey, error) {
 
 	var keys []*model.ApiKey
 	for rows.Next() {
-		var rec model.ApiKey
-		var key sql.NullString
-		var keyHash sql.NullString
-		var keyPreview sql.NullString
-		var capabilitiesPayload []byte
-		var revokedAt sql.NullTime
-		if err := rows.Scan(&rec.ID, &rec.SessionID, &rec.Name, &key, &keyHash, &keyPreview, &capabilitiesPayload, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
-			return nil, fmt.Errorf("scan api key: %w", err)
+		rec, err := scanAPIKeyRow(rows)
+		if err != nil {
+			return nil, err
 		}
-		if key.Valid {
-			rec.Key = key.String
-			rec.PlaintextPersisted = key.String != ""
-		}
-		if keyHash.Valid {
-			rec.KeyHash = keyHash.String
-		}
-		if keyPreview.Valid {
-			rec.KeyPreview = keyPreview.String
-		}
-		if len(capabilitiesPayload) > 0 {
-			var capabilityValues []string
-			if err := json.Unmarshal(capabilitiesPayload, &capabilityValues); err != nil {
-				return nil, fmt.Errorf("unmarshal api key capabilities: %w", err)
-			}
-			capabilities, err := model.NormalizeAPIKeyCapabilities(capabilityValues)
-			if err != nil {
-				return nil, fmt.Errorf("normalize api key capabilities: %w", err)
-			}
-			rec.Capabilities = capabilities
-		}
-		if revokedAt.Valid {
-			t := revokedAt.Time
-			rec.RevokedAt = &t
-		}
-		rec.EnsureSecurityMetadata()
-		keys = append(keys, &rec)
+		keys = append(keys, rec)
 	}
 
 	return keys, rows.Err()
+}
+
+// GetAPIKeyByHash fetches a single API key by its SHA-256 hash (nil when
+// absent). The auth revalidation path uses it to notice revocations and
+// deletions made on other replicas.
+func (s *Store) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.ApiKey, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at FROM api_keys WHERE key_hash=$1`, keyHash)
+	rec, err := scanAPIKeyRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("query api key by hash: %w", err)
+	}
+	return rec, nil
+}
+
+func scanAPIKeyRow(row interface {
+	Scan(dest ...interface{}) error
+}) (*model.ApiKey, error) {
+	var rec model.ApiKey
+	var key sql.NullString
+	var keyHash sql.NullString
+	var keyPreview sql.NullString
+	var capabilitiesPayload []byte
+	var revokedAt sql.NullTime
+	if err := row.Scan(&rec.ID, &rec.SessionID, &rec.Name, &key, &keyHash, &keyPreview, &capabilitiesPayload, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
+		return nil, fmt.Errorf("scan api key: %w", err)
+	}
+	if key.Valid {
+		rec.Key = key.String
+		rec.PlaintextPersisted = key.String != ""
+	}
+	if keyHash.Valid {
+		rec.KeyHash = keyHash.String
+	}
+	if keyPreview.Valid {
+		rec.KeyPreview = keyPreview.String
+	}
+	if len(capabilitiesPayload) > 0 {
+		var capabilityValues []string
+		if err := json.Unmarshal(capabilitiesPayload, &capabilityValues); err != nil {
+			return nil, fmt.Errorf("unmarshal api key capabilities: %w", err)
+		}
+		capabilities, err := model.NormalizeAPIKeyCapabilities(capabilityValues)
+		if err != nil {
+			return nil, fmt.Errorf("normalize api key capabilities: %w", err)
+		}
+		rec.Capabilities = capabilities
+	}
+	if revokedAt.Valid {
+		t := revokedAt.Time
+		rec.RevokedAt = &t
+	}
+	rec.EnsureSecurityMetadata()
+	return &rec, nil
 }
 
 func (s *Store) SaveApiKey(ctx context.Context, key *model.ApiKey) error {

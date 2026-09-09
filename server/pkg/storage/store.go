@@ -81,6 +81,10 @@ type Storer interface {
 	// It supports store-backed reads when a request is not present in the local
 	// cache (multi-instance visibility).
 	GetRequest(ctx context.Context, requestID string) (*model.Request, error)
+	// ListRequestsBySession returns every request in a session, oldest first.
+	// It is the read-through for ListRequests when other replicas created
+	// requests this instance has not seen.
+	ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error)
 
 	// Fenced request writes. Every method loads the authoritative row, verifies
 	// that (machineID, leaseEpoch) identify the request's current lease grant,
@@ -126,12 +130,19 @@ type Storer interface {
 	AllSessions(ctx context.Context) ([]*model.Session, error)
 	GetSession(ctx context.Context, sessionID string) (*model.Session, error)
 	SaveSession(ctx context.Context, session *model.Session) error
+	// InsertSessionIfAbsent inserts only when the ID is free (cross-replica
+	// CreateSession dedup); returns inserted=false when the row exists.
+	InsertSessionIfAbsent(ctx context.Context, session *model.Session) (bool, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 	AllUserSessions(ctx context.Context) (map[string][]string, error)
 	AddUserSession(ctx context.Context, userID, sessionID string) error
 	RemoveUserSession(ctx context.Context, userID, sessionID string) error
 	AllApiKeys(ctx context.Context) ([]*model.ApiKey, error)
 	SaveApiKey(ctx context.Context, key *model.ApiKey) error
+	// GetAPIKeyByHash fetches one key by its SHA-256 hash (nil when absent);
+	// the auth revalidation path uses it to notice revocations and deletions
+	// made on other replicas.
+	GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.ApiKey, error)
 
 	// Tools
 	AllTools(ctx context.Context) ([]*model.Tool, error)
@@ -208,10 +219,36 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// withSerializableTx runs fn inside a SERIALIZABLE transaction, retrying
+// serialization failures (SQLSTATE 40001). Concurrent replicas contending on
+// the same rows are routine under serializable isolation: Postgres aborts
+// one of the transactions, and the correct response is to restart it, not to
+// surface an error to the caller.
 func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	if s == nil {
 		return errors.New("storage: store is nil")
 	}
+
+	const maxAttempts = 4
+	backoff := 2 * time.Millisecond
+	for attempt := 0; ; attempt++ {
+		err := s.attemptSerializableTx(ctx, fn)
+		if err == nil {
+			return nil
+		}
+		if attempt+1 >= maxAttempts || !isSerializationFailure(err) {
+			return err
+		}
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return err
+		}
+		backoff *= 2
+	}
+}
+
+func (s *Store) attemptSerializableTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -228,6 +265,16 @@ func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) 
 		return fmt.Errorf("commit tx: %w", err)
 	}
 	return nil
+}
+
+// isSerializationFailure reports whether err carries Postgres SQLSTATE 40001
+// (serialization_failure). pgx errors expose the SQLState method.
+func isSerializationFailure(err error) bool {
+	var sqlStater interface{ SQLState() string }
+	if errors.As(err, &sqlStater) {
+		return sqlStater.SQLState() == "40001"
+	}
+	return false
 }
 
 // intEnv reads a positive integer from the named environment variable, falling

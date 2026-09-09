@@ -71,8 +71,10 @@ func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) 
 		t.Fatalf("mark running: %v", err)
 	}
 
-	request.VisibleAt = time.Now().Add(-time.Second)
-	request.UpdatedAt = time.Now().Add(-time.Second)
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.VisibleAt = time.Now().Add(-time.Second)
+		r.UpdatedAt = time.Now().Add(-time.Second)
+	})
 
 	requestService.markStalledRequests()
 

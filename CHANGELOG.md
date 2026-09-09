@@ -8,6 +8,26 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- Multi-instance coherence: with a shared store configured, the store is now
+  the point of coherence for the paths that previously decided from
+  per-replica memory. `ListRequests` reads through the store (requests from
+  other replicas appear; new `ListRequestsBySession`); `CreateSession` dedups
+  via `InsertSessionIfAbsent` so a cross-replica race yields one winner and
+  an `ALREADY_EXISTS` instead of a silent overwrite; machine capacity
+  consults `MachineInFlightCount` so the per-machine limit holds across
+  replicas; `DrainMachine` persists the drain flag (and re-registration
+  clears a stale one); cached API-key grants re-verify against the store
+  (new `GetAPIKeyByHash`) so revocations and session deletions propagate
+  within ~5s on every replica; `withSerializableTx` retries SQLSTATE 40001
+  serialization failures with backoff. See
+  `server/docs/release-notes/2026-09-09-multi-instance-coherence.md`.
+- The service package no longer hands out live cached `Request`/`Task`
+  pointers: read APIs return clones, store-fresh objects are cached as
+  clones, and nothing mutates shared state under a read lock. The CI race
+  leg covers every server package again (`make test-race`, no exclusions).
+
+### Changed (earlier)
+
 - Domain-error taxonomy: server handlers map failures to gRPC codes through
   one table (`statusFromDomainError`) instead of inline choices that
   collapsed distinct conditions into `NOT_FOUND`/`INTERNAL`. Claim
@@ -82,6 +102,13 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- Conformance case `multi_instance_list_visibility` (grpc, two real server
+  processes sharing one Postgres): a request created on instance A appears
+  in instance B's `ListRequests` listing through the store read-through.
+- Go multi-replica suites: `pkg/service/coherence_test.go` (revocation and
+  session-deletion propagation, session dedup, list read-through,
+  store-backed capacity, drain-flag visibility) and
+  `pkg/storage/serialization_test.go` (SQLSTATE 40001 classifier).
 - Conformance integrity guarantees: bootstrap failures are hard failures
   (never skips) in auto-boot mode, connectivity-skip conversion is opt-in via
   `TOOLPLANE_CONFORMANCE_ALLOW_SKIP`, and a session guard fails runs where an
