@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
 
 	"toolplane/pkg/model"
 	"toolplane/pkg/storage"
@@ -16,6 +19,21 @@ import (
 var (
 	errTaskCancelled = errors.New("task cancelled")
 	errTaskTimedOut  = errors.New("task timed out")
+)
+
+// Task-adoption fencing intervals. A task's executing instance owns it for
+// taskAdoptionLeaseTTL and renews at taskAdoptionRenewInterval; any
+// instance's sweep can claim a task whose lease expired. Due tasks are
+// re-dispatched by whichever instance's sweep sees them first, so retries
+// distribute across replicas instead of piling onto the creator.
+const (
+	taskAdoptionLeaseTTL      = 30 * time.Second
+	taskAdoptionRenewInterval = 10 * time.Second
+	taskAdoptionSweepInterval = 5 * time.Second
+	// taskAdoptionSweepBatch bounds the work one sweep tick takes on.
+	taskAdoptionSweepBatch = 32
+	taskCleanupInterval    = 30 * time.Minute
+	taskRetentionAge       = 24 * time.Hour
 )
 
 type taskExecutionState struct {
@@ -33,6 +51,11 @@ type TasksService struct {
 	executions map[string]*taskExecutionState
 	execMutex  sync.RWMutex
 
+	// instanceID identifies this process to the adoption fence: task
+	// ownership in the store is recorded per instance so replicas cannot
+	// execute the same task, and a lost lease is detected on renewal.
+	instanceID string
+
 	// References to other services
 	toolService     *ToolService
 	machinesService *MachinesService
@@ -49,6 +72,7 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 
 	service := &TasksService{
 		ctx:             ctx,
+		instanceID:      "toolplane-task-" + uuid.New().String(),
 		tasks:           make(map[string]*model.Task),
 		executions:      make(map[string]*taskExecutionState),
 		toolService:     toolService,
@@ -68,27 +92,31 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 			}
 		}
 
-		// Re-adopt in-flight work: re-launch the execution loop for any task that
-		// was pending or running when this instance started (e.g. after a restart).
-		// Without this, a non-terminal task loaded above would stall forever.
+		// Re-adopt in-flight work: launch the execution loop for any task that
+		// was pending or running when this instance started (e.g. after a
+		// restart) and is due. Without this, a non-terminal task loaded above
+		// would stall forever.
 		//
-		// Multi-instance safety: each task is claimed via ClaimTaskForAdoption
-		// before its execution loop is launched, so two replicas starting
-		// simultaneously cannot both adopt (and thus duplicate-execute) the same
-		// task. Only the instance that wins the claim launches executeTask.
+		// Multi-instance safety: ownership is acquired through the fenced
+		// adoption claim (unowned or lease-expired wins), so two replicas
+		// starting simultaneously cannot both adopt — and a replica whose
+		// adoption lease lapses loses the task on renewal.
 		adoptCtx, adoptCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 		if nonTerminal, err := store.FindNonTerminalTasks(adoptCtx); err != nil {
 			log.Printf("task re-adoption scan failed: %v", err)
 		} else {
 			for _, task := range nonTerminal {
+				if !service.taskAttemptDue(task) {
+					continue
+				}
 				// Claim this task for adoption; only one instance wins.
-				claimed, ok, claimErr := store.ClaimTaskForAdoption(adoptCtx, task.ID, 30*time.Second)
+				claimed, ok, claimErr := store.ClaimTaskForAdoption(adoptCtx, task.ID, service.instanceID, taskAdoptionLeaseTTL)
 				if claimErr != nil {
 					log.Printf("task re-adoption claim %s failed: %v", task.ID, claimErr)
 					continue
 				}
 				if !ok {
-					// Another instance already adopted this task.
+					// Another instance owns this task.
 					continue
 				}
 				service.recordTaskEvent(claimed, trace.EventTaskRetryScheduled, map[string]any{
@@ -98,8 +126,105 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 			}
 		}
 		adoptCancel()
+
+		// The adoption sweep is the task-side twin of the request reaper: it
+		// claims due tasks nobody owns (new enqueues, retries released by
+		// their scheduler, tasks orphaned by a dead instance) so work
+		// distributes across replicas instead of depending on the creator.
+		go service.adoptDueTasks()
+		// Terminal tasks are retained for inspection, then pruned.
+		go service.cleanupTerminalTasks()
 	}
 	return service
+}
+
+// taskAttemptDue reports whether the task's next attempt is scheduled for
+// now: tasks waiting out a backoff are not adoptable before their slot.
+func (s *TasksService) taskAttemptDue(task *model.Task) bool {
+	if task == nil || task.DeadLetter {
+		return false
+	}
+	switch task.Status {
+	case model.StatusCompleted, model.StatusFailed, model.StatusCancelled:
+		return false
+	}
+	if task.NextAttemptAt == nil {
+		return true
+	}
+	return !task.NextAttemptAt.After(time.Now())
+}
+
+// dispatchTask acquires ownership of a freshly enqueued task on this
+// instance (it is unowned, so the claim is uncontended) and runs it. When
+// the claim unexpectedly loses, the sweep picks the task up within one
+// interval.
+func (s *TasksService) dispatchTask(taskID string) {
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+	defer cancel()
+	claimed, ok, err := s.store.ClaimTaskForAdoption(ctx, taskID, s.instanceID, taskAdoptionLeaseTTL)
+	if err != nil {
+		log.Printf("task dispatch claim %s failed: %v", taskID, err)
+		return
+	}
+	if !ok {
+		return
+	}
+	s.executeTask(claimed)
+}
+
+// adoptDueTasks periodically claims due tasks that no live instance owns.
+// New tasks dispatch immediately on their creating instance; this loop is
+// what recovers them (and scheduled retries) when that instance dies or
+// releases the task for retry.
+func (s *TasksService) adoptDueTasks() {
+	ticker := time.NewTicker(taskAdoptionSweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		// The targeted adoptable query answers due-ness and ownership in the
+		// store: a task this instance is executing holds a fresh adoption
+		// lease (renewed every taskAdoptionRenewInterval), so it is filtered
+		// out server-side and no local execution map is consulted.
+		candidates, err := s.store.FindAdoptableTasks(ctx, time.Now(), taskAdoptionLeaseTTL, taskAdoptionSweepBatch)
+		if err != nil {
+			log.Printf("task adoption sweep scan failed: %v", err)
+			cancel()
+			continue
+		}
+		for _, task := range candidates {
+			claimed, ok, claimErr := s.store.ClaimTaskForAdoption(ctx, task.ID, s.instanceID, taskAdoptionLeaseTTL)
+			if claimErr != nil {
+				log.Printf("task adoption sweep claim %s failed: %v", task.ID, claimErr)
+				continue
+			}
+			if !ok {
+				continue
+			}
+			go s.executeTask(claimed)
+		}
+		cancel()
+	}
+}
+
+// cleanupTerminalTasks prunes old terminal tasks on a schedule so the
+// tasks table does not grow without bound.
+func (s *TasksService) cleanupTerminalTasks() {
+	ticker := time.NewTicker(taskCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.CleanupOldTasks(taskRetentionAge)
+		}
+	}
 }
 
 // CreateTask creates a new task and schedules it for execution. With a
@@ -139,8 +264,15 @@ func (s *TasksService) CreateTask(sessionID, toolName, input, idempotencyKey str
 
 	s.recordTaskEvent(task, trace.EventTaskCreated, nil)
 
-	// Schedule task for execution asynchronously
-	go s.executeTask(task)
+	// Enqueue, don't self-run: dispatch acquires ownership (uncontended for
+	// a fresh task) so execution starts immediately here, while the sweep on
+	// any instance recovers the task if this one dies before finishing. In
+	// the in-memory dev mode there is no fence, so the loop runs directly.
+	if s.store != nil {
+		go s.dispatchTask(task.ID)
+	} else {
+		go s.executeTask(task)
+	}
 
 	return task, nil
 }
@@ -262,7 +394,11 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	task.LastError = ""
 	s.tasksMutex.Unlock()
 
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// Cancel is terminal: an undurable cancel row means a restart
+		// re-adopts a task the user believes is gone.
+		log.Printf("task %s cancel not durable; may re-adopt after restart: %v", task.ID, err)
+	}
 
 	requestID, cancel := s.taskExecutionSnapshot(taskID)
 	s.recordTaskEvent(task, trace.EventTaskCancelled, map[string]any{
@@ -278,8 +414,20 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	return nil
 }
 
-// executeTask executes a task by finding a suitable machine and sending a request
+// executeTask executes a task by finding a suitable machine and sending a request.
+// With a store configured, this instance holds the task's adoption lease for
+// the duration: a renewal ticker keeps it alive, and losing it (another
+// instance claimed the expired task) cancels the attempt so the task is
+// never executed twice. Retries are released for any instance's sweep to
+// pick up when due.
 func (s *TasksService) executeTask(task *model.Task) {
+	// Callers hand over the store-claimed copy; make it the cached
+	// authoritative object so status transitions are visible to readers
+	// instead of mutating a detached clone next to a stale cache entry.
+	s.tasksMutex.Lock()
+	s.tasks[task.ID] = task
+	s.tasksMutex.Unlock()
+
 	taskCtx, cancel := context.WithCancel(s.ctx)
 	s.setTaskExecution(task.ID, cancel)
 	defer func() {
@@ -287,9 +435,61 @@ func (s *TasksService) executeTask(task *model.Task) {
 		cancel()
 	}()
 
+	// Keep the adoption lease alive while this instance executes. Renewal
+	// failure means ownership was lost — stop rather than double-execute.
+	var leaseLost atomic.Bool
+	if s.store != nil {
+		renewTicker := time.NewTicker(taskAdoptionRenewInterval)
+		go func() {
+			defer renewTicker.Stop()
+			for {
+				select {
+				case <-taskCtx.Done():
+					return
+				case <-renewTicker.C:
+					ctx, renewCancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+					renewed, err := s.store.RenewTaskAdoption(ctx, task.ID, s.instanceID)
+					renewCancel()
+					if err != nil {
+						// Store errors keep the lease (it may still be live);
+						// the next tick retries.
+						continue
+					}
+					if !renewed {
+						log.Printf("task %s adoption lease lost; aborting local execution", task.ID)
+						leaseLost.Store(true)
+						cancel()
+						return
+					}
+				}
+			}
+		}()
+	}
+	// releaseTask drops the adoption lease once, when this loop is done
+	// holding the task.
+	releaseOnce := sync.Once{}
+	releaseTask := func() {
+		if s.store == nil {
+			return
+		}
+		releaseOnce.Do(func() {
+			ctx, releaseCancel := context.WithTimeout(context.WithoutCancel(s.ctx), defaultPersistenceTimeout)
+			defer releaseCancel()
+			if err := s.store.ReleaseTaskAdoption(ctx, task.ID, s.instanceID); err != nil {
+				log.Printf("task adoption release %s failed: %v", task.ID, err)
+			}
+		})
+	}
+	defer releaseTask()
+
 	for {
 		if err := taskCtx.Err(); err != nil {
 			if s.isTaskCancelled(task.ID) {
+				return
+			}
+			if leaseLost.Load() {
+				// Ownership moved elsewhere; do not write a failure state
+				// that would race with the new owner.
 				return
 			}
 			s.updateTaskWithError(task, "task cancelled due to server shutdown")
@@ -312,6 +512,9 @@ func (s *TasksService) executeTask(task *model.Task) {
 		}
 		if errors.Is(err, context.Canceled) {
 			if s.isTaskCancelled(task.ID) {
+				return
+			}
+			if leaseLost.Load() {
 				return
 			}
 			s.updateTaskWithError(task, "task cancelled due to server shutdown")
@@ -340,7 +543,11 @@ func (s *TasksService) executeTask(task *model.Task) {
 			completedAt := time.Now()
 			task.CompletedAt = &completedAt
 			s.tasksMutex.Unlock()
-			s.persistTask(task)
+			if err := s.persistTask(task); err != nil {
+				// Dead-letter is terminal: an undurable row means the exhausted
+				// task re-runs from attempt one after a restart.
+				log.Printf("task %s dead-letter not durable; may re-adopt after restart: %v", task.ID, err)
+			}
 			s.recordTaskEvent(task, trace.EventTaskDeadLettered, map[string]any{
 				"reason": err.Error(),
 			})
@@ -356,11 +563,23 @@ func (s *TasksService) executeTask(task *model.Task) {
 		}
 		task.NextAttemptAt = &next
 		s.tasksMutex.Unlock()
-		s.persistTask(task)
+		if err := s.persistTask(task); err != nil {
+			// The retry slot lives only in memory now; a restart forgets the
+			// backoff and the sweep adopts the task immediately.
+			log.Printf("task %s retry state not durable; backoff may be lost: %v", task.ID, err)
+		}
 		s.recordTaskEvent(task, trace.EventTaskRetryScheduled, map[string]any{
 			"reason":        err.Error(),
 			"nextAttemptAt": next,
 		})
+
+		if s.store != nil {
+			// The retry is scheduled durably; release ownership so any
+			// instance's sweep claims the task when its slot arrives,
+			// distributing retries across replicas instead of pinning them
+			// to this one.
+			return
+		}
 
 		if delay <= 0 {
 			continue
@@ -397,7 +616,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	task.CompletedAt = nil
 	task.NextAttemptAt = nil
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The attempt count is memory-only now; a restart may re-run this
+		// attempt against a stale counter.
+		log.Printf("task %s attempt-start state not durable: %v", task.ID, err)
+	}
 
 	machine, err := s.selectMachine(task.SessionID, task.ToolName)
 	if err != nil {
@@ -465,7 +688,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	task.DeadLetter = false
 	task.LastError = ""
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The completed result exists only in memory; a restart re-adopts and
+		// re-executes the task.
+		log.Printf("task %s completion not durable; may re-execute after restart: %v", task.ID, err)
+	}
 	s.recordTaskEvent(task, trace.EventTaskExecutionCompleted, map[string]any{
 		"requestID":  request.ID,
 		"resultType": result.ResultType,
@@ -491,15 +718,27 @@ func (s *TasksService) selectMachine(sessionID, toolName string) (*model.Machine
 	return nil, wrapf(ErrMachineAtCapacity, "all machines at capacity for tool %s", toolName)
 }
 
-func (s *TasksService) persistTask(task *model.Task) {
+// persistTask writes the task through to the store with one retry, deriving
+// its context from the service so it participates in graceful shutdown. The
+// error is returned (and logged with task identity) so callers can react;
+// terminal-state callers treat a failed persist as a data-loss risk and log
+// loudly rather than swallowing it.
+func (s *TasksService) persistTask(task *model.Task) error {
 	if s.store == nil || task == nil {
-		return
+		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-	if err := s.store.SaveTask(ctx, task); err != nil {
-		log.Printf("persist task save failed: %v", err)
+	var err error
+	for attempt := 0; attempt < 2; attempt++ {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), defaultPersistenceTimeout)
+		err = s.store.SaveTask(ctx, task)
+		cancel()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(time.Duration(attempt+1) * 50 * time.Millisecond)
 	}
-	cancel()
+	log.Printf("persist task save failed after retry: id=%s status=%s err=%v", task.ID, task.Status, err)
+	return err
 }
 
 // updateTaskWithError updates a task with an error status
@@ -517,7 +756,10 @@ func (s *TasksService) updateTaskWithError(task *model.Task, errorMsg string) {
 	task.CompletedAt = &completedAt
 	task.NextAttemptAt = nil
 
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The failure exists only in memory; a restart re-adopts the task.
+		log.Printf("task %s failure state not durable; may re-execute after restart: %v", task.ID, err)
+	}
 	s.recordTaskEvent(task, trace.EventTaskExecutionFailed, map[string]any{
 		"reason": errorMsg,
 	})
@@ -559,7 +801,11 @@ func (s *TasksService) setCurrentRequestID(task *model.Task, requestID string) {
 	task.CurrentRequestID = requestID
 	task.UpdatedAt = time.Now()
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// Chunk-replay reads on other replicas fall back to the previous
+		// request id until the next durable write.
+		log.Printf("task %s current-request link not durable: %v", task.ID, err)
+	}
 }
 
 func (s *TasksService) taskExecutionSnapshot(taskID string) (string, context.CancelFunc) {
@@ -656,22 +902,48 @@ func requestIDFromMetadata(metadata map[string]any) string {
 	return requestID
 }
 
-// CleanupOldTasks removes tasks older than a certain age
+// CleanupOldTasks removes terminal tasks older than maxAge. Non-terminal
+// tasks are never eligible regardless of age: deleting the row of a task
+// that is pending, running, or awaiting retry would orphan work the
+// adoption sweep could otherwise recover. A periodic sweeper invokes this
+// with taskRetentionAge.
 func (s *TasksService) CleanupOldTasks(maxAge time.Duration) {
-	s.tasksMutex.Lock()
-	defer s.tasksMutex.Unlock()
-
 	cutoff := time.Now().Add(-maxAge)
+
+	s.execMutex.RLock()
+	executing := make(map[string]struct{}, len(s.executions))
+	for id := range s.executions {
+		executing[id] = struct{}{}
+	}
+	s.execMutex.RUnlock()
+
+	var removals []string
+	s.tasksMutex.Lock()
 	for id, task := range s.tasks {
-		if task.CreatedAt.Before(cutoff) {
-			delete(s.tasks, id)
-			if s.store != nil {
-				ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-				if err := s.store.DeleteTask(ctx, id); err != nil {
-					log.Printf("persist task cleanup delete failed: %v", err)
-				}
-				cancel()
-			}
+		if task == nil || task.CreatedAt.After(cutoff) {
+			continue
 		}
+		if _, busy := executing[id]; busy {
+			continue
+		}
+		switch task.Status {
+		case model.StatusCompleted, model.StatusFailed, model.StatusCancelled:
+		default:
+			continue
+		}
+		removals = append(removals, id)
+		delete(s.tasks, id)
+	}
+	s.tasksMutex.Unlock()
+
+	if s.store == nil {
+		return
+	}
+	for _, id := range removals {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), defaultPersistenceTimeout)
+		if err := s.store.DeleteTask(ctx, id); err != nil {
+			log.Printf("persist task cleanup delete failed: id=%s err=%v", id, err)
+		}
+		cancel()
 	}
 }

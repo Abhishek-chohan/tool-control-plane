@@ -150,6 +150,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency ON requests(session_id, idempotency_key) WHERE idempotency_key <> ''`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
+		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS adopted_by TEXT`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_idempotency ON tasks(session_id, idempotency_key) WHERE idempotency_key <> ''`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS draining BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS token_hash TEXT`,

@@ -128,11 +128,26 @@ type Storer interface {
 	// FindNonTerminalTasks returns tasks that are not in a terminal state
 	// (done/failed/cancelled). Used on startup to re-adopt in-flight work.
 	FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
-	// ClaimTaskForAdoption atomically claims a non-terminal task for re-adoption
-	// by this instance, preventing duplicate execution across replicas. Only the
-	// first caller wins; subsequent callers see the task was recently touched and
-	// return claimed=false.
-	ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error)
+	// FindAdoptableTasks returns up to limit non-terminal tasks whose next
+	// attempt is due (next_attempt_at null or past) and whose adoption lease
+	// is free: unowned, or owned but untouched for leaseTTL. The adoption
+	// sweep uses it so each tick touches only claimable work, not every
+	// non-terminal row.
+	FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL time.Duration, limit int) ([]*model.Task, error)
+	// ClaimTaskForAdoption atomically acquires execution ownership of a task:
+	// it succeeds when the task is unowned or the previous owner's lease
+	// (leaseTTL since its last touch) has expired, and records instanceID as the
+	// owner. Only the first caller wins; it is the fencing gate for task
+	// execution across replicas.
+	ClaimTaskForAdoption(ctx context.Context, taskID, instanceID string, leaseTTL time.Duration) (*model.Task, bool, error)
+	// RenewTaskAdoption refreshes the owning instance's lease. It returns
+	// false when ownership was lost (expired and re-claimed elsewhere), at
+	// which point the caller must stop executing the task.
+	RenewTaskAdoption(ctx context.Context, taskID, instanceID string) (bool, error)
+	// ReleaseTaskAdoption clears ownership when the executing instance
+	// reaches a terminal state or schedules a retry for any instance to pick
+	// up. Only the recorded owner may release.
+	ReleaseTaskAdoption(ctx context.Context, taskID, instanceID string) error
 
 	// Sessions
 	AllSessions(ctx context.Context) ([]*model.Session, error)
