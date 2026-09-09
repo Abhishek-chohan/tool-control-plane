@@ -628,7 +628,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	task.CompletedAt = nil
 	task.NextAttemptAt = nil
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The attempt count is memory-only now; a restart may re-run this
+		// attempt against a stale counter.
+		log.Printf("task %s attempt-start state not durable: %v", task.ID, err)
+	}
 
 	machine, err := s.selectMachine(task.SessionID, task.ToolName)
 	if err != nil {
@@ -696,7 +700,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	task.DeadLetter = false
 	task.LastError = ""
 	s.tasksMutex.Unlock()
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The completed result exists only in memory; a restart re-adopts and
+		// re-executes the task.
+		log.Printf("task %s completion not durable; may re-execute after restart: %v", task.ID, err)
+	}
 	s.recordTaskEvent(task, trace.EventTaskExecutionCompleted, map[string]any{
 		"requestID":  request.ID,
 		"resultType": result.ResultType,
@@ -760,7 +768,10 @@ func (s *TasksService) updateTaskWithError(task *model.Task, errorMsg string) {
 	task.CompletedAt = &completedAt
 	task.NextAttemptAt = nil
 
-	s.persistTask(task)
+	if err := s.persistTask(task); err != nil {
+		// The failure exists only in memory; a restart re-adopts the task.
+		log.Printf("task %s failure state not durable; may re-execute after restart: %v", task.ID, err)
+	}
 	s.recordTaskEvent(task, trace.EventTaskExecutionFailed, map[string]any{
 		"reason": errorMsg,
 	})
