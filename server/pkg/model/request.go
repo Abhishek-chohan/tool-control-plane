@@ -125,6 +125,35 @@ type RequestChunkWindow struct {
 	Chunks   []string
 }
 
+// Clone returns a copy safe to hand out of the service's cache: the struct
+// is copied field-by-field, and the mutable reference fields (Meta,
+// StreamResults, the time pointers) get fresh copies so callers reading the
+// clone never race with the service mutating the cached original. Result is
+// shared by reference: service code only ever assigns it wholesale, never
+// mutates it in depth.
+func (r *Request) Clone() *Request {
+	cloned := *r
+	if r.Meta != nil {
+		cloned.Meta = make(map[string]string, len(r.Meta))
+		for k, v := range r.Meta {
+			cloned.Meta[k] = v
+		}
+	}
+	if r.StreamResults != nil {
+		cloned.StreamResults = make([]string, len(r.StreamResults))
+		copy(cloned.StreamResults, r.StreamResults)
+	}
+	if r.NextAttemptAt != nil {
+		t := *r.NextAttemptAt
+		cloned.NextAttemptAt = &t
+	}
+	if r.LeasedAt != nil {
+		t := *r.LeasedAt
+		cloned.LeasedAt = &t
+	}
+	return &cloned
+}
+
 // EnsureStreamSequenceDefaults normalizes retained-window sequence state for legacy requests.
 func (r *Request) EnsureStreamSequenceDefaults() {
 	if r.StreamStartSeq <= 0 {

@@ -312,6 +312,15 @@ func (s *MachinesService) DrainMachine(ctx context.Context, sessionID, machineID
 	}
 
 	if started {
+		// Persist the drain flag so other replicas stop dispatching work to
+		// this machine (IsMachineDraining reads it through the store).
+		if s.store != nil {
+			flagCtx, flagCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+			if err := s.store.SetMachineDraining(flagCtx, sessionID, machineID); err != nil {
+				log.Printf("persist machine drain flag failed: %v", err)
+			}
+			flagCancel()
+		}
 		activeRequests := 0
 		if s.requestTracker != nil {
 			activeRequests = s.requestTracker.ActiveRequestsForMachine(sessionID, machineID)
@@ -753,6 +762,21 @@ func (s *MachinesService) ReserveMachineSlot(sessionID, machineID string) bool {
 	}
 	s.machineInFlight[sessionID][machineID] = current + 1
 	s.capacityMutex.Unlock()
+
+	// With a store configured, the cross-instance in-flight count is
+	// authoritative: the local counter cannot see requests claimed by other
+	// replicas on the same machine row. The transitioning request is already
+	// counted (it was claimed), so the limit holds at cap total in-flight.
+	// On a store error the local grant stands — capacity is a soft limit and
+	// the fenced write remains the hard serialization point.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		defer cancel()
+		if inFlight, err := s.store.MachineInFlightCount(ctx, sessionID, machineID); err == nil && inFlight > cap {
+			s.ReleaseMachineSlot(sessionID, machineID)
+			return false
+		}
+	}
 	return true
 }
 

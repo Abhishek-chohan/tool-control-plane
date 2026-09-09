@@ -138,7 +138,9 @@ func (s *TasksService) GetTask(taskID string) (*model.Task, error) {
 		return nil, wrapf(ErrNotFound, "task with ID %s not found", taskID)
 	}
 
-	return task, nil
+	// Hand out a clone: callers read outside the lock while task
+	// execution mutates the cached original.
+	return task.Clone(), nil
 }
 
 // GetTaskByID gets a task by ID for a specific session
@@ -156,7 +158,7 @@ func (s *TasksService) GetTaskByID(sessionID, taskID string) (*model.Task, error
 		return nil, wrapf(ErrNotFound, "task with ID %s not found in session %s", taskID, sessionID)
 	}
 
-	return task, nil
+	return task.Clone(), nil
 }
 
 // ListTasks lists all tasks for a session
@@ -171,7 +173,11 @@ func (s *TasksService) ListTasks(sessionID string) ([]*model.Task, error) {
 		}
 	}
 
-	return tasks, nil
+	cloned := make([]*model.Task, 0, len(tasks))
+	for _, task := range tasks {
+		cloned = append(cloned, task.Clone())
+	}
+	return cloned, nil
 }
 
 // CancelTask cancels a running task
