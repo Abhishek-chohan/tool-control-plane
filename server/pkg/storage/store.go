@@ -128,6 +128,12 @@ type Storer interface {
 	// FindNonTerminalTasks returns tasks that are not in a terminal state
 	// (done/failed/cancelled). Used on startup to re-adopt in-flight work.
 	FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
+	// FindAdoptableTasks returns up to limit non-terminal tasks whose next
+	// attempt is due (next_attempt_at null or past) and whose adoption lease
+	// is free: unowned, or owned but untouched for leaseTTL. The adoption
+	// sweep uses it so each tick touches only claimable work, not every
+	// non-terminal row.
+	FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL time.Duration, limit int) ([]*model.Task, error)
 	// ClaimTaskForAdoption atomically acquires execution ownership of a task:
 	// it succeeds when the task is unowned or the previous owner's lease
 	// (leaseTTL since its last touch) has expired, and records instanceID as the

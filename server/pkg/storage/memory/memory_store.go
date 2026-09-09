@@ -420,6 +420,34 @@ func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
 	return out, nil
 }
 
+func (s *Store) FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL time.Duration, limit int) ([]*model.Task, error) {
+	if limit <= 0 {
+		limit = 32
+	}
+	leaseCutoff := now.Add(-leaseTTL)
+	var out []*model.Task
+	for _, t := range s.tasks {
+		if len(out) >= limit {
+			break
+		}
+		if t.DeadLetter {
+			continue
+		}
+		switch t.Status {
+		case model.StatusCompleted, model.StatusFailed, model.StatusCancelled:
+			continue
+		}
+		if t.NextAttemptAt != nil && t.NextAttemptAt.After(now) {
+			continue
+		}
+		if owner, owned := s.taskOwners[t.ID]; owned && owner != "" && t.UpdatedAt.After(leaseCutoff) {
+			continue
+		}
+		out = append(out, cloneTask(t))
+	}
+	return out, nil
+}
+
 func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID, instanceID string, leaseTTL time.Duration) (*model.Task, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

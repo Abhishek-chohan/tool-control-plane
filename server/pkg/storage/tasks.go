@@ -82,6 +82,40 @@ func (s *Store) DeleteTask(ctx context.Context, taskID string) error {
 // FindNonTerminalTasks returns tasks that are not in a terminal state
 // (completed/failed/cancelled). Used on startup to re-adopt in-flight work so
 // a task interrupted by an instance restart resumes instead of stalling.
+// FindAdoptableTasks returns up to limit due tasks whose adoption lease is
+// free: unowned, or owned but untouched for leaseTTL. Oldest due first, so
+// starved work wins ties.
+func (s *Store) FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL time.Duration, limit int) ([]*model.Task, error) {
+	if s == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 32
+	}
+	leaseCutoff := now.Add(-leaseTTL)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+taskColumns+` FROM tasks
+		WHERE status NOT IN ($1,$2,$3) AND dead_letter=false
+		AND (next_attempt_at IS NULL OR next_attempt_at <= $4)
+		AND (adopted_by IS NULL OR adopted_by = '' OR updated_at <= $5)
+		ORDER BY COALESCE(next_attempt_at, created_at) ASC
+		LIMIT $6`,
+		string(model.StatusCompleted), string(model.StatusFailed), string(model.StatusCancelled), now, leaseCutoff, limit)
+	if err != nil {
+		return nil, fmt.Errorf("find adoptable tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		task, err := scanTaskRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
+}
+
 // GetTaskByIdempotencyKey fetches the task a session created under the given
 // dedup key (nil when absent). CreateTask uses it to make retries return the
 // original task without re-executing it.
