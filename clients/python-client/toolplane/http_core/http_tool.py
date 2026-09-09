@@ -258,14 +258,14 @@ class HTTPToolManager(BaseToolManager):
             raise ToolError(f"Failed to delete tool {tool_id}: {e}")
 
     def _execute_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
     ) -> str:
         """Execute a tool and return request ID."""
         try:
             self.connection_manager.ensure_connected()
 
             response = self.connection_manager.execute_tool(
-                session_id, tool_name, json.dumps(params)
+                session_id, tool_name, json.dumps(params), idempotency_key
             )
 
             if response.get("error"):
@@ -276,13 +276,15 @@ class HTTPToolManager(BaseToolManager):
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
-    def _stream_tool_on_server(self, session_id: str, tool_name: str, params: Dict):
+    def _stream_tool_on_server(
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+    ):
         """Stream tool execution."""
         try:
             self.connection_manager.ensure_connected()
 
             response = self.connection_manager.stream_execute_tool(
-                session_id, tool_name, json.dumps(params)
+                session_id, tool_name, json.dumps(params), idempotency_key
             )
 
             # Track buffer for backpressure

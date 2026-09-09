@@ -116,7 +116,16 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 // CreateRequest creates a new tool execution request. timeoutSeconds overrides
 // the absolute per-attempt execution timeout; values <= 0 use the server
 // default, values above maxRequestTimeout are rejected.
-func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeoutSeconds int) (*model.Request, error) {
+func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeoutSeconds int, idempotencyKey string) (*model.Request, error) {
+	// Idempotent create: a retry carrying the same key returns the original
+	// request instead of enqueueing duplicate work. Checked before anything
+	// else so retries never re-validate or re-dispatch.
+	if idempotencyKey != "" {
+		if existing := s.findRequestByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
+			return existing, nil
+		}
+	}
+
 	// Check if tool exists
 	_, err := s.toolService.GetToolByName(sessionID, toolName)
 	if err != nil {
@@ -146,6 +155,7 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	s.ensureRequestDefaults(request)
 	request.TimeoutSeconds = int(resolvedTimeout.Seconds())
 	request.BackoffSeconds = int(s.retryBackoff.Seconds())
+	request.IdempotencyKey = idempotencyKey
 	request.VisibleAt = time.Now()
 
 	s.requestsMutex.Lock()
@@ -163,6 +173,14 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		defer cancel()
 		if err := s.store.SaveRequest(ctx, request); err != nil {
+			// A concurrent replica inserted the same (session, key) first: the
+			// unique partial index rejects this insert and the retry returns the
+			// winner's request.
+			if idempotencyKey != "" && storage.IsUniqueViolation(err) {
+				if existing := s.findRequestByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
+					return existing, nil
+				}
+			}
 			return nil, fmt.Errorf("persist request create failed: %w", err)
 		}
 	}
@@ -179,6 +197,41 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	s.notifyRequestUpdate(request.ID)
 
 	return request.Clone(), nil
+}
+
+// findRequestByIdempotencyKey resolves a dedup key to the session's request:
+// the local cache first (mirroring every store write), then the store, so a
+// key minted on another replica also dedups.
+func (s *RequestsService) findRequestByIdempotencyKey(sessionID, idempotencyKey string) *model.Request {
+	s.requestsMutex.RLock()
+	for _, req := range s.requests[sessionID] {
+		if req != nil && req.IdempotencyKey == idempotencyKey {
+			cloned := req.Clone()
+			s.requestsMutex.RUnlock()
+			return cloned
+		}
+	}
+	s.requestsMutex.RUnlock()
+
+	if s.store == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+	defer cancel()
+	found, err := s.store.GetRequestByIdempotencyKey(ctx, sessionID, idempotencyKey)
+	if err != nil || found == nil {
+		return nil
+	}
+	found = found.Clone()
+	s.requestsMutex.Lock()
+	if _, ok := s.requests[sessionID]; !ok {
+		s.requests[sessionID] = make(map[string]*model.Request)
+	}
+	if _, exists := s.requests[sessionID][found.ID]; !exists {
+		s.requests[sessionID][found.ID] = found.Clone()
+	}
+	s.requestsMutex.Unlock()
+	return found
 }
 
 // GetRequestByID gets a request by ID. On a cache miss it falls back to the
@@ -1213,7 +1266,7 @@ func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*mo
 // ExecuteTool executes a tool on a specific machine
 func (s *RequestsService) ExecuteTool(sessionID, machineID, toolName, input string) (*model.ToolResult, error) {
 	// Create a new request with the default absolute timeout.
-	request, err := s.CreateRequest(sessionID, toolName, input, 0)
+	request, err := s.CreateRequest(sessionID, toolName, input, 0, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -1508,6 +1561,10 @@ func (s *RequestsService) handleExpiredRequest(req *model.Request) {
 	}
 	message := "request lease expired"
 	now := time.Now()
+	// Mutate the cached request under the write lock: readers (drain polls,
+	// status reads) walk the map under the read lock concurrently with the
+	// reaper on other goroutines.
+	s.requestsMutex.Lock()
 	s.recordRequestEvent(req, trace.EventRequestLeaseExpired, machineID, map[string]any{
 		"visibleAt": req.VisibleAt,
 	})
@@ -1540,7 +1597,6 @@ func (s *RequestsService) handleExpiredRequest(req *model.Request) {
 	}
 	req.UpdatedAt = now
 
-	s.requestsMutex.Lock()
 	if _, ok := s.requests[sessionID]; !ok {
 		s.requests[sessionID] = make(map[string]*model.Request)
 	}

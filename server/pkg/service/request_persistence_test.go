@@ -56,7 +56,7 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestSvc.CreateRequest(session.ID, "echo", `{"message":"persist"}`, 0)
+	request, err := requestSvc.CreateRequest(session.ID, "echo", `{"message":"persist"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

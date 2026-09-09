@@ -42,8 +42,14 @@ class TaskManager:
         session_id: str,
         tool_name: str,
         input_data: str,
+        idempotency_key: str = "",
     ) -> Dict[str, Any]:
-        """Create a task for a session."""
+        """Create a task for a session.
+
+        idempotency_key, when set, dedups creates within the session:
+        retrying with the same key returns the original task without
+        re-executing it.
+        """
         self.connection_manager.ensure_connected()
 
         try:
@@ -51,6 +57,7 @@ class TaskManager:
                 session_id=session_id,
                 tool_name=tool_name,
                 input=input_data,
+                idempotency_key=idempotency_key,
             )
             response = self.connection_manager.tasks_stub.CreateTask(
                 request, metadata=self.connection_manager.get_metadata()

@@ -1241,6 +1241,8 @@ export class ExecuteToolRequest extends jspb.Message {
     setInput(value: string): ExecuteToolRequest;
     getTimeoutSeconds(): number;
     setTimeoutSeconds(value: number): ExecuteToolRequest;
+    getIdempotencyKey(): string;
+    setIdempotencyKey(value: string): ExecuteToolRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ExecuteToolRequest.AsObject;
@@ -1258,6 +1260,7 @@ export namespace ExecuteToolRequest {
         toolName: string,
         input: string,
         timeoutSeconds: number,
+        idempotencyKey: string,
     }
 }
 
@@ -1334,6 +1337,8 @@ export class CreateRequestRequest extends jspb.Message {
     setInput(value: string): CreateRequestRequest;
     getTimeoutSeconds(): number;
     setTimeoutSeconds(value: number): CreateRequestRequest;
+    getIdempotencyKey(): string;
+    setIdempotencyKey(value: string): CreateRequestRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): CreateRequestRequest.AsObject;
@@ -1351,6 +1356,7 @@ export namespace CreateRequestRequest {
         toolName: string,
         input: string,
         timeoutSeconds: number,
+        idempotencyKey: string,
     }
 }
 
@@ -1835,6 +1841,8 @@ export class CreateTaskRequest extends jspb.Message {
     setToolName(value: string): CreateTaskRequest;
     getInput(): string;
     setInput(value: string): CreateTaskRequest;
+    getIdempotencyKey(): string;
+    setIdempotencyKey(value: string): CreateTaskRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): CreateTaskRequest.AsObject;
@@ -1851,6 +1859,7 @@ export namespace CreateTaskRequest {
         sessionId: string,
         toolName: string,
         input: string,
+        idempotencyKey: string,
     }
 }
 

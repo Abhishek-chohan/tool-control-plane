@@ -59,7 +59,7 @@ func TestRequestsServiceInMemoryLeaseExpiryRequeuesRunningRequest(t *testing.T) 
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"lease"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"lease"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRequestsServiceRecordsProviderLifecycleEvents(t *testing.T) {
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trace"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"trace"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

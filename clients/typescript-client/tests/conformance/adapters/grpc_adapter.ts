@@ -332,11 +332,12 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return response.getSuccess();
   }
 
-  async createRequest(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<string> {
+  async createRequest(sessionId: string, toolName: string, params: Record<string, unknown>, idempotencyKey: string = ''): Promise<string> {
     const request = new CreateRequestRequest();
     request.setSessionId(sessionId);
     request.setToolName(toolName);
     request.setInput(JSON.stringify(params));
+    request.setIdempotencyKey(idempotencyKey);
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.requestsClient.createRequest(request, metadata, options, callback),
