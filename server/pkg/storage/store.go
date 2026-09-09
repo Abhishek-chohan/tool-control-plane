@@ -242,7 +242,9 @@ func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) 
 		select {
 		case <-time.After(backoff):
 		case <-ctx.Done():
-			return err
+			// Cancellation is the caller's outcome, not a retryable
+			// serialization failure; surface it instead of the 40001.
+			return ctx.Err()
 		}
 		backoff *= 2
 	}

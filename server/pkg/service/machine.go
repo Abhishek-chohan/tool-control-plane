@@ -315,7 +315,7 @@ func (s *MachinesService) DrainMachine(ctx context.Context, sessionID, machineID
 		// Persist the drain flag so other replicas stop dispatching work to
 		// this machine (IsMachineDraining reads it through the store).
 		if s.store != nil {
-			flagCtx, flagCancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			flagCtx, flagCancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
 			if err := s.store.SetMachineDraining(flagCtx, sessionID, machineID); err != nil {
 				log.Printf("persist machine drain flag failed: %v", err)
 			}
