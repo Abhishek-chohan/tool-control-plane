@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -20,6 +21,16 @@ type GRPCTLSConfig struct {
 
 // ClientOption mutates client construction settings without breaking existing call sites.
 type ClientOption func(*ToolplaneClient)
+
+// WithExecutionTimeout bounds ExecuteTool waits and execution streams.
+// The default is 30s; zero or negative keeps the default.
+func WithExecutionTimeout(d time.Duration) ClientOption {
+	return func(c *ToolplaneClient) {
+		if d > 0 {
+			c.executionTimeout = d
+		}
+	}
+}
 
 // WithGRPCTLS enables TLS for the direct gRPC client and optionally supplies a custom CA bundle and server name.
 func WithGRPCTLS(caCertPath, serverName string) ClientOption {

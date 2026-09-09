@@ -210,14 +210,17 @@ class ToolManager(BaseToolManager):
             raise ToolError(f"Failed to delete tool {tool_id}: {e}")
 
     def _execute_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
     ) -> str:
         """Execute tool on server."""
         try:
             self.connection_manager.ensure_connected()
 
             request = ExecuteToolRequest(
-                session_id=session_id, tool_name=tool_name, input=json.dumps(params)
+                session_id=session_id,
+                tool_name=tool_name,
+                input=json.dumps(params),
+                idempotency_key=idempotency_key,
             )
 
             response = self.connection_manager.tool_stub.ExecuteTool(
@@ -237,13 +240,18 @@ class ToolManager(BaseToolManager):
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
-    def _stream_tool_on_server(self, session_id: str, tool_name: str, params: Dict):
+    def _stream_tool_on_server(
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+    ):
         """Stream tool execution on server."""
         try:
             self.connection_manager.ensure_connected()
 
             request = ExecuteToolRequest(
-                session_id=session_id, tool_name=tool_name, input=json.dumps(params)
+                session_id=session_id,
+                tool_name=tool_name,
+                input=json.dumps(params),
+                idempotency_key=idempotency_key,
             )
 
             # Use streaming endpoint

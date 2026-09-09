@@ -12,7 +12,7 @@ import (
 
 // taskColumns is the single column list for task SELECTs; scanTaskRow is the
 // matching scanner. Keep them in sync with SaveTask's INSERT columns.
-const taskColumns = `id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, current_request_id, created_at, updated_at, completed_at`
+const taskColumns = `id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, current_request_id, idempotency_key, created_at, updated_at, completed_at`
 
 func (s *Store) AllTasks(ctx context.Context) ([]*model.Task, error) {
 	if s == nil {
@@ -40,8 +40,8 @@ func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO tasks (id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, current_request_id, created_at, updated_at, completed_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        INSERT INTO tasks (id, session_id, tool_name, status, input, result, result_type, error, attempts, max_attempts, backoff_seconds, next_attempt_at, timeout_seconds, dead_letter, last_error, current_request_id, idempotency_key, created_at, updated_at, completed_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             tool_name = EXCLUDED.tool_name,
@@ -58,10 +58,11 @@ func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {
             dead_letter = EXCLUDED.dead_letter,
             last_error = EXCLUDED.last_error,
             current_request_id = EXCLUDED.current_request_id,
+            idempotency_key = EXCLUDED.idempotency_key,
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at,
             completed_at = EXCLUDED.completed_at
-    `, task.ID, task.SessionID, task.ToolName, string(task.Status), task.Input, nullString(task.Result), nullString(task.ResultType), nullString(task.Error), task.Attempts, task.MaxAttempts, task.BackoffSeconds, nullableTime(task.NextAttemptAt), task.TimeoutSeconds, task.DeadLetter, nullString(task.LastError), nullString(task.CurrentRequestID), task.CreatedAt, task.UpdatedAt, nullableTime(task.CompletedAt))
+    `, task.ID, task.SessionID, task.ToolName, string(task.Status), task.Input, nullString(task.Result), nullString(task.ResultType), nullString(task.Error), task.Attempts, task.MaxAttempts, task.BackoffSeconds, nullableTime(task.NextAttemptAt), task.TimeoutSeconds, task.DeadLetter, nullString(task.LastError), nullString(task.CurrentRequestID), nullString(task.IdempotencyKey), task.CreatedAt, task.UpdatedAt, nullableTime(task.CompletedAt))
 	if err != nil {
 		return fmt.Errorf("upsert task: %w", err)
 	}
@@ -81,6 +82,24 @@ func (s *Store) DeleteTask(ctx context.Context, taskID string) error {
 // FindNonTerminalTasks returns tasks that are not in a terminal state
 // (completed/failed/cancelled). Used on startup to re-adopt in-flight work so
 // a task interrupted by an instance restart resumes instead of stalling.
+// GetTaskByIdempotencyKey fetches the task a session created under the given
+// dedup key (nil when absent). CreateTask uses it to make retries return the
+// original task without re-executing it.
+func (s *Store) GetTaskByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Task, error) {
+	if s == nil || idempotencyKey == "" {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE session_id=$1 AND idempotency_key=$2`, sessionID, idempotencyKey)
+	task, err := scanTaskRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get task by idempotency key: %w", err)
+	}
+	return task, nil
+}
+
 func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error) {
 	if s == nil {
 		return nil, nil
@@ -162,7 +181,8 @@ func scanTaskRow(row interface {
 	var nextAttempt sql.NullTime
 	var lastError sql.NullString
 	var currentRequestID sql.NullString
-	if err := row.Scan(&t.ID, &t.SessionID, &t.ToolName, &t.Status, &t.Input, &result, &resultType, &errorText, &t.Attempts, &t.MaxAttempts, &t.BackoffSeconds, &nextAttempt, &t.TimeoutSeconds, &t.DeadLetter, &lastError, &currentRequestID, &t.CreatedAt, &t.UpdatedAt, &completedAt); err != nil {
+	var idempotencyKey sql.NullString
+	if err := row.Scan(&t.ID, &t.SessionID, &t.ToolName, &t.Status, &t.Input, &result, &resultType, &errorText, &t.Attempts, &t.MaxAttempts, &t.BackoffSeconds, &nextAttempt, &t.TimeoutSeconds, &t.DeadLetter, &lastError, &currentRequestID, &idempotencyKey, &t.CreatedAt, &t.UpdatedAt, &completedAt); err != nil {
 		return nil, fmt.Errorf("scan task: %w", err)
 	}
 	if result.Valid {
@@ -184,6 +204,9 @@ func scanTaskRow(row interface {
 	}
 	if lastError.Valid {
 		t.LastError = lastError.String
+	}
+	if idempotencyKey.Valid {
+		t.IdempotencyKey = idempotencyKey.String
 	}
 	if currentRequestID.Valid {
 		t.CurrentRequestID = currentRequestID.String

@@ -670,6 +670,9 @@ message ExecuteToolRequest {
   // Zero or negative uses the server default; values above the server maximum
   // are rejected.
   int32 timeout_seconds = 4;
+  // Optional caller-chosen dedup key: retrying the same call with the same
+  // key returns the original request instead of executing the tool again.
+  string idempotency_key = 5;
 }
 
 // ExecuteToolResponse
@@ -701,6 +704,10 @@ message CreateRequestRequest {
   // Zero or negative uses the server default; values above the server maximum
   // are rejected.
   int32 timeout_seconds = 4;
+  // Optional caller-chosen dedup key: within a session, creating a request
+  // with a key that already exists returns the existing request instead of
+  // enqueueing duplicate work.
+  string idempotency_key = 5;
 }
 
 // GetRequestRequest
@@ -844,6 +851,10 @@ message CreateTaskRequest {
   string session_id = 1;
   string tool_name = 2;
   string input = 3;  // JSON input as string
+  // Optional caller-chosen dedup key: creating a task with a key that
+  // already exists in the session returns the existing task without
+  // re-executing it.
+  string idempotency_key = 4;
 }
 
 // GetTaskRequest

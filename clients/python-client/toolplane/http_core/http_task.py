@@ -34,17 +34,24 @@ class HTTPTaskManager:
         session_id: str,
         tool_name: str,
         input_data: str,
+        idempotency_key: str = "",
     ) -> Dict[str, Any]:
-        """Create a task for a session."""
+        """Create a task for a session.
+
+        idempotency_key, when set, dedups creates within the session:
+        retrying with the same key returns the original task without
+        re-executing it.
+        """
         try:
             self.connection_manager.ensure_connected()
-            response = self.connection_manager.create_task(
-                {
-                    "sessionId": session_id,
-                    "toolName": tool_name,
-                    "input": input_data,
-                }
-            )
+            payload = {
+                "sessionId": session_id,
+                "toolName": tool_name,
+                "input": input_data,
+            }
+            if idempotency_key:
+                payload["idempotencyKey"] = idempotency_key
+            response = self.connection_manager.create_task(payload)
             task = response.get("task", response)
             if not isinstance(task, dict):
                 raise TaskError(

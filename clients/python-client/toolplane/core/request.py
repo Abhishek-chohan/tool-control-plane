@@ -17,6 +17,7 @@ from toolplane.proto.service_pb2 import (
     GetRequestRequest,
     ListRequestsRequest,
     RenewRequestLeaseRequest,
+    ResumeStreamRequest,
     SubmitRequestResultRequest,
     UpdateRequestRequest,
 )
@@ -592,11 +593,14 @@ class RequestManager:
         tool_name: str,
         input_data: str,
         timeout_seconds: int = 0,
+        idempotency_key: str = "",
     ) -> str:
         """Create a new request.
 
         timeout_seconds optionally overrides the absolute execution timeout;
-        zero keeps the server default.
+        zero keeps the server default. idempotency_key, when set, dedups
+        creates within the session: retrying with the same key returns the
+        original request instead of enqueueing duplicate work.
         """
         try:
             self.connection_manager.ensure_connected()
@@ -606,6 +610,7 @@ class RequestManager:
                 tool_name=tool_name,
                 input=input_data,
                 timeout_seconds=timeout_seconds,
+                idempotency_key=idempotency_key,
             )
 
             response = self.connection_manager.requests_stub.CreateRequest(
@@ -615,6 +620,36 @@ class RequestManager:
 
         except Exception as e:
             raise RequestError(f"Failed to create request: {e}")
+
+    def resume_stream(self, session_id: str, request_id: str, last_seq: int = 0):
+        """Resume a request chunk stream after the given absolute sequence.
+
+        Yields chunk dicts (seq, request_id, chunk, is_final, error) covering
+        everything the server still retains after last_seq. Raises
+        ToolplaneInvalidArgumentError (OUT_OF_RANGE) when the retained window
+        has moved past last_seq and replay is no longer possible.
+        """
+        try:
+            self.connection_manager.ensure_connected()
+
+            request = ResumeStreamRequest(
+                session_id=session_id, request_id=request_id, last_seq=last_seq
+            )
+            for chunk in self.connection_manager.requests_stub.ResumeStream(
+                request, metadata=self.connection_manager.get_metadata()
+            ):
+                yield {
+                    "seq": chunk.seq,
+                    "request_id": chunk.request_id,
+                    "chunk": chunk.chunk,
+                    "is_final": chunk.is_final,
+                    "error": chunk.error,
+                }
+
+        except grpc.RpcError as rpc_error:
+            raise api_error_from_rpc_error(
+                rpc_error, context=f"Failed to resume stream for request {request_id}"
+            ) from rpc_error
 
     def list_requests(
         self,

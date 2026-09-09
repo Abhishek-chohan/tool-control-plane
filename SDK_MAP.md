@@ -91,7 +91,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `DeleteTool` | `full`: `delete_tool()` | `full`: `DeleteTool()` | `full`: `deleteTool()` | Covered by `conformance/cases/tool_discovery.json` |
 | `UpdateToolPing` | `partial`: explicit provider heartbeat path | `unsupported` | `unsupported` | No standalone public ping wrapper (provider scope) |
 | `StreamExecuteTool` | `full`: `stream()` / `astream()` | `full`: `StreamExecuteTool()` | `unsupported` | Covered by `conformance/cases/invoke_stream.json` |
-| `ResumeStream` | `unsupported` | `unsupported` | `unsupported` | No client currently exposes stream resumption; the server returns `OUT_OF_RANGE` when replay falls behind the retained window |
+| `ResumeStream` | `full`: `request_manager.resume_stream()` (gRPC + HTTP) | `full`: `ResumeStream()` | `full`: `resumeStream()` | Replays retained chunks after `last_seq` and streams live until the final marker; the server returns `OUT_OF_RANGE` when replay falls behind the retained window. The Python `stream()` fallback resumes through it instead of re-invoking |
 | `ExecuteTool` | `full`: `invoke()` / `ainvoke()` | `full`: `ExecuteTool()` plus math helpers | `full`: `executeTool()` plus math helpers | Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
 | `HealthCheck` | `partial`: `ToolplaneHTTP.health()` plus connect probes | `full`: gRPC `Ping()` / `Connect()` | `full`: gRPC `ping()` / `connect()` | TypeScript and Go treat health checks as part of the maintained gRPC connection path |
 
@@ -127,7 +127,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | RPC | Python | Go | TypeScript | Notes / conformance |
 | --- | --- | --- | --- | --- |
-| `CreateRequest` | `full`: `create_request()` | `full`: `CreateRequest()` | `full`: `createRequest()` | Covered by `conformance/cases/request_create.json` |
+| `CreateRequest` | `full`: `create_request()` | `full` via `ExecuteToolWithKey()` | `full`: `createRequest()` | Optional `idempotency_key` dedups retries within a session. Covered by `conformance/cases/request_create.json` and `request_idempotency_retry.json` |
 | `GetRequest` | `full`: `get_request_status()` | `full`: `GetRequest()` | `full`: `getRequest()` | Python keeps the `get_request_status()` name, while Go and TypeScript expose direct request lookup wrappers |
 | `ListRequests` | `full`: `list_requests()` | `full`: `ListRequests()` | `full`: `listRequests()` | Public across Python, Go, and TypeScript |
 | `UpdateRequest` | `partial`: internal result-status updates | `unsupported` | `full`: `updateRequest()` | Fenced provider write: the request's `machineId` + `leaseEpoch` from the claim response must be presented, otherwise the server rejects with `FAILED_PRECONDITION`. TypeScript exposes the provider-running/status transition helper used by the maintained runtime |

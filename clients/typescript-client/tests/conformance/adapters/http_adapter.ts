@@ -313,11 +313,12 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     return response.success === true;
   }
 
-  async createRequest(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<string> {
+  async createRequest(sessionId: string, toolName: string, params: Record<string, unknown>, idempotencyKey: string = ''): Promise<string> {
     const response = await this.post<Record<string, unknown>>('api/CreateRequest', {
       sessionId,
       toolName,
       input: JSON.stringify(params),
+      idempotencyKey,
     });
 
     const request = this.unwrapObject(response.request ?? response);
