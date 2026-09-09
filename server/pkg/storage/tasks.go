@@ -121,34 +121,32 @@ func (s *Store) FindNonTerminalTasks(ctx context.Context) ([]*model.Task, error)
 	return tasks, rows.Err()
 }
 
-// ClaimTaskForAdoption atomically claims a non-terminal task for re-adoption by
-// this instance, preventing duplicate execution across replicas. It works by
-// bumping updated_at inside a guarded transaction: only the first instance to
-// call this for a given task wins (subsequent callers see updated_at is too
-// recent and return claimed=false). The minAge threshold ensures two instances
-// starting simultaneously don't both adopt — the first one's updated_at bump
-// excludes the second.
-func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID string, minAge time.Duration) (*model.Task, bool, error) {
+// ClaimTaskForAdoption atomically acquires execution ownership of a task:
+// it succeeds when the task is unowned or the previous owner's lease
+// (leaseTTL since its last touch) has expired, and records instanceID as the
+// owner. Only the first caller wins; it is the fencing gate for task
+// execution across replicas.
+func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID, instanceID string, leaseTTL time.Duration) (*model.Task, bool, error) {
 	if s == nil {
 		return nil, false, nil
 	}
 	var claimed *model.Task
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		var adoptedBy sql.NullString
 		var updatedAt time.Time
-		if err := tx.QueryRowContext(ctx, `SELECT updated_at FROM tasks WHERE id=$1 FOR UPDATE`, taskID).Scan(&updatedAt); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT adopted_by, updated_at FROM tasks WHERE id=$1 FOR UPDATE`, taskID).Scan(&adoptedBy, &updatedAt); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return sql.ErrNoRows
 			}
 			return fmt.Errorf("claim task adoption: load: %w", err)
 		}
-		// Only adopt if the task hasn't been touched recently (another instance
-		// may have just adopted it).
-		cutoff := time.Now().Add(-minAge)
-		if updatedAt.After(cutoff) {
-			return nil // recently touched; don't claim
-		}
 		now := time.Now()
-		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET updated_at=$1 WHERE id=$2`, now, taskID); err != nil {
+		// Acquire when unowned, or when the previous owner's lease (its
+		// last touch + TTL) has expired: a live owner keeps the task.
+		if adoptedBy.Valid && adoptedBy.String != "" && updatedAt.After(now.Add(-leaseTTL)) {
+			return nil // owned and leased; don't steal
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE tasks SET adopted_by=$1, updated_at=$2 WHERE id=$3`, instanceID, now, taskID); err != nil {
 			return fmt.Errorf("claim task adoption: update: %w", err)
 		}
 		row := tx.QueryRowContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE id=$1`, taskID)
@@ -169,6 +167,36 @@ func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID string, minAge 
 		return nil, false, nil
 	}
 	return claimed, true, nil
+}
+
+// RenewTaskAdoption refreshes the owning instance's lease. It returns false
+// when ownership was lost (the lease expired and another instance claimed
+// the task), at which point the previous owner must stop executing.
+func (s *Store) RenewTaskAdoption(ctx context.Context, taskID, instanceID string) (bool, error) {
+	if s == nil {
+		return false, nil
+	}
+	result, err := s.db.ExecContext(ctx, `UPDATE tasks SET updated_at=$1 WHERE id=$2 AND adopted_by=$3`, time.Now(), taskID, instanceID)
+	if err != nil {
+		return false, fmt.Errorf("renew task adoption: %w", err)
+	}
+	renewed, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("renew task adoption: rows affected: %w", err)
+	}
+	return renewed > 0, nil
+}
+
+// ReleaseTaskAdoption clears ownership so any instance can pick the task up
+// (retry scheduling, terminal states). Only the recorded owner may release.
+func (s *Store) ReleaseTaskAdoption(ctx context.Context, taskID, instanceID string) error {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE tasks SET adopted_by='', updated_at=$1 WHERE id=$2 AND adopted_by=$3`, time.Now(), taskID, instanceID); err != nil {
+		return fmt.Errorf("release task adoption: %w", err)
+	}
+	return nil
 }
 
 // scanTaskRow scans a single task row from a QueryRow or rows.Next result.

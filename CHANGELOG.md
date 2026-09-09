@@ -6,6 +6,23 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Changed
+
+- Task execution no longer self-assigns. Tasks are enqueued pending and a
+  fenced adoption model runs them: a `tasks.adopted_by` column records the
+  owning instance, the executing instance renews its lease every 10s and
+  cancels itself if ownership is lost (no more double-execution when an
+  instance restarts under a long-running task), and an adoption sweep on
+  every instance claims due tasks nobody owns — recovering a dead
+  instance's work within ~35s instead of at the next restart, and spreading
+  retries across replicas. Retries release ownership after scheduling so
+  any instance can pick them up. `persistTask` retries and returns its
+  error, with call sites logging the concrete consequence of an undurable
+  write; a periodic sweeper prunes terminal tasks older than 24h, and
+  `CleanupOldTasks` now removes only terminal tasks (previously it deleted
+  any old row, including pending/running work). See
+  `server/docs/release-notes/2026-09-11-tasks-redesign.md`.
+
 ### Added
 
 - Idempotency keys on creates: `CreateRequest`, `ExecuteTool`,
