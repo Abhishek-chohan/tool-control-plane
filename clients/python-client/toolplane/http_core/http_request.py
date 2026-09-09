@@ -11,7 +11,11 @@ from ..common.constants import (
     DEFAULT_MAX_WORKERS,
     DEFAULT_POLL_INTERVAL,
 )
-from ..core.errors import RequestError, ToolplaneFailedPreconditionError
+from ..core.errors import (
+    RequestError,
+    ToolplaneFailedPreconditionError,
+    api_error_from_http_response,
+)
 from .http_connection import HTTPConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -549,6 +553,75 @@ class HTTPRequestManager:
         except Exception as e:
             raise RequestError(f"Failed to get request status: {e}")
 
+    def resume_stream(self, session_id: str, request_id: str, last_seq: int = 0):
+        """Resume a request chunk stream after the given absolute sequence.
+
+        Yields chunk dicts (seq, request_id, chunk, is_final, error) covering
+        everything the server still retains after last_seq. Raises
+        ToolplaneInvalidArgumentError (OUT_OF_RANGE) when the retained window
+        has moved past last_seq and replay is no longer possible.
+        """
+        response = None
+        try:
+            self.connection_manager.ensure_connected()
+            response = self.connection_manager.stream_post(
+                "api/ResumeStream",
+                {"sessionId": session_id, "requestId": request_id, "lastSeq": last_seq},
+            )
+
+            for line in response.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(chunk, dict) and isinstance(chunk.get("result"), dict):
+                    chunk = chunk["result"]
+
+                error_frame = chunk.get("error")
+                if isinstance(error_frame, dict):
+                    # The gateway wraps the gRPC status (with its numeric
+                    # code) in the error frame; surface the real code rather
+                    # than guessing.
+                    raise api_error_from_http_response(
+                        400,
+                        json.dumps({"error": error_frame}),
+                        context=f"Failed to resume stream for request {request_id}",
+                    )
+                error_text = error_frame if isinstance(error_frame, str) else ""
+                if error_text:
+                    raise api_error_from_http_response(
+                        400,
+                        json.dumps({"message": error_text}),
+                        context=f"Failed to resume stream for request {request_id}",
+                    )
+
+                if chunk.get("isFinal"):
+                    # The final marker is part of the stream contract even
+                    # when it carries no chunk payload.
+                    yield {
+                        "seq": int(chunk.get("seq", 0) or 0),
+                        "request_id": chunk.get("requestId", request_id),
+                        "chunk": chunk.get("chunk") or "",
+                        "is_final": True,
+                        "error": "",
+                    }
+                    return
+
+                value = chunk.get("chunk")
+                if value not in (None, ""):
+                    yield {
+                        "seq": int(chunk.get("seq", 0) or 0),
+                        "request_id": chunk.get("requestId", request_id),
+                        "chunk": value,
+                        "is_final": False,
+                        "error": "",
+                    }
+        finally:
+            if response is not None:
+                response.close()
+
     def list_requests(
         self,
         session_id: str,
@@ -581,11 +654,14 @@ class HTTPRequestManager:
         tool_name: str,
         input_data: str,
         timeout_seconds: int = 0,
+        idempotency_key: str = "",
     ) -> str:
         """Create a new request.
 
         timeout_seconds optionally overrides the absolute execution timeout;
-        zero keeps the server default.
+        zero keeps the server default. idempotency_key, when set, dedups
+        creates within the session: retrying with the same key returns the
+        original request instead of enqueueing duplicate work.
         """
         try:
             self.connection_manager.ensure_connected()
@@ -595,6 +671,8 @@ class HTTPRequestManager:
                 "toolName": tool_name,
                 "input": input_data,
             }
+            if idempotency_key:
+                payload["idempotencyKey"] = idempotency_key
             if timeout_seconds > 0:
                 payload["timeoutSeconds"] = timeout_seconds
 

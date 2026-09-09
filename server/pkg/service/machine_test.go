@@ -25,11 +25,11 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 		t.Fatalf("register machine: %v", err)
 	}
 
-	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0)
+	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create active request: %v", err)
 	}
-	queuedRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"queued"}`, 0)
+	queuedRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"queued"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create queued request: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestMachinesServiceDrainMachineWaitsForInflightRequestAndBlocksNewWork(t *t
 		t.Fatal("expected machine to be marked draining")
 	}
 
-	if _, err := requestService.CreateRequest(sessionID, "echo", `{"message":"new"}`, 0); err == nil {
+	if _, err := requestService.CreateRequest(sessionID, "echo", `{"message":"new"}`, 0, ""); err == nil {
 		t.Fatal("expected new requests to fail once drain starts")
 	}
 
@@ -117,7 +117,7 @@ func TestMachinesServiceDrainMachineWaitsForClaimedRequestUntilLeaseExpiryRequeu
 		t.Fatalf("register machine: %v", err)
 	}
 
-	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"claimed"}`, 0)
+	request, err := requestService.CreateRequest(sessionID, "echo", `{"message":"claimed"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

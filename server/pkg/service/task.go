@@ -102,23 +102,40 @@ func NewTasksService(ctx context.Context, toolService *ToolService, machinesServ
 	return service
 }
 
-// CreateTask creates a new task and schedules it for execution
-func (s *TasksService) CreateTask(sessionID, toolName, input string) (*model.Task, error) {
+// CreateTask creates a new task and schedules it for execution. With a
+// non-empty idempotencyKey, a retry returns the existing task without
+// scheduling it again.
+func (s *TasksService) CreateTask(sessionID, toolName, input, idempotencyKey string) (*model.Task, error) {
+	if idempotencyKey != "" {
+		if existing := s.findTaskByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
+			return existing, nil
+		}
+	}
+
 	// Create the task
 	task := model.NewTask(sessionID, toolName, input)
+	task.IdempotencyKey = idempotencyKey
 
-	// Store the task
+	// Persist-first so the store stays authoritative: a persist failure
+	// surfaces instead of leaving the local cache divergent, and a
+	// cross-replica key race (unique violation) returns the winner's task
+	// without scheduling this duplicate.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
+		if err := s.store.SaveTask(ctx, task); err != nil {
+			if idempotencyKey != "" && storage.IsUniqueViolation(err) {
+				if existing := s.findTaskByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
+					return existing, nil
+				}
+			}
+			return nil, fmt.Errorf("persist task create failed: %w", err)
+		}
+	}
+
 	s.tasksMutex.Lock()
 	s.tasks[task.ID] = task
 	s.tasksMutex.Unlock()
-
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveTask(ctx, task); err != nil {
-			log.Printf("persist task create failed: %v", err)
-		}
-	}
 
 	s.recordTaskEvent(task, trace.EventTaskCreated, nil)
 
@@ -126,6 +143,38 @@ func (s *TasksService) CreateTask(sessionID, toolName, input string) (*model.Tas
 	go s.executeTask(task)
 
 	return task, nil
+}
+
+// findTaskByIdempotencyKey resolves a dedup key to the session's task: the
+// local cache first, then the store, so a key minted on another replica also
+// dedups.
+func (s *TasksService) findTaskByIdempotencyKey(sessionID, idempotencyKey string) *model.Task {
+	s.tasksMutex.RLock()
+	for _, task := range s.tasks {
+		if task != nil && task.SessionID == sessionID && task.IdempotencyKey == idempotencyKey {
+			cloned := task.Clone()
+			s.tasksMutex.RUnlock()
+			return cloned
+		}
+	}
+	s.tasksMutex.RUnlock()
+
+	if s.store == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+	defer cancel()
+	found, err := s.store.GetTaskByIdempotencyKey(ctx, sessionID, idempotencyKey)
+	if err != nil || found == nil {
+		return nil
+	}
+	found = found.Clone()
+	s.tasksMutex.Lock()
+	if _, exists := s.tasks[found.ID]; !exists {
+		s.tasks[found.ID] = found.Clone()
+	}
+	s.tasksMutex.Unlock()
+	return found
 }
 
 // GetTask gets a task by ID
@@ -364,7 +413,7 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	// Give the underlying request the same absolute timeout as the task
 	// attempt so the lease reaper does not reclaim the request before the task
 	// deadline is reached (0 keeps the server default).
-	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input, task.TimeoutSeconds)
+	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input, task.TimeoutSeconds, "")
 	if err != nil {
 		return err
 	}

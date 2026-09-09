@@ -43,7 +43,7 @@ func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing
 		t.Fatalf("register machine: %v", err)
 	}
 
-	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0)
+	activeRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"active"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create active request: %v", err)
 	}
@@ -55,12 +55,12 @@ func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing
 		t.Fatalf("mark active request running: %v", err)
 	}
 
-	pendingRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"pending"}`, 0)
+	pendingRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"pending"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create pending request: %v", err)
 	}
 
-	cancelledRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"cancelled"}`, 0)
+	cancelledRequest, err := requestService.CreateRequest(sessionID, "echo", `{"message":"cancelled"}`, 0, "")
 	if err != nil {
 		t.Fatalf("create cancelled request: %v", err)
 	}

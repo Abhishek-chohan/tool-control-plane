@@ -29,7 +29,7 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 		t.Fatalf("register machine: %v", err)
 	}
 
-	task, err := tasksService.CreateTask(sessionID, "echo", `{"message":"cancel me"}`)
+	task, err := tasksService.CreateTask(sessionID, "echo", `{"message":"cancel me"}`, "")
 	if err != nil {
 		t.Fatalf("create task: %v", err)
 	}

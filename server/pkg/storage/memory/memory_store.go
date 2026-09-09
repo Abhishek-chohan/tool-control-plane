@@ -70,6 +70,20 @@ func (s *Store) AllRequests(ctx context.Context) ([]*model.Request, error) {
 	return out, nil
 }
 
+func (s *Store) GetRequestByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Request, error) {
+	if idempotencyKey == "" {
+		return nil, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, r := range s.requests {
+		if r.SessionID == sessionID && r.IdempotencyKey == idempotencyKey {
+			return cloneRequest(r), nil
+		}
+	}
+	return nil, nil
+}
+
 func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	if req == nil {
 		return nil
@@ -353,6 +367,20 @@ func (s *Store) AllTasks(ctx context.Context) ([]*model.Task, error) {
 		out = append(out, cloneTask(t))
 	}
 	return out, nil
+}
+
+func (s *Store) GetTaskByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Task, error) {
+	if idempotencyKey == "" {
+		return nil, nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.tasks {
+		if t.SessionID == sessionID && t.IdempotencyKey == idempotencyKey {
+			return cloneTask(t), nil
+		}
+	}
+	return nil, nil
 }
 
 func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {

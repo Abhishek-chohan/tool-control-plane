@@ -169,7 +169,9 @@ class BaseToolManager(ABC):
         """Get available tools from server (protocol-specific)."""
         pass
 
-    def execute_tool(self, session_id: str, tool_name: str, params: Dict) -> str:
+    def execute_tool(
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+    ) -> str:
         """Execute a tool and return request ID."""
         try:
             # Validate tool name
@@ -177,19 +179,23 @@ class BaseToolManager(ABC):
                 raise ToolError(f"Invalid tool name: {tool_name}")
 
             self.connection_manager.ensure_connected()
-            return self._execute_tool_on_server(session_id, tool_name, params)
+            return self._execute_tool_on_server(
+                session_id, tool_name, params, idempotency_key
+            )
 
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
     @abstractmethod
     def _execute_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
     ) -> str:
         """Execute tool on server (protocol-specific)."""
         pass
 
-    def stream_tool(self, session_id: str, tool_name: str, params: Dict):
+    def stream_tool(
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+    ):
         """Stream tool execution."""
         try:
             # Validate tool name
@@ -197,13 +203,17 @@ class BaseToolManager(ABC):
                 raise ToolError(f"Invalid tool name: {tool_name}")
 
             self.connection_manager.ensure_connected()
-            yield from self._stream_tool_on_server(session_id, tool_name, params)
+            yield from self._stream_tool_on_server(
+                session_id, tool_name, params, idempotency_key
+            )
 
         except Exception as e:
             raise ToolError(f"Failed to stream tool {tool_name}: {e}")
 
     @abstractmethod
-    def _stream_tool_on_server(self, session_id: str, tool_name: str, params: Dict):
+    def _stream_tool_on_server(
+        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+    ):
         """Stream tool execution on server (protocol-specific)."""
         pass
 

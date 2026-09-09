@@ -1,0 +1,23 @@
+{
+  "id": "request_idempotency_retry",
+  "feature": "request_create",
+  "description": "Creating a request with an idempotency key and retrying the same create with the same key returns the original request instead of enqueueing duplicate work; a different key creates a distinct request. This is the end-to-end dedup proof behind safe client retries.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-idempotency-session",
+    "description": "session for idempotency retry fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_idempotency_tool",
+    "tool_description": "conformance idempotency tool",
+    "params": {
+      "message": "retry-me"
+    },
+    "idempotency_key": "conformance-idempotency-key-1"
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "retry_returns_same_request": true,
+    "different_key_distinct_request": true
+  },
+  "tags": ["core", "request", "idempotency"]
+}

@@ -41,6 +41,10 @@ type Task struct {
 	// persisted with the task so any replica can answer chunk-replay reads for
 	// a running task, not just the replica executing it.
 	CurrentRequestID string `json:"currentRequestId,omitempty"`
+	// IdempotencyKey, when set by the caller, dedups creates within the
+	// session: re-creating with the same key returns the original task
+	// without re-executing it.
+	IdempotencyKey string `json:"idempotencyKey,omitempty"`
 }
 
 // Clone returns a copy safe to hand out of the service's cache: the struct

@@ -408,8 +408,22 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
         String(request.tool_description ?? 'conformance request tool'),
       );
 
-      const requestId = await adapter.createRequest(sessionId, toolName, (request.params as Record<string, unknown>) ?? {});
+      const idempotencyKey = String(request.idempotency_key ?? '');
+      const requestId = await adapter.createRequest(sessionId, toolName, (request.params as Record<string, unknown>) ?? {}, idempotencyKey);
       assertRequestIdNonEmpty(requestId, caseId, transport);
+
+      if (expected.retry_returns_same_request === true) {
+        const retryId = await adapter.createRequest(sessionId, toolName, (request.params as Record<string, unknown>) ?? {}, idempotencyKey);
+        if (retryId !== requestId) {
+          throw new Error(`[${transport}] ${caseId}: retry with idempotency key ${idempotencyKey} returned ${retryId}, want the original request ${requestId}`);
+        }
+      }
+      if (expected.different_key_distinct_request === true) {
+        const distinctId = await adapter.createRequest(sessionId, toolName, (request.params as Record<string, unknown>) ?? {}, `${idempotencyKey}-other`);
+        if (distinctId === requestId) {
+          throw new Error(`[${transport}] ${caseId}: a different idempotency key returned the original request ${requestId}`);
+        }
+      }
 
       const requestStatus = await adapter.getRequestStatus(sessionId, requestId);
       if ('status_equals' in expected) {

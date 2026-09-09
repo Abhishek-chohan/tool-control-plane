@@ -84,7 +84,7 @@ func newTaxonomyTestServer(t *testing.T) (*GRPCServer, *SessionsService, *Machin
 func TestClaimRequestErrorCodeTaxonomy(t *testing.T) {
 	server, _, machineService, requestService, _, machineID := newTaxonomyTestServer(t)
 
-	request, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0)
+	request, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestClaimRequestErrorCodeTaxonomy(t *testing.T) {
 	// getOrCreateDrainState marks the machine draining without starting the
 	// async unregister, keeping the state deterministic for the assertion.
 	machineService.getOrCreateDrainState("sess-taxonomy", machineID)
-	other, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0)
+	other, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0, "")
 	if err != nil {
 		t.Fatalf("create second request: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestClaimRequestErrorCodeTaxonomy(t *testing.T) {
 func TestCancelRequestErrorCodeTaxonomy(t *testing.T) {
 	server, _, _, requestService, _, _ := newTaxonomyTestServer(t)
 
-	request, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0)
+	request, err := requestService.CreateRequest("sess-taxonomy", "echo", `{}`, 0, "")
 	if err != nil {
 		t.Fatalf("create request: %v", err)
 	}

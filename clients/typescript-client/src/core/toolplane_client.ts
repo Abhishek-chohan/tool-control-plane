@@ -56,6 +56,7 @@ import {
   DeleteToolResponse as DeleteToolResponseMessage,
   DrainMachineRequest as DrainMachineMessage,
   DrainMachineResponse as DrainMachineResponseMessage,
+  ExecuteToolChunk as ExecuteToolChunkMessage,
   ExecuteToolRequest as ExecuteToolMessage,
   ExecuteToolResponse as ExecuteToolResponseMessage,
   GetMachineRequest as GetMachineMessage,
@@ -83,6 +84,7 @@ import {
   ListToolsResponse as ListToolsResponseMessage,
   Machine as ProtoMachine,
   RenewRequestLeaseRequest as RenewRequestLeaseMessage,
+  ResumeStreamRequest as ResumeStreamMessage,
   RevokeApiKeyRequest as RevokeApiKeyMessage,
   RevokeApiKeyResponse as RevokeApiKeyResponseMessage,
   RegisterMachineRequest as RegisterMachineMessage,
@@ -108,6 +110,16 @@ import {
   TasksServiceClient,
   ToolServiceClient,
 } from '../proto/proto/service_grpc_pb';
+
+/** A normalized execution chunk: the wire fields of ExecuteToolChunk as
+ * plain values, safe to hand to callers without the proto machinery. */
+export interface ExecuteToolChunkModel {
+  seq: number;
+  requestId: string;
+  chunk: string;
+  isFinal: boolean;
+  error: string;
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const REQUEST_POLL_INTERVAL_MS = 100;
@@ -284,8 +296,12 @@ export class ToolplaneClient {
     };
   }
 
-  async executeTool(toolName: string, params: Record<string, unknown> = {}): Promise<RequestModel> {
-    const request = await this.executeToolGRPC(toolName, params);
+  async executeTool(
+    toolName: string,
+    params: Record<string, unknown> = {},
+    options: { idempotencyKey?: string } = {},
+  ): Promise<RequestModel> {
+    const request = await this.executeToolGRPC(toolName, params, options.idempotencyKey ?? '');
     return this.normalizeRequest(request);
   }
 
@@ -661,13 +677,14 @@ export class ToolplaneClient {
     return response.getDrained();
   }
 
-  async createTask(toolName: string, input: string): Promise<Task> {
+  async createTask(toolName: string, input: string, idempotencyKey: string = ''): Promise<Task> {
     this.ensureGRPCConnected('task creation');
 
     const request = new CreateTaskMessage();
     request.setSessionId(this.getRequiredSessionId('task creation'));
     request.setToolName(toolName);
     request.setInput(input);
+    request.setIdempotencyKey(idempotencyKey);
 
     const response = await this.invokeGRPCUnary<ProtoTask>(
       (metadata, options, callback) => this.tasksClient!.createTask(request, metadata, options, callback),
@@ -721,13 +738,14 @@ export class ToolplaneClient {
     return response.getSuccess();
   }
 
-  async createRequest(toolName: string, input: string): Promise<RequestModel> {
+  async createRequest(toolName: string, input: string, idempotencyKey: string = ''): Promise<RequestModel> {
     this.ensureGRPCConnected('request creation');
 
     const request = new CreateRequestMessage();
     request.setSessionId(this.getRequiredSessionId('request creation'));
     request.setToolName(toolName);
     request.setInput(input);
+    request.setIdempotencyKey(idempotencyKey);
 
     const response = await this.invokeGRPCUnary<ProtoRequest>(
       (metadata, options, callback) => this.requestsClient!.createRequest(request, metadata, options, callback),
@@ -1000,13 +1018,56 @@ export class ToolplaneClient {
     return this.parseNumericResult(request.getResult(), toolName);
   }
 
-  private async executeToolGRPC(toolName: string, params: Record<string, unknown>): Promise<ProtoRequest> {
+  /**
+   * Replays the request's retained chunks that follow lastSeq and streams
+   * live chunks until the final marker. Resolving rejects with an
+   * OutOfRange-mapped error when the retained window has moved past lastSeq.
+   */
+  async resumeStream(
+    requestId: string,
+    lastSeq: number = 0,
+    onChunk?: (chunk: ExecuteToolChunkModel) => void,
+  ): Promise<ExecuteToolChunkModel[]> {
+    this.ensureGRPCConnected('stream resume');
+
+    const request = new ResumeStreamMessage();
+    request.setRequestId(requestId);
+    request.setLastSeq(lastSeq);
+
+    const stream = this.toolClient!.resumeStream(request, this.createMetadata());
+    const chunks: ExecuteToolChunkModel[] = [];
+
+    return new Promise((resolve, reject) => {
+      stream.on('data', (chunk: ExecuteToolChunkMessage) => {
+        const normalized = {
+          seq: chunk.getSeq(),
+          requestId: chunk.getRequestId(),
+          chunk: chunk.getChunk(),
+          isFinal: chunk.getIsFinal(),
+          error: chunk.getError(),
+        };
+        chunks.push(normalized);
+        onChunk?.(normalized);
+      });
+      stream.on('error', (error: grpc.ServiceError) => {
+        reject(this.translateGRPCError(error, `failed to resume stream for request ${requestId}`, requestId));
+      });
+      stream.on('end', () => resolve(chunks));
+    });
+  }
+
+  private async executeToolGRPC(
+    toolName: string,
+    params: Record<string, unknown>,
+    idempotencyKey: string = '',
+  ): Promise<ProtoRequest> {
     this.ensureGRPCConnected('tool execution');
 
     const request = new ExecuteToolMessage();
     request.setSessionId(this.getRequiredSessionId('tool execution'));
     request.setToolName(toolName);
     request.setInput(JSON.stringify(params));
+    request.setIdempotencyKey(idempotencyKey);
 
     const response = await this.invokeGRPCUnary<ExecuteToolResponseMessage>(
       (metadata, options, callback) => this.toolClient!.executeTool(request, metadata, options, callback),

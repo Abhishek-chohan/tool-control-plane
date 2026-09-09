@@ -6,6 +6,36 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Added
+
+- Idempotency keys on creates: `CreateRequest`, `ExecuteTool`,
+  `StreamExecuteTool`, and `CreateTask` accept an optional `idempotency_key`
+  that dedups within a session — a retry returns the original request (or
+  task, without re-executing it) instead of enqueueing duplicate work.
+  Backed by `requests`/`tasks.idempotency_key` columns with partial unique
+  indexes; a cross-replica race is settled by the index and the loser
+  re-reads the winner's row. All three SDKs expose the key, and the Python
+  `stream()` fallback re-invokes under one so a broken stream can no longer
+  double-execute a tool. See
+  `server/docs/release-notes/2026-09-10-idempotency-and-resume.md`.
+- `ResumeStream` wrappers in all three SDKs (Python gRPC + HTTP
+  `resume_stream()`, Go `ResumeStream()`, TypeScript `resumeStream()`):
+  replay retained chunks after `last_seq` and stream live until the final
+  marker. Conformance case `request_idempotency_retry` (grpc + http).
+- Go client: `WithExecutionTimeout(d)` replaces the hardcoded 30s
+  ExecuteTool/stream ceiling; caller deadlines still win.
+
+### Fixed
+
+- The Python `stream()` fallback re-invoked the tool on any stream failure —
+  including a completed-but-failed tool — executing it twice. It now resumes
+  from the last received sequence via `ResumeStream`, or re-invokes under an
+  idempotency key when the stream died before the first chunk; tool failures
+  surface instead of re-executing.
+- The request reaper mutated cached requests after releasing the read lock
+  while drain polls counted them under it (found by the re-enabled race
+  detector); the mutation now holds the write lock.
+
 ### Changed
 
 - Multi-instance coherence: with a shared store configured, the store is now
