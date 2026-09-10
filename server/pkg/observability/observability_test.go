@@ -10,12 +10,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"toolplane/pkg/model"
 	"toolplane/pkg/storage/memory"
 	"toolplane/pkg/trace"
 )
@@ -77,14 +79,26 @@ func TestGRPCInterceptorSurfacesTraceparentOnFailureLog(t *testing.T) {
 
 func TestAuditRecorderPersistsFilteredEvents(t *testing.T) {
 	store := memory.New()
-	recorder := NewAuditRecorder(context.Background(), store)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recorder := NewAuditRecorder(ctx, store)
 
 	recorder.Record(trace.SessionEvent{Event: trace.EventSessionCreated, SessionID: "s1"})
 	recorder.Record(trace.SessionEvent{Event: trace.EventAPIKeyRevoked, SessionID: "s1"})
 	recorder.Record(trace.SessionEvent{Event: trace.EventRequestClaimed, SessionID: "s1"}) // high-frequency: excluded
 	recorder.Record(trace.SessionEvent{Event: trace.EventTaskDeadLettered, SessionID: "s1", TaskID: "t1"})
 
-	events := store.AuditEvents()
+	// Writes are asynchronous (the recorder must never block its caller);
+	// wait for the three durable rows to land.
+	var events []*model.AuditEvent
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		events = store.AuditEvents()
+		if len(events) == 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if len(events) != 3 {
 		t.Fatalf("retained %d audit events, want 3 (high-frequency excluded)", len(events))
 	}

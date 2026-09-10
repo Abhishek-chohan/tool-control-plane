@@ -23,6 +23,9 @@ type MethodPolicy struct {
 	Capability  model.APIKeyCapability
 	BindSession bool
 	BindUser    bool
+	// Public marks unauthenticated surface: standard infrastructure
+	// probes that must answer before any credential exists (grpc.health.v1).
+	Public bool
 }
 
 type sessionScopedRequest interface {
@@ -114,6 +117,12 @@ func (a *APIKeyAuthorizer) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (interface{}, error) {
+		if policy, ok := methodPolicyFor(info.FullMethod); ok && policy.Public {
+			// Infrastructure probes carry no credentials by design.
+			ctx = NewContext(ctx, anonymousPrincipal())
+			return handler(ctx, req)
+		}
+
 		principal, authErr := a.authenticateRequest(ctx)
 		if authErr != nil {
 			a.recordRejected("", info.FullMethod, "authentication_failed", authErr.Error(), redactTokenFromContext(ctx))
@@ -145,6 +154,10 @@ func (a *APIKeyAuthorizer) StreamInterceptor() grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
+		if policy, ok := methodPolicyFor(info.FullMethod); ok && policy.Public {
+			return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: NewContext(ss.Context(), anonymousPrincipal())})
+		}
+
 		principal, authErr := a.authenticateRequest(ss.Context())
 		if authErr != nil {
 			a.recordRejected("", info.FullMethod, "authentication_failed", authErr.Error(), redactTokenFromContext(ss.Context()))
@@ -362,6 +375,8 @@ func methodPolicyFor(fullMethod string) (MethodPolicy, bool) {
 // The legacy "execute" capability satisfies both invoke and provide (it
 // normalizes to invoke+provide), so pre-split keys keep working.
 var methodPolicies = map[string]MethodPolicy{
+	"/grpc.health.v1.Health/Check":             {Public: true},
+	"/grpc.health.v1.Health/Watch":             {Public: true},
 	"/api.ToolService/RegisterTool":            {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.ToolService/ListTools":               {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.ToolService/GetToolById":             {Capability: model.APIKeyCapabilityRead, BindSession: true},
@@ -412,3 +427,12 @@ func DebugPrincipal(principal *model.AuthPrincipal) string {
 	}
 	return fmt.Sprintf("mode=%s session=%s user=%s key=%s caps=%v", principal.Mode, principal.SessionID, principal.UserID, principal.KeyID, model.CapabilityStrings(principal.Capabilities))
 }
+
+// wrappedServerStream overrides the context of a server stream so public
+// methods can run with an anonymous principal without re-authenticating.
+type wrappedServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedServerStream) Context() context.Context { return w.ctx }

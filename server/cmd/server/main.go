@@ -41,6 +41,13 @@ func storeClose(store storage.Storer) error {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+// run owns the process lifecycle and returns the exit code; every path
+// returns normally so the deferred storage close runs — os.Exit lives only
+// in main, above.
+func run() int {
 	port := flag.Int("port", 9001, "Port for gRPC server")
 	enableTrace := flag.Bool("trace-sessions", false, "Log session lifecycle tracing events")
 	metricsListen := flag.String("metrics-listen", "127.0.0.1:0", "HTTP listen address for Prometheus metrics; empty disables the endpoint")
@@ -59,13 +66,13 @@ func main() {
 	cfg, err := loadServerConfig()
 	if err != nil {
 		slog.Error("invalid server configuration", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
 	// migrate-only does not start the gRPC server, so transport settings are not required.
 	if !*migrateOnly {
 		if err := validateGRPCTLSSettings(cfg.environment, *tlsCertFile, *tlsKeyFile); err != nil {
 			slog.Error("invalid gRPC TLS configuration", slog.Any("err", err))
-			os.Exit(1)
+			return 1
 		}
 	}
 
@@ -86,10 +93,10 @@ func main() {
 			slog.Info("storage mode: explicit in-memory")
 		case errors.Is(err, storage.ErrConfigMissing):
 			slog.Error("storage configuration error", slog.Any("err", err))
-			os.Exit(1)
+			return 1
 		default:
 			slog.Error("failed to initialize storage", slog.Any("err", err))
-			os.Exit(1)
+			return 1
 		}
 	} else {
 		store = pgStore
@@ -102,10 +109,10 @@ func main() {
 	if *migrateOnly {
 		if pgStore == nil {
 			slog.Error("migrate-only requires Postgres-backed storage")
-			os.Exit(1)
+			return 1
 		}
 		slog.Info("database schema ready", "env", cfg.environment, "storage", "postgres")
-		return
+		return 0
 	}
 
 	// The durable audit trail piggybacks on lifecycle events; failures
@@ -137,19 +144,19 @@ func main() {
 	authenticateAPIKey, authSummary, err := cfg.buildAuthenticator(postgresAuthenticator)
 	if err != nil {
 		slog.Error("failed to configure auth", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		slog.Error("failed to listen", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
 
 	serverOptions, transportSummary, err := grpcServerTransport(*tlsCertFile, *tlsKeyFile)
 	if err != nil {
 		slog.Error("failed to configure gRPC transport", slog.Any("err", err))
-		os.Exit(1)
+		return 1
 	}
 	// Explicit message bounds and keepalive enforcement: the defaults leave
 	// message size implicit (4MiB) and idle connections unpoliced. 16MiB
@@ -196,9 +203,13 @@ func main() {
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthSrv)
 
-	metricsErr := startMetricsServer(ctx, *metricsListen, metricsCollector)
+	metricsDone := startMetricsServer(ctx, *metricsListen, metricsCollector)
 
-	// graceful shutdown
+	// The shutdown goroutine owns the drain and nothing else: it never
+	// consumes the serve/metrics channels, so the main select below is
+	// their single reader (a shared channel consumed from two selects can
+	// deadlock when one receiver blocks forever on a result the other
+	// already took).
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	stopDone := make(chan struct{})
@@ -221,9 +232,6 @@ func main() {
 		case <-time.After(20 * time.Second):
 			slog.Warn("graceful stop deadline exceeded; forcing stop")
 			server.Stop()
-		}
-		if metricsErr != nil {
-			<-metricsDone(metricsErr)
 		}
 	}()
 
@@ -248,38 +256,40 @@ func main() {
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(lis) }()
 
-	// Single exit path: a signal drains gracefully; an unsolicited serve
-	// failure (from either server) tears everything down without skipping
-	// the deferred store close.
+	// Single exit path. A signal drains gracefully; an unsolicited serve
+	// failure tears everything down; a nil serve result means GracefulStop
+	// completed. Every path joins the drain (stopDone) before returning so
+	// the deferred storage close runs with both servers fully stopped.
 	exitCode := 0
-	select {
-	case err := <-serveErr:
-		if err != nil {
-			slog.Error("gRPC serve error", slog.Any("err", err))
-			exitCode = 1
-			cancel()
-			healthSrv.Shutdown()
-			server.Stop()
+	for {
+		select {
+		case err := <-serveErr:
+			if err != nil {
+				slog.Error("gRPC serve error", slog.Any("err", err))
+				exitCode = 1
+				cancel()
+				healthSrv.Shutdown()
+				server.Stop()
+			}
+			<-stopDone
+			return exitCode
+		case err := <-metricsDone:
+			if err != nil {
+				slog.Error("metrics serve error", slog.Any("err", err))
+				exitCode = 1
+				cancel()
+				healthSrv.Shutdown()
+				server.Stop()
+				<-stopDone
+				return exitCode
+			}
+			// nil: the metrics server drained as part of shutdown — keep
+			// waiting for the gRPC result or the drain completion.
+			metricsDone = nil
+		case <-stopDone:
+			return exitCode
 		}
-	case err := <-metricsErr:
-		slog.Error("metrics serve error", slog.Any("err", err))
-		exitCode = 1
-		cancel()
-		healthSrv.Shutdown()
-		server.Stop()
-	case <-stopDone:
 	}
-	if exitCode != 0 {
-		// Give the forced stop a moment to unblock Serve before defers run.
-		<-stopDone
-	}
-	os.Exit(exitCode)
-}
-
-// metricsDone blocks until the metrics server reports a terminal outcome;
-// used by the shutdown path to avoid exiting before its error is observed.
-func metricsDone(errCh <-chan error) <-chan error {
-	return errCh
 }
 
 // startMetricsServer serves /metrics and reports its terminal outcome on

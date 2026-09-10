@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -209,9 +210,14 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 	if s == nil || event == nil {
 		return nil
 	}
+	// map[string]any is not a bindable driver value: marshal to JSON like
+	// every other JSONB write. Unrepresentable values drop the details
+	// rather than failing the row.
 	var details any
 	if len(event.Details) > 0 {
-		details = event.Details
+		if encoded, err := json.Marshal(event.Details); err == nil {
+			details = encoded
+		}
 	}
 	if _, err := s.db.ExecContext(ctx, `
         INSERT INTO audit_events (created_at, event, session_id, machine_id, request_id, task_id, details)

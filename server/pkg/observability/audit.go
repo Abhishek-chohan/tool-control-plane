@@ -31,19 +31,35 @@ var auditedEvents = map[trace.SessionEventType]bool{
 	trace.EventTaskDeadLettered:    true,
 }
 
+const (
+	// auditQueueCapacity bounds queued audit writes. The producing
+	// operation never blocks: when the queue is full the event is dropped
+	// with a log line — an audit trail must not stall user requests.
+	auditQueueCapacity = 256
+	// auditWriteTimeout bounds one persistence attempt in the writer
+	// goroutine (invisible to producers).
+	auditWriteTimeout = 2 * time.Second
+)
+
 // AuditRecorder implements trace.SessionTracer, persisting the audited
-// event subset. Persistence failures are logged with full event identity
-// and dropped: the audit trail must never block or fail the user operation
-// that produced the event.
+// event subset through a bounded asynchronous queue. Record never blocks
+// the caller; a full queue drops the event with a log line, and
+// persistence failures are logged with full event identity.
 type AuditRecorder struct {
 	store AuditStore
-	ctx   context.Context
+	queue chan *model.AuditEvent
 }
 
-// NewAuditRecorder builds the recorder; ctx bounds persistence calls (the
-// server's lifecycle context, so shutdown stops in-flight writes).
+// NewAuditRecorder builds the recorder and starts its single writer
+// goroutine. Shutdown is driven by ctx: the writer drains queued events
+// best-effort and exits.
 func NewAuditRecorder(ctx context.Context, store AuditStore) *AuditRecorder {
-	return &AuditRecorder{store: store, ctx: ctx}
+	r := &AuditRecorder{
+		store: store,
+		queue: make(chan *model.AuditEvent, auditQueueCapacity),
+	}
+	go r.writeLoop(ctx)
+	return r
 }
 
 // Record implements trace.SessionTracer.
@@ -62,15 +78,48 @@ func (r *AuditRecorder) Record(event trace.SessionEvent) {
 		Details:   event.Metadata,
 	}
 
-	ctx, cancel := context.WithTimeout(r.ctx, 2*time.Second)
-	defer cancel()
-	if err := r.store.RecordAuditEvent(ctx, audit); err != nil {
-		slog.ErrorContext(r.ctx, "audit event not durable",
+	select {
+	case r.queue <- audit:
+	default:
+		slog.Warn("audit event dropped: queue full",
 			slog.String("event", audit.Event),
 			slog.String("sessionId", audit.SessionID),
-			slog.String("machineId", audit.MachineID),
-			slog.String("requestId", audit.RequestID),
-			slog.String("taskId", audit.TaskID),
+		)
+	}
+}
+
+// writeLoop is the single writer: producers only enqueue. The shutdown
+// drain is best-effort and write deadlines keep it bounded.
+func (r *AuditRecorder) writeLoop(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			for {
+				select {
+				case event := <-r.queue:
+					drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), auditWriteTimeout)
+					r.persist(drainCtx, event)
+					cancel()
+				default:
+					return
+				}
+			}
+		case event := <-r.queue:
+			writeCtx, cancel := context.WithTimeout(ctx, auditWriteTimeout)
+			r.persist(writeCtx, event)
+			cancel()
+		}
+	}
+}
+
+func (r *AuditRecorder) persist(ctx context.Context, event *model.AuditEvent) {
+	if err := r.store.RecordAuditEvent(ctx, event); err != nil {
+		slog.ErrorContext(ctx, "audit event not durable",
+			slog.String("event", event.Event),
+			slog.String("sessionId", event.SessionID),
+			slog.String("machineId", event.MachineID),
+			slog.String("requestId", event.RequestID),
+			slog.String("taskId", event.TaskID),
 			slog.Any("err", err),
 		)
 	}
