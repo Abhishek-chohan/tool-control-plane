@@ -86,6 +86,36 @@ func (s *Store) GetRequestByIdempotencyKey(ctx context.Context, sessionID, idemp
 	return nil, nil
 }
 
+// GetRequestChunksByRequest mirrors the Postgres chunk-table read over the
+// in-memory model: the retained window for the advertised bookkeeping.
+func (s *Store) GetRequestChunksByRequest(ctx context.Context, requestID string, startSeq, nextSeq int32) (model.RequestChunkWindow, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.requests[requestID]
+	if !ok {
+		return model.RequestChunkWindow{StartSeq: startSeq, NextSeq: nextSeq}, nil
+	}
+	r.EnsureStreamSequenceDefaults()
+	full := r.StreamChunkWindow()
+	// Clamp the requested window into the retained one: never hand out seqs
+	// the model does not hold.
+	if startSeq < full.StartSeq {
+		startSeq = full.StartSeq
+	}
+	if nextSeq > full.NextSeq {
+		nextSeq = full.NextSeq
+	}
+	window := model.RequestChunkWindow{StartSeq: startSeq, NextSeq: nextSeq}
+	for i, chunk := range full.Chunks {
+		seq := full.StartSeq + int32(i)
+		if seq < startSeq || seq >= nextSeq {
+			continue
+		}
+		window.Chunks = append(window.Chunks, chunk)
+	}
+	return window, nil
+}
+
 func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	if req == nil {
 		return nil

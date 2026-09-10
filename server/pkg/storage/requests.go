@@ -321,6 +321,37 @@ func (s *Store) GetRequestByIdempotencyKey(ctx context.Context, sessionID, idemp
 	return req, nil
 }
 
+// GetRequestChunksByRequest reads the retained chunk window from the
+// append-only chunk table: chunks with startSeq <= seq < nextSeq, ascending.
+// Callers pass the request row's current bookkeeping so the window matches
+// what the row advertises.
+func (s *Store) GetRequestChunksByRequest(ctx context.Context, requestID string, startSeq, nextSeq int32) (model.RequestChunkWindow, error) {
+	if s == nil {
+		return model.RequestChunkWindow{}, nil
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT seq, chunk FROM request_chunks WHERE request_id=$1 AND seq >= $2 AND seq < $3 ORDER BY seq ASC`,
+		requestID, int(startSeq), int(nextSeq))
+	if err != nil {
+		return model.RequestChunkWindow{}, fmt.Errorf("query request chunks: %w", err)
+	}
+	defer rows.Close()
+
+	window := model.RequestChunkWindow{StartSeq: startSeq, NextSeq: nextSeq}
+	for rows.Next() {
+		var seq int32
+		var chunk string
+		if err := rows.Scan(&seq, &chunk); err != nil {
+			return model.RequestChunkWindow{}, fmt.Errorf("scan request chunk: %w", err)
+		}
+		if seq != window.StartSeq+int32(len(window.Chunks)) {
+			return model.RequestChunkWindow{}, fmt.Errorf("chunk table gap for request %s: seq %d out of sequence", requestID, seq)
+		}
+		window.Chunks = append(window.Chunks, chunk)
+	}
+	return window, rows.Err()
+}
+
 func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error) {
 	if s == nil {
 		return nil, nil
