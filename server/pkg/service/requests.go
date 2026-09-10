@@ -195,6 +195,9 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	})
 
 	s.notifyRequestUpdate(request.ID)
+	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+		s.releaseRequestSignal(request.ID)
+	}
 
 	return request.Clone(), nil
 }
@@ -589,6 +592,9 @@ func (s *RequestsService) updateRequestViaStore(
 	}
 
 	s.notifyRequestUpdate(updated.ID)
+	if updated.Status == model.RequestStatusDone || updated.Status == model.RequestStatusFailed {
+		s.releaseRequestSignal(updated.ID)
+	}
 
 	return updated, nil
 }
@@ -813,6 +819,10 @@ func (s *RequestsService) SubmitRequestResult(
 		s.mirrorRequestLocked(submitted)
 		s.recordSubmitEvents(submitted, resultType)
 		s.notifyRequestUpdate(submitted.ID)
+		if resultType != model.ResultTypeStreaming {
+			// Terminal: nothing will broadcast again.
+			s.releaseRequestSignal(submitted.ID)
+		}
 		return nil
 	}
 
@@ -874,6 +884,8 @@ func (s *RequestsService) SubmitRequestResult(
 
 	s.recordSubmitEvents(request, resultType)
 	s.notifyRequestUpdate(request.ID)
+	// Resolution/rejection are terminal: nothing will broadcast again.
+	s.releaseRequestSignal(request.ID)
 
 	return nil
 }
@@ -935,6 +947,7 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 	}
 
 	s.notifyRequestUpdate(request.ID)
+	s.releaseRequestSignal(request.ID)
 
 	return nil
 }
@@ -950,6 +963,14 @@ func (s *RequestsService) AppendRequestChunks(
 	chunks []string,
 	resultType model.ResultType,
 ) error {
+	// Payload bound: reject oversized chunks before touching state so a
+	// provider cannot park unbounded bytes in the retained window.
+	for _, chunk := range chunks {
+		if len(chunk) > model.MaxRequestChunkBytes {
+			return wrapf(ErrInvalidArgument, "chunk %d bytes exceeds the %d byte limit", len(chunk), model.MaxRequestChunkBytes)
+		}
+	}
+
 	s.requestsMutex.Lock()
 	defer s.requestsMutex.Unlock()
 
@@ -1069,55 +1090,99 @@ func (s *RequestsService) GetRequestChunks(sessionID, requestID string) (model.R
 }
 
 // GetRequestStream returns a stable snapshot of the current retained stream window.
+// With a store configured, the window is read from the append-only chunk
+// table (chunks from other replicas included); the in-memory model is the
+// dev-mode source.
 func (s *RequestsService) GetRequestStream(sessionID, requestID string) (*RequestStreamSnapshot, error) {
-	s.requestsMutex.RLock()
-	defer s.requestsMutex.RUnlock()
-
-	request, err := s.cloneRequestLocked(sessionID, requestID)
+	snapshot, err := s.requestStreamSnapshot(sessionID, requestID, -1)
 	if err != nil {
 		return nil, err
 	}
-
-	return snapshotRequestStreamLocked(request), nil
+	return snapshot, nil
 }
 
 // GetRequestStreamAnySession returns a retained stream snapshot without requiring a session ID.
 func (s *RequestsService) GetRequestStreamAnySession(requestID string) (*RequestStreamSnapshot, error) {
-	s.requestsMutex.RLock()
-	defer s.requestsMutex.RUnlock()
-
-	request, err := s.cloneRequestAnySessionLocked(requestID)
-	if err != nil {
-		return nil, err
-	}
-
-	return snapshotRequestStreamLocked(request), nil
+	return s.requestStreamSnapshot("", requestID, -1)
 }
 
 // GetRequestReplayStream returns only the retained chunks that follow lastSeq.
 func (s *RequestsService) GetRequestReplayStream(sessionID, requestID string, lastSeq int32) (*RequestStreamSnapshot, error) {
-	s.requestsMutex.RLock()
-	defer s.requestsMutex.RUnlock()
-
-	request, err := s.cloneRequestLocked(sessionID, requestID)
-	if err != nil {
-		return nil, err
-	}
-
-	return snapshotRequestReplayLocked(request, lastSeq)
+	return s.requestStreamSnapshot(sessionID, requestID, lastSeq)
 }
 
 // GetRequestReplayStreamAnySession returns only the retained chunks that follow lastSeq.
 func (s *RequestsService) GetRequestReplayStreamAnySession(requestID string, lastSeq int32) (*RequestStreamSnapshot, error) {
-	s.requestsMutex.RLock()
-	defer s.requestsMutex.RUnlock()
+	return s.requestStreamSnapshot("", requestID, lastSeq)
+}
 
-	request, err := s.cloneRequestAnySessionLocked(requestID)
+// requestStreamSnapshot composes the stream snapshot: the request's status
+// and seq bookkeeping (cache, then store read-through) plus its retained
+// chunk window. lastSeq >= 0 selects replay semantics (chunks after lastSeq,
+// OUT_OF_RANGE when the window moved past it); a negative lastSeq selects the
+// full retained window.
+func (s *RequestsService) requestStreamSnapshot(sessionID, requestID string, lastSeq int32) (*RequestStreamSnapshot, error) {
+	request, err := s.lookupRequestForStream(sessionID, requestID)
 	if err != nil {
 		return nil, err
 	}
 
-	return snapshotRequestReplayLocked(request, lastSeq)
+	snapshot := snapshotRequestStreamLocked(request)
+
+	// Resolve the authoritative window BEFORE any replay slicing. In
+	// store-backed mode the row model's StreamResults is empty (payloads
+	// live in the chunk table), so slicing the model window directly would
+	// panic; the table window is the consistent one. In-memory dev mode
+	// keeps the model window.
+	if s.store != nil {
+		request.EnsureStreamSequenceDefaults()
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		window, windowErr := s.store.GetRequestChunksByRequest(ctx, request.ID, request.StreamStartSeq, request.NextStreamSeq)
+		cancel()
+		if windowErr != nil {
+			return nil, fmt.Errorf("persist request chunk read failed: %w", windowErr)
+		}
+		snapshot.Window = window
+	}
+
+	if lastSeq >= 0 {
+		// Replay: only chunks after lastSeq. A request behind the retained
+		// start is OUT_OF_RANGE (RequestStreamExpiredError).
+		nextSeq := lastSeq + 1
+		window := snapshot.Window
+		if nextSeq < window.StartSeq && nextSeq < window.NextSeq {
+			return nil, &RequestStreamExpiredError{
+				RequestID: request.ID,
+				LastSeq:   lastSeq,
+				StartSeq:  window.StartSeq,
+				NextSeq:   window.NextSeq,
+			}
+		}
+		if nextSeq < window.StartSeq {
+			nextSeq = window.StartSeq
+		}
+		if nextSeq >= window.NextSeq {
+			snapshot.Window = model.RequestChunkWindow{StartSeq: window.NextSeq, NextSeq: window.NextSeq, Chunks: []string{}}
+		} else {
+			startIndex := int(nextSeq - window.StartSeq)
+			snapshot.Window = model.RequestChunkWindow{
+				StartSeq: nextSeq,
+				NextSeq:  window.NextSeq,
+				Chunks:   append([]string(nil), window.Chunks[startIndex:]...),
+			}
+		}
+	}
+	return snapshot, nil
+}
+
+// lookupRequestForStream resolves the request for a stream read: session-
+// scoped when sessionID is given, any-session otherwise. The store
+// read-through populates the cache exactly like the plain getters.
+func (s *RequestsService) lookupRequestForStream(sessionID, requestID string) (*model.Request, error) {
+	if sessionID != "" {
+		return s.GetRequestByID(sessionID, requestID)
+	}
+	return s.GetRequestByIDAnySession(requestID)
 }
 
 // ActiveRequestsForMachine returns the number of claimed or running requests still assigned to a machine.
@@ -1314,12 +1379,14 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 
 		switch req.Status {
 		case model.RequestStatusDone:
+			s.releaseRequestSignal(req.ID)
 			return &model.ToolResult{
 				RequestID:  req.ID,
 				Result:     fmt.Sprintf("%v", req.Result),
 				ResultType: string(req.ResultType),
 			}, nil
 		case model.RequestStatusFailed:
+			s.releaseRequestSignal(req.ID)
 			if req.Error != "" {
 				return nil, fmt.Errorf("tool execution failed: %s", req.Error)
 			}
@@ -1511,24 +1578,6 @@ func snapshotRequestStreamLocked(request *model.Request) *RequestStreamSnapshot 
 	}
 }
 
-func snapshotRequestReplayLocked(request *model.Request, lastSeq int32) (*RequestStreamSnapshot, error) {
-	snapshot := snapshotRequestStreamLocked(request)
-	if lastSeq < 0 {
-		lastSeq = 0
-	}
-	requestedSeq := lastSeq + 1
-	if requestedSeq < snapshot.Window.StartSeq && requestedSeq < snapshot.Window.NextSeq {
-		return nil, &RequestStreamExpiredError{
-			RequestID: snapshot.RequestID,
-			LastSeq:   lastSeq,
-			StartSeq:  snapshot.Window.StartSeq,
-			NextSeq:   snapshot.Window.NextSeq,
-		}
-	}
-	snapshot.Window = request.StreamChunkWindowAfter(lastSeq)
-	return snapshot, nil
-}
-
 func (s *RequestsService) notifyRequestUpdate(requestID string) {
 	if requestID == "" {
 		return
@@ -1536,6 +1585,21 @@ func (s *RequestsService) notifyRequestUpdate(requestID string) {
 	val, _ := s.signals.LoadOrStore(requestID, newRequestSignal())
 	sig := val.(*requestSignal)
 	sig.broadcast()
+}
+
+// releaseRequestSignal drops a request's broadcast entry. The signal map is
+// a bus, not a registry: once a request reaches a terminal state nothing
+// will ever broadcast again, so terminal transitions release the entry
+// instead of leaking one per request for the life of the process. Callers
+// invoke it where the terminal transition is known; late subscribers
+// recreate a fresh entry via LoadOrStore. Must not be called while holding
+// requestsMutex (callers that hold it know the terminal state already and
+// call this after unlock).
+func (s *RequestsService) releaseRequestSignal(requestID string) {
+	if requestID == "" {
+		return
+	}
+	s.signals.Delete(requestID)
 }
 
 func (s *RequestsService) subscribeRequest(requestID string) <-chan struct{} {

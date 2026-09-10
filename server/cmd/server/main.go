@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"toolplane/pkg/model"
 	"toolplane/pkg/observability"
 	"toolplane/pkg/service"
@@ -119,6 +120,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to configure gRPC transport: %v", err)
 	}
+	// Explicit message bounds and keepalive enforcement: the defaults leave
+	// message size implicit (4MiB) and idle connections unpoliced. 16MiB
+	// accommodates a full chunk batch (32 x 512KiB) per RPC. MinTime must
+	// stay below the proxy/gateway ping interval (10s): a client pinging at
+	// or under MinTime gets GOAWAY and its connection killed.
+	serverOptions = append(serverOptions,
+		grpc.MaxRecvMsgSize(model.MaxChunkBatchBytes),
+		grpc.MaxSendMsgSize(model.MaxChunkBatchBytes),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: true,
+		}),
+	)
 	if authenticateAPIKey != nil {
 		authorizer := auth.NewAPIKeyAuthorizer(
 			authenticateAPIKey,

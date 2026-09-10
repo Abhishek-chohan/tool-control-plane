@@ -14,6 +14,7 @@ from toolplane.proto.service_pb2 import (
     CancelRequestRequest,
     ClaimRequestRequest,
     CreateRequestRequest,
+    GetRequestChunksRequest,
     GetRequestRequest,
     ListRequestsRequest,
     RenewRequestLeaseRequest,
@@ -680,7 +681,12 @@ class RequestManager:
             raise RequestError(f"Failed to list requests: {e}")
 
     def get_request_status(self, session_id: str, request_id: str) -> Dict[str, Any]:
-        """Get request status."""
+        """Get request status, with the retained chunk window attached.
+
+        The request message no longer carries chunk payloads; the window is
+        fetched from the chunks endpoint so poll-based consumers see the
+        same data as resume-stream consumers.
+        """
         try:
             self.connection_manager.ensure_connected()
 
@@ -690,7 +696,23 @@ class RequestManager:
                 request, metadata=self.connection_manager.get_metadata()
             )
 
-            return self._normalize_request(response)
+            result = self._normalize_request(response)
+
+            try:
+                chunks_request = GetRequestChunksRequest(
+                    session_id=session_id, request_id=request_id
+                )
+                chunks_response = (
+                    self.connection_manager.requests_stub.GetRequestChunks(
+                        chunks_request, metadata=self.connection_manager.get_metadata()
+                    )
+                )
+                if chunks_response.chunks:
+                    result["streamResults"] = list(chunks_response.chunks)
+            except Exception:
+                pass
+
+            return result
 
         except Exception as e:
             raise RequestError(f"Failed to get request status: {e}")
