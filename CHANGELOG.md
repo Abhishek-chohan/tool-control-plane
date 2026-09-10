@@ -8,6 +8,23 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- Chunk storage redesign: stream chunks moved out of the `requests` row's
+  JSONB array (rewritten whole on every append) into an append-only
+  `request_chunks` table. Fenced appends insert chunk rows and update only
+  the request row's sequence bookkeeping, trimming the table to the newest
+  100 chunks / 8 MiB payload; chunk windows are served from the table, so
+  replica B sees replica A's chunks without cache mirroring. Worst-case
+  retained window per request drops from ~400 MiB to ~8 MiB. Chunks above
+  512 KiB are rejected with `INVALID_ARGUMENT`. See
+  `server/docs/release-notes/2026-09-11-chunk-storage.md`.
+- `StreamExecuteTool` and `ResumeStream` deliver chunks on append signal
+  (microsecond latency) instead of a 200 ms poll, with a 2 s fallback
+  timer; the request signal map now releases entries on terminal
+  transitions instead of leaking one per request.
+- The gRPC server sets explicit `MaxRecvMsgSize`/`MaxSendMsgSize` (16 MiB,
+  sized for a full chunk batch) and a keepalive enforcement policy
+  (MinTime 5s — below the proxy/gateway 10s ping cadence; stricter values
+  kill proxy connections via GOAWAY).
 - Task execution no longer self-assigns. Tasks are enqueued pending and a
   fenced adoption model runs them: a `tasks.adopted_by` column records the
   owning instance, the executing instance renews its lease every 10s and

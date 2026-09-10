@@ -169,18 +169,44 @@ func (r *Request) EnsureStreamSequenceDefaults() {
 }
 
 // AddStreamChunk adds a chunk to the retained stream window and returns its absolute sequence number.
+// The window is bounded twice: by count (maxRequestStreamChunks) and by total
+// payload bytes (maxRequestStreamWindowBytes). When a bound is exceeded the
+// oldest chunks are dropped and StartSeq advances, so consumers resuming from
+// a trimmed sequence see the retained window's true start.
 func (r *Request) AddStreamChunk(chunk string) int32 {
 	r.EnsureStreamSequenceDefaults()
 	seq := r.NextStreamSeq
 	r.StreamResults = append(r.StreamResults, chunk)
 	r.NextStreamSeq++
-	if len(r.StreamResults) > maxRequestStreamChunks {
-		over := len(r.StreamResults) - maxRequestStreamChunks
+	r.trimStreamWindow()
+	r.UpdatedAt = time.Now()
+	return seq
+}
+
+// trimStreamWindow drops oldest chunks until the retained window fits both
+// the count and byte bounds, advancing StartSeq to match.
+func (r *Request) trimStreamWindow() {
+	if over := len(r.StreamResults) - maxRequestStreamChunks; over > 0 {
 		r.StreamResults = append([]string(nil), r.StreamResults[over:]...)
 		r.StreamStartSeq += int32(over)
 	}
-	r.UpdatedAt = time.Now()
-	return seq
+	for len(r.StreamResults) > 0 && r.streamWindowBytes() > MaxRequestStreamWindowBytes {
+		r.StreamResults = r.StreamResults[1:]
+		r.StreamStartSeq++
+	}
+	if r.StreamStartSeq > r.NextStreamSeq {
+		// Degenerate guard: never let the window invert.
+		r.StreamStartSeq = r.NextStreamSeq
+		r.StreamResults = nil
+	}
+}
+
+func (r *Request) streamWindowBytes() int {
+	total := 0
+	for _, chunk := range r.StreamResults {
+		total += len(chunk)
+	}
+	return total
 }
 
 func (r *Request) ClearStreamChunks() {
@@ -233,6 +259,21 @@ const (
 	defaultRequestTimeoutSeconds = 45
 	defaultRequestBackoffSeconds = 5
 	maxRequestStreamChunks       = 100
+	// MaxRequestStreamWindowChunks is the stored-window count bound, shared
+	// with the chunk-table trim (storage layer cannot see unexported consts).
+	MaxRequestStreamWindowChunks = 100
+	// MaxRequestChunkBytes bounds one stream chunk; larger payloads are
+	// rejected at the RPC boundary rather than truncated mid-stream.
+	MaxRequestChunkBytes = 512 << 10
+	// MaxChunkBatchBytes bounds one AppendRequestChunks RPC: the server's
+	// MaxRecvMsgSize is set to match, so a full max-size batch fits.
+	MaxChunkBatchBytes = 32 * MaxRequestChunkBytes
+	// maxRequestStreamWindowBytes bounds the retained window: when the
+	// window's total payload exceeds it, oldest chunks are trimmed (StartSeq
+	// advances) until it fits.
+	// MaxRequestStreamWindowBytes is the stored-window byte bound (shared
+	// with the chunk-table trim).
+	MaxRequestStreamWindowBytes = 8 << 20
 )
 
 // ScheduleRetry computes the next attempt time with linear backoff.

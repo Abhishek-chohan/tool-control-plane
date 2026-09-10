@@ -57,6 +57,68 @@ func selectRequestForUpdate(ctx context.Context, tx *sql.Tx, sessionID, requestI
 	return req, nil
 }
 
+// selectChunkWindow reads the retained chunk payloads [startSeq, nextSeq)
+// from the chunk table inside the transaction. Fenced writes use it to
+// rebuild the returned model's window: the request row no longer carries
+// payloads, so its loaded model starts with an empty StreamResults and
+// appending to it directly would leave StartSeq + len(StreamResults) behind
+// NextStreamSeq — an inconsistent window that panics slice-based readers.
+func selectChunkWindow(ctx context.Context, tx *sql.Tx, requestID string, startSeq, nextSeq int32) (model.RequestChunkWindow, error) {
+	rows, err := tx.QueryContext(ctx,
+		`SELECT seq, chunk FROM request_chunks WHERE request_id=$1 AND seq >= $2 AND seq < $3 ORDER BY seq ASC`,
+		requestID, int(startSeq), int(nextSeq))
+	if err != nil {
+		return model.RequestChunkWindow{}, fmt.Errorf("select request chunks: %w", err)
+	}
+	defer rows.Close()
+
+	window := model.RequestChunkWindow{StartSeq: startSeq, NextSeq: nextSeq}
+	for rows.Next() {
+		var seq int32
+		var chunk string
+		if err := rows.Scan(&seq, &chunk); err != nil {
+			return model.RequestChunkWindow{}, fmt.Errorf("scan request chunk: %w", err)
+		}
+		window.Chunks = append(window.Chunks, chunk)
+	}
+	return window, rows.Err()
+}
+
+// enforceChunkWindow trims the request's chunk table to the retained window
+// bounds — the newest MaxRequestStreamWindowChunks rows whose cumulative
+// payload fits MaxRequestStreamWindowBytes — and returns the new window
+// start (the smallest surviving seq, or nextSeq when nothing survives).
+// Enforcement lives here rather than in the caller's model because each
+// fenced call loads the row with empty payloads: only the table knows the
+// full history.
+func enforceChunkWindow(ctx context.Context, tx *sql.Tx, requestID string, nextSeq int32) (int32, error) {
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM request_chunks
+		WHERE request_id=$1 AND seq <= COALESCE((
+			SELECT seq FROM (
+				SELECT seq,
+				       ROW_NUMBER() OVER (ORDER BY seq DESC) AS position,
+				       SUM(length(chunk)) OVER (ORDER BY seq DESC) AS running_bytes
+				FROM request_chunks WHERE request_id=$1
+			) ranked
+			WHERE position > $2 OR running_bytes > $3
+			ORDER BY seq ASC
+			LIMIT 1
+		), -1)`, requestID, model.MaxRequestStreamWindowChunks, int64(model.MaxRequestStreamWindowBytes)); err != nil {
+		return 0, fmt.Errorf("trim request chunks: %w", err)
+	}
+
+	var startSeq sql.NullInt32
+	if err := tx.QueryRowContext(ctx,
+		`SELECT MIN(seq) FROM request_chunks WHERE request_id=$1`, requestID).Scan(&startSeq); err != nil {
+		return 0, fmt.Errorf("read window start: %w", err)
+	}
+	if !startSeq.Valid {
+		return nextSeq, nil
+	}
+	return startSeq.Int32, nil
+}
+
 // RenewRequestLease extends the lease deadline of a claimed/running request.
 // Only the current lease holder may renew (machineID + leaseEpoch must match).
 // The new lease deadline is min(now + leaseDuration, leased_at +
@@ -138,10 +200,31 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 			}
 			// Trailing streaming chunk from the final lease holder.
 			if resultStr, ok := result.(string); ok {
-				req.AddStreamChunk(resultStr)
-				if err := persistRequestInTx(ctx, tx, req); err != nil {
+				seq := req.AddStreamChunk(resultStr)
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)
+				 ON CONFLICT (request_id, seq) DO NOTHING`,
+					req.ID, int(seq), resultStr, time.Now()); err != nil {
+					return fmt.Errorf("insert trailing request chunk: %w", err)
+				}
+				startSeq, err := enforceChunkWindow(ctx, tx, req.ID, req.NextStreamSeq)
+				if err != nil {
 					return err
 				}
+				req.StreamStartSeq = startSeq
+				if _, err := tx.ExecContext(ctx,
+					`UPDATE requests SET stream_start_seq=$1, next_stream_seq=$2, updated_at=$3 WHERE id=$4`,
+					req.StreamStartSeq, req.NextStreamSeq, req.UpdatedAt, req.ID); err != nil {
+					return fmt.Errorf("update request stream bookkeeping: %w", err)
+				}
+				// Rebuild from the table: the row model carries no payloads, so
+				// the appended copy alone would desync the window.
+				window, err := selectChunkWindow(ctx, tx, req.ID, req.StreamStartSeq, req.NextStreamSeq)
+				if err != nil {
+					return err
+				}
+				req.StreamStartSeq = window.StartSeq
+				req.StreamResults = window.Chunks
 			}
 			submitted = req
 			return nil
@@ -188,6 +271,10 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 }
 
 // AppendRequestChunksFenced appends stream chunks as the current lease holder.
+// Chunk payloads go to the append-only request_chunks table; the request row
+// only takes the sequence bookkeeping (stream_start_seq / next_stream_seq), so
+// an append no longer rewrites a whole-row JSONB array that grows with the
+// stream. Trimmed window entries are deleted in the same transaction.
 func (s *Store) AppendRequestChunksFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, chunks []string) (*model.Request, error) {
 	if s == nil {
 		return nil, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
@@ -201,12 +288,48 @@ func (s *Store) AppendRequestChunksFenced(ctx context.Context, sessionID, reques
 		if err := CheckLeaseFence(req, machineID, leaseEpoch); err != nil {
 			return err
 		}
+
+		firstSeq := req.NextStreamSeq
 		for _, chunk := range chunks {
 			req.AddStreamChunk(chunk)
 		}
-		if err := persistRequestInTx(ctx, tx, req); err != nil {
+
+		// Chunk payloads are append-only rows keyed (request_id, seq).
+		for i, chunk := range chunks {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)
+				 ON CONFLICT (request_id, seq) DO NOTHING`,
+				req.ID, int(firstSeq)+i, chunk, time.Now()); err != nil {
+				return fmt.Errorf("insert request chunk: %w", err)
+			}
+		}
+		// Enforce the retained window against the table BEFORE writing row
+		// bookkeeping: the row model starts each call with empty payloads,
+		// so count/byte trimming on it cannot see prior chunks. The enforced
+		// start is what the row must advertise.
+		startSeq, err := enforceChunkWindow(ctx, tx, req.ID, req.NextStreamSeq)
+		if err != nil {
 			return err
 		}
+		req.StreamStartSeq = startSeq
+
+		// Bookkeeping-only row update: no JSONB rewrite.
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE requests SET stream_start_seq=$1, next_stream_seq=$2, updated_at=$3 WHERE id=$4`,
+			req.StreamStartSeq, req.NextStreamSeq, req.UpdatedAt, req.ID); err != nil {
+			return fmt.Errorf("update request stream bookkeeping: %w", err)
+		}
+
+		// Rebuild the returned model's window from the chunk table. The row
+		// no longer carries payloads, so appending to the row-loaded model
+		// would desync its window (StartSeq + len(StreamResults) < NextSeq)
+		// and panic window readers. The table is authoritative.
+		window, err := selectChunkWindow(ctx, tx, req.ID, req.StreamStartSeq, req.NextStreamSeq)
+		if err != nil {
+			return err
+		}
+		req.StreamStartSeq = window.StartSeq
+		req.StreamResults = window.Chunks
 		updated = req
 		return nil
 	})
