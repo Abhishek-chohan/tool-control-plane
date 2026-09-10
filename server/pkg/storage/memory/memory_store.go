@@ -37,6 +37,7 @@ type Store struct {
 	machineTools map[string]map[string]struct{} // machineID -> set(toolID)
 	draining     map[string]struct{}            // set(machineID)
 	auditLog     []*model.AuditEvent            // capped audit trail (test/dev)
+	auditNextID  int64                          // monotonic even past ring wrap
 }
 
 // Compile-time check: the in-memory implementation satisfies storage.Storer.
@@ -657,8 +658,11 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 	if event == nil {
 		return nil
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	stored := *event
-	stored.ID = int64(len(s.auditLog) + 1)
+	s.auditNextID++
+	stored.ID = s.auditNextID
 	s.auditLog = append(s.auditLog, &stored)
 	if len(s.auditLog) > memoryAuditCapacity {
 		s.auditLog = s.auditLog[len(s.auditLog)-memoryAuditCapacity:]
@@ -668,6 +672,8 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 
 // AuditEvents returns the retained audit trail (newest last).
 func (s *Store) AuditEvents() []*model.AuditEvent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	out := make([]*model.AuditEvent, len(s.auditLog))
 	copy(out, s.auditLog)
 	return out

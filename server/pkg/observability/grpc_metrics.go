@@ -44,7 +44,13 @@ func (c *RuntimeMetricsCollector) StreamServerInterceptor() grpc.StreamServerInt
 
 func logRPC(ctx context.Context, method string, err error, elapsed time.Duration) {
 	logger := slog.Default()
-	if logger == nil || !logger.Enabled(ctx, slog.LevelDebug) {
+	if logger == nil {
+		return
+	}
+	failed := err != nil && status.Code(err) != codes.OK
+	// Failures surface at Info even when the handler's floor is Info;
+	// successes log only when Debug is enabled.
+	if !failed && !logger.Enabled(ctx, slog.LevelDebug) {
 		return
 	}
 	attrs := []slog.Attr{
@@ -58,8 +64,7 @@ func logRPC(ctx context.Context, method string, err error, elapsed time.Duration
 		}
 	}
 	level := slog.LevelDebug
-	if err != nil && status.Code(err) != codes.OK {
-		// Failures are worth surfacing above the per-request debug floor.
+	if failed {
 		level = slog.LevelInfo
 	}
 	logger.LogAttrs(ctx, level, "rpc", attrs...)
