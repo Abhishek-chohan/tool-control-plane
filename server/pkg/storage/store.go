@@ -85,6 +85,11 @@ type Storer interface {
 	// the given dedup key (nil when absent); CreateRequest uses it to make
 	// retries return the original request instead of duplicate work.
 	GetRequestByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Request, error)
+	// GetRequestChunksByRequest returns the retained chunk window for a
+	// request from the append-only chunk table: chunks with startSeq <= seq <
+	// nextSeq. Store-backed window reads are served from here; the request
+	// row no longer carries chunk payloads.
+	GetRequestChunksByRequest(ctx context.Context, requestID string, startSeq, nextSeq int32) (model.RequestChunkWindow, error)
 	// ListRequestsBySession returns every request in a session, oldest first.
 	// It is the read-through for ListRequests when other replicas created
 	// requests this instance has not seen.

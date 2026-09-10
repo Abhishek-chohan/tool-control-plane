@@ -213,8 +213,14 @@ func TestFencedWritesRejectStaleHolderAfterReclaim(t *testing.T) {
 		if submitted.Status != model.RequestStatusDone {
 			t.Fatalf("submit status: got %s want done", submitted.Status)
 		}
-		if len(submitted.StreamResults) != 1 || submitted.StreamResults[0] != "chunk-1" {
-			t.Fatalf("chunk window incoherent after fenced writes: %v", submitted.StreamResults)
+		// Chunk payloads live in the append-only table; assert coherence
+		// through the authoritative window read.
+		window, err := s.GetRequestChunksByRequest(ctx, reqID, submitted.StreamStartSeq, submitted.NextStreamSeq)
+		if err != nil {
+			t.Fatalf("chunk window read: %v", err)
+		}
+		if len(window.Chunks) != 1 || window.Chunks[0] != "chunk-1" {
+			t.Fatalf("chunk window incoherent after fenced writes: %v", window.Chunks)
 		}
 	})
 }

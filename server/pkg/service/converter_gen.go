@@ -121,7 +121,6 @@ func convertModelRequestToProto(in *model.Request) *proto.Request {
 		CreatedAt:          in.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:          in.UpdatedAt.Format(time.RFC3339),
 		ExecutingMachineId: in.ExecutingMachineID,
-		StreamResults:      in.StreamResults,
 		LeasedBy:           in.LeasedBy,
 		LeaseEpoch:         in.LeaseEpoch,
 		LeaseExpiresAt:     leaseExpiresAt,

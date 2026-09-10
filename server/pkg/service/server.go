@@ -731,9 +731,13 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 		return statusFromDomainError("execute tool", err)
 	}
 
-	// Poll for updates and stream them back
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
+	// Signal-driven delivery: chunk appends broadcast on the request's
+	// signal, so chunks stream within microseconds of the append instead of
+	// on the next poll tick. The slow fallback timer only guards against a
+	// missed broadcast in an in-memory edge case.
+	fallbackTick := time.NewTicker(2 * time.Second)
+	defer fallbackTick.Stop()
+	watch := s.requestService.subscribeRequest(request.ID)
 	lastSeq := int32(0)
 
 	for {
@@ -745,11 +749,14 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
 		}
 		if snapshot.IsTerminal() {
+			s.requestService.releaseRequestSignal(request.ID)
 			return nil
 		}
 
 		select {
-		case <-ticker.C:
+		case <-watch:
+			watch = s.requestService.subscribeRequest(request.ID)
+		case <-fallbackTick.C:
 		case <-stream.Context().Done():
 			return status.Errorf(codes.Canceled, "client disconnected")
 		}
@@ -781,8 +788,11 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 		return err
 	}
 
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
+	// Signal-driven, like StreamExecuteTool: replays fast on append, with a
+	// slow fallback timer as broadcast insurance.
+	fallbackTick := time.NewTicker(2 * time.Second)
+	defer fallbackTick.Stop()
+	watch := s.requestService.subscribeRequest(req.RequestId)
 	lastSeq := req.LastSeq
 
 	for {
@@ -794,11 +804,14 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 			return status.Errorf(codes.Internal, "failed to send resumed chunk: %v", err)
 		}
 		if snapshot.IsTerminal() {
+			s.requestService.releaseRequestSignal(req.RequestId)
 			return nil
 		}
 
 		select {
-		case <-ticker.C:
+		case <-watch:
+			watch = s.requestService.subscribeRequest(req.RequestId)
+		case <-fallbackTick.C:
 		case <-stream.Context().Done():
 			return status.Errorf(codes.Canceled, "client disconnected during resume")
 		}
