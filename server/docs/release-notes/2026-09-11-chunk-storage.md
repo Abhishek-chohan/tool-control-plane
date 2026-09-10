@@ -59,7 +59,7 @@ the entry; late subscribers recreate it transparently.
 The gRPC server previously ran on implicit defaults. It now sets
 `MaxRecvMsgSize`/`MaxSendMsgSize` to `MaxChunkBatchBytes` (32 × 512 KiB =
 16 MiB, sized for a full max-size chunk batch per RPC) and a keepalive
-enforcement policy (MinTime 10s, PermitWithoutStream).
+enforcement policy (MinTime 5s, PermitWithoutStream).
 
 ## Compatibility
 
