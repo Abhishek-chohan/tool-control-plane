@@ -172,6 +172,11 @@ type Storer interface {
 	// made on other replicas.
 	GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.ApiKey, error)
 
+	// Audit events: durable rows for security- and lifecycle-relevant
+	// transitions, written best-effort (failures are logged, never surfaced
+	// to the operation that produced the event).
+	RecordAuditEvent(ctx context.Context, event *model.AuditEvent) error
+
 	// Tools
 	AllTools(ctx context.Context) ([]*model.Tool, error)
 	SaveTool(ctx context.Context, tool *model.Tool) error

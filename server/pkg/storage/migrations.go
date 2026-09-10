@@ -151,6 +151,16 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency ON requests(session_id, idempotency_key) WHERE idempotency_key <> ''`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
 		`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS adopted_by TEXT`,
+		`CREATE TABLE IF NOT EXISTS audit_events (
+            id BIGSERIAL PRIMARY KEY,
+            created_at TIMESTAMPTZ NOT NULL,
+            event TEXT NOT NULL,
+            session_id TEXT,
+            machine_id TEXT,
+            request_id TEXT,
+            task_id TEXT,
+            details JSONB
+        )`,
 		`CREATE TABLE IF NOT EXISTS request_chunks (
             request_id TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
             seq INTEGER NOT NULL,
