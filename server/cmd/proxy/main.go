@@ -5,11 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -67,6 +71,12 @@ func authHeaderMatcher(key string) (string, bool) {
 	// Per-machine credential for provide-scoped RPCs.
 	if strings.EqualFold(key, "X-Toolplane-Machine-Token") {
 		return "x-toolplane-machine-token", true
+	}
+	// W3C trace correlation: forwarded so the server can attach the
+	// caller's trace context to request logs. The gateway already forwards
+	// its (validated) traceparent the same way.
+	if strings.EqualFold(key, "Traceparent") {
+		return "traceparent", true
 	}
 	return runtime.DefaultHeaderMatcher(key)
 }
@@ -412,10 +422,33 @@ func main() {
 		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
+		// IdleTimeout polices parked keep-alive connections; WriteTimeout
+		// stays unset because streaming responses outlive any fixed deadline.
+		IdleTimeout: 120 * time.Second,
 	}
-	if serveTLS {
-		log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
-		log.Fatal(httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile))
+	serveErr := make(chan error, 1)
+	go func() {
+		if serveTLS {
+			log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
+			serveErr <- httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile)
+			return
+		}
+		serveErr <- httpServer.ListenAndServe()
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serveErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("proxy serve error: %v", err)
+		}
+	case <-sigCh:
+		log.Println("shutdown signal received, draining proxy")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("proxy shutdown error: %v", err)
+		}
 	}
-	log.Fatal(httpServer.ListenAndServe())
 }
