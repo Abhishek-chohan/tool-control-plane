@@ -293,7 +293,7 @@ export class ToolplaneMcpBridge {
     try {
       const request = await this.client.executeTool(name, args);
       this.rememberRequest(request.id);
-      return this.buildCallToolResult(request);
+      return await this.buildCallToolResult(request);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
@@ -417,7 +417,7 @@ export class ToolplaneMcpBridge {
     switch (payload.status) {
       case TASK_STATUS_COMPLETED:
         payload.result = {
-          ...this.buildCallToolResult(request),
+          ...(await this.buildCallToolResult(request)),
           resultType: RESULT_TYPE_COMPLETE,
         };
         break;
@@ -464,7 +464,17 @@ export class ToolplaneMcpBridge {
    * a textual summary, a request resource link, and the full translated
    * request payload as structuredContent.
    */
-  private buildCallToolResult(request: ToolplaneRequest): CallToolResult {
+  private async buildCallToolResult(request: ToolplaneRequest): Promise<CallToolResult> {
+    // Chunk payloads no longer travel on the request message; hydrate them
+    // from the authoritative chunk window. Read failures degrade to the
+    // payload without chunks.
+    try {
+      const window = await this.client.getRequestChunksWindow(request.id);
+      request = { ...request, streamResults: window.chunks };
+    } catch (error) {
+      debugLog(`chunk window read failed for ${request.id}: ${describeError(error)}`);
+    }
+
     const structuredContent = buildRequestPayload(request);
     const isError = request.status !== 'done' || Boolean(request.error);
 
@@ -522,7 +532,7 @@ export class ToolplaneMcpBridge {
    */
   private async decorateSyncResult(request: ToolplaneRequest): Promise<JSONObject> {
     const result: JSONObject = {
-      ...this.buildCallToolResult(request),
+      ...(await this.buildCallToolResult(request)),
       resultType: RESULT_TYPE_COMPLETE,
     };
 
