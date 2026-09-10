@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"toolplane/pkg/model"
 	"toolplane/pkg/observability"
@@ -46,14 +49,23 @@ func main() {
 	tlsKeyFile := flag.String("tls-key-file", strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_KEY_FILE")), "Path to a PEM-encoded gRPC TLS private key; empty disables TLS outside production")
 	flag.Parse()
 
+	// Structured logging for the whole process; the std log bridge below
+	// routes the services' existing log.Printf output through the same
+	// handler, so every line is one format.
+	logger := observability.NewLogger(observability.LogFormatFromEnv(), os.Stdout)
+	slog.SetDefault(logger)
+	observability.RouteStdLog(logger)
+
 	cfg, err := loadServerConfig()
 	if err != nil {
-		log.Fatalf("invalid server configuration: %v", err)
+		slog.Error("invalid server configuration", slog.Any("err", err))
+		os.Exit(1)
 	}
 	// migrate-only does not start the gRPC server, so transport settings are not required.
 	if !*migrateOnly {
 		if err := validateGRPCTLSSettings(cfg.environment, *tlsCertFile, *tlsKeyFile); err != nil {
-			log.Fatalf("invalid gRPC TLS configuration: %v", err)
+			slog.Error("invalid gRPC TLS configuration", slog.Any("err", err))
+			os.Exit(1)
 		}
 	}
 
@@ -61,10 +73,9 @@ func main() {
 	defer cancel()
 
 	metricsCollector := observability.NewRuntimeMetricsCollector()
-	tracer := trace.SessionTracer(metricsCollector)
-	if *enableTrace {
-		tracer = trace.NewMultiTracer(metricsCollector, trace.NewLoggingTracer(log.Default()))
-	}
+	var tracers []trace.SessionTracer
+	tracers = append(tracers, metricsCollector)
+	var tracer trace.SessionTracer = metricsCollector
 
 	pgStore, err := storage.OpenFromEnv(ctx, log.Default())
 	var store storage.Storer
@@ -72,26 +83,43 @@ func main() {
 		switch {
 		case errors.Is(err, storage.ErrExplicitInMemoryMode):
 			store = memory.New()
-			log.Printf("storage mode: explicit in-memory")
+			slog.Info("storage mode: explicit in-memory")
 		case errors.Is(err, storage.ErrConfigMissing):
-			log.Fatalf("storage configuration error: %v", err)
+			slog.Error("storage configuration error", slog.Any("err", err))
+			os.Exit(1)
 		default:
-			log.Fatalf("failed to initialize storage: %v", err)
+			slog.Error("failed to initialize storage", slog.Any("err", err))
+			os.Exit(1)
 		}
 	} else {
 		store = pgStore
 	}
 	defer func() {
 		if cerr := storeClose(store); cerr != nil {
-			log.Printf("error closing storage: %v", cerr)
+			slog.Error("error closing storage", slog.Any("err", cerr))
 		}
 	}()
 	if *migrateOnly {
 		if pgStore == nil {
-			log.Fatalf("migrate-only requires Postgres-backed storage")
+			slog.Error("migrate-only requires Postgres-backed storage")
+			os.Exit(1)
 		}
-		log.Printf("database schema ready (env=%s storage=postgres)", cfg.environment)
+		slog.Info("database schema ready", "env", cfg.environment, "storage", "postgres")
 		return
+	}
+
+	// The durable audit trail piggybacks on lifecycle events; failures
+	// are logged by the recorder and never block the operation.
+	var auditRecorder *observability.AuditRecorder
+	if store != nil {
+		auditRecorder = observability.NewAuditRecorder(ctx, store)
+		tracers = append(tracers, auditRecorder)
+	}
+	if *enableTrace {
+		tracers = append(tracers, trace.NewLoggingTracer(log.Default()))
+	}
+	if len(tracers) > 1 {
+		tracer = trace.NewMultiTracer(tracers...)
 	}
 
 	// initialize your services
@@ -108,17 +136,20 @@ func main() {
 
 	authenticateAPIKey, authSummary, err := cfg.buildAuthenticator(postgresAuthenticator)
 	if err != nil {
-		log.Fatalf("failed to configure auth: %v", err)
+		slog.Error("failed to configure auth", slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		slog.Error("failed to listen", slog.Any("err", err))
+		os.Exit(1)
 	}
 
 	serverOptions, transportSummary, err := grpcServerTransport(*tlsCertFile, *tlsKeyFile)
 	if err != nil {
-		log.Fatalf("failed to configure gRPC transport: %v", err)
+		slog.Error("failed to configure gRPC transport", slog.Any("err", err))
+		os.Exit(1)
 	}
 	// Explicit message bounds and keepalive enforcement: the defaults leave
 	// message size implicit (4MiB) and idle connections unpoliced. 16MiB
@@ -133,35 +164,67 @@ func main() {
 			PermitWithoutStream: true,
 		}),
 	)
+	// One interceptor chain, assembled explicitly. Metrics outermost so
+	// auth rejections and transport failures are counted like any other
+	// request; auth (or its anonymous dev-mode stand-in) sits inside it.
+	var unaryInterceptors []grpc.UnaryServerInterceptor
+	var streamInterceptors []grpc.StreamServerInterceptor
+	unaryInterceptors = append(unaryInterceptors, metricsCollector.UnaryServerInterceptor())
+	streamInterceptors = append(streamInterceptors, metricsCollector.StreamServerInterceptor())
 	if authenticateAPIKey != nil {
 		authorizer := auth.NewAPIKeyAuthorizer(
 			authenticateAPIKey,
 			tracer,
 			auth.WithMachineTokenAuth(machineSvc.AuthorizeMachineToken),
 		)
-		serverOptions = append(serverOptions,
-			grpc.UnaryInterceptor(authorizer.UnaryInterceptor()),
-			grpc.StreamInterceptor(authorizer.StreamInterceptor()),
-		)
+		unaryInterceptors = append(unaryInterceptors, authorizer.UnaryInterceptor())
+		streamInterceptors = append(streamInterceptors, authorizer.StreamInterceptor())
 	} else {
 		// Auth-disabled dev mode: still attach an anonymous fixed-mode
 		// principal so handler-level fail-closed checks behave consistently.
-		serverOptions = append(serverOptions,
-			grpc.UnaryInterceptor(auth.AnonymousUnaryInterceptor()),
-			grpc.StreamInterceptor(auth.AnonymousStreamInterceptor()),
-		)
+		unaryInterceptors = append(unaryInterceptors, auth.AnonymousUnaryInterceptor())
+		streamInterceptors = append(streamInterceptors, auth.AnonymousStreamInterceptor())
 	}
+	serverOptions = append(serverOptions,
+		grpc.ChainUnaryInterceptor(unaryInterceptors...),
+		grpc.ChainStreamInterceptor(streamInterceptors...),
+	)
 	server := grpc.NewServer(serverOptions...)
-	startMetricsServer(ctx, *metricsListen, metricsCollector)
+
+	// Standard grpc.health.v1: load balancers and orchestrators probe this
+	// instead of inferring liveness from connection acceptance.
+	healthSrv := health.NewServer()
+	healthpb.RegisterHealthServer(server, healthSrv)
+
+	metricsErr := startMetricsServer(ctx, *metricsListen, metricsCollector)
 
 	// graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	stopDone := make(chan struct{})
 	go func() {
-		<-sigCh
-		log.Println("shutdown signal received, graceful stop")
+		defer close(stopDone)
+		select {
+		case <-sigCh:
+		case <-ctx.Done():
+		}
+		slog.Info("shutdown signal received, graceful stop")
 		cancel()
-		server.GracefulStop()
+		healthSrv.Shutdown() // report NOT_SERVING before draining
+		stopped := make(chan struct{})
+		go func() {
+			server.GracefulStop()
+			close(stopped)
+		}()
+		select {
+		case <-stopped:
+		case <-time.After(20 * time.Second):
+			slog.Warn("graceful stop deadline exceeded; forcing stop")
+			server.Stop()
+		}
+		if metricsErr != nil {
+			<-metricsDone(metricsErr)
+		}
 	}()
 
 	adapter := service.NewGRPCServer(
@@ -175,20 +238,64 @@ func main() {
 	proto.RegisterRequestsServiceServer(server, adapter)
 	proto.RegisterTasksServiceServer(server, adapter)
 
-	log.Printf("gRPC server listening at %v (env=%s auth=%s transport=%s)", lis.Addr(), cfg.environment, authSummary, transportSummary)
-	if err := server.Serve(lis); err != nil {
-		log.Fatalf("gRPC serve error: %v", err)
+	slog.Info("gRPC server listening",
+		"addr", lis.Addr().String(),
+		"env", cfg.environment,
+		"auth", authSummary,
+		"transport", transportSummary)
+	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- server.Serve(lis) }()
+
+	// Single exit path: a signal drains gracefully; an unsolicited serve
+	// failure (from either server) tears everything down without skipping
+	// the deferred store close.
+	exitCode := 0
+	select {
+	case err := <-serveErr:
+		if err != nil {
+			slog.Error("gRPC serve error", slog.Any("err", err))
+			exitCode = 1
+			cancel()
+			healthSrv.Shutdown()
+			server.Stop()
+		}
+	case err := <-metricsErr:
+		slog.Error("metrics serve error", slog.Any("err", err))
+		exitCode = 1
+		cancel()
+		healthSrv.Shutdown()
+		server.Stop()
+	case <-stopDone:
 	}
+	if exitCode != 0 {
+		// Give the forced stop a moment to unblock Serve before defers run.
+		<-stopDone
+	}
+	os.Exit(exitCode)
 }
 
-func startMetricsServer(ctx context.Context, listenAddr string, collector *observability.RuntimeMetricsCollector) {
+// metricsDone blocks until the metrics server reports a terminal outcome;
+// used by the shutdown path to avoid exiting before its error is observed.
+func metricsDone(errCh <-chan error) <-chan error {
+	return errCh
+}
+
+// startMetricsServer serves /metrics and reports its terminal outcome on
+// the returned channel; an empty listen address disables it (nil channel —
+// a receive blocks forever, which the caller's select tolerates).
+func startMetricsServer(ctx context.Context, listenAddr string, collector *observability.RuntimeMetricsCollector) <-chan error {
 	if collector == nil || strings.TrimSpace(listenAddr) == "" {
-		return
+		return nil
 	}
 
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		log.Fatalf("failed to listen for metrics: %v", err)
+		slog.Error("failed to listen for metrics", slog.Any("err", err))
+		out := make(chan error, 1)
+		out <- err
+		return out
 	}
 
 	server := &http.Server{
@@ -196,19 +303,24 @@ func startMetricsServer(ctx context.Context, listenAddr string, collector *obser
 		// Bound header reads so a slow-loris client cannot pin connections.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	out := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("metrics server shutdown error: %v", err)
+			slog.Error("metrics server shutdown error", slog.Any("err", err))
 		}
 	}()
 
 	go func() {
-		log.Printf("metrics server listening at %v", listener.Addr())
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("metrics serve error: %v", err)
+		slog.Info("metrics server listening", "addr", listener.Addr().String())
+		err := server.Serve(listener)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			out <- err
+			return
 		}
+		out <- nil
 	}()
+	return out
 }

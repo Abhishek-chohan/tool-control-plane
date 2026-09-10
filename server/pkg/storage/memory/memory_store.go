@@ -36,6 +36,7 @@ type Store struct {
 	userSess     map[string]map[string]struct{} // userID -> set(sessionID)
 	machineTools map[string]map[string]struct{} // machineID -> set(toolID)
 	draining     map[string]struct{}            // set(machineID)
+	auditLog     []*model.AuditEvent            // capped audit trail (test/dev)
 }
 
 // Compile-time check: the in-memory implementation satisfies storage.Storer.
@@ -645,6 +646,31 @@ func (s *Store) SaveApiKey(ctx context.Context, key *model.ApiKey) error {
 	defer s.mu.Unlock()
 	s.apiKeys[key.ID] = cloneApiKey(key)
 	return nil
+}
+
+// memoryAuditCapacity bounds the retained in-memory audit trail: the
+// Postgres store is the real sink; this exists so store-backed tests and
+// dev mode can assert on recorded events.
+const memoryAuditCapacity = 1024
+
+func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) error {
+	if event == nil {
+		return nil
+	}
+	stored := *event
+	stored.ID = int64(len(s.auditLog) + 1)
+	s.auditLog = append(s.auditLog, &stored)
+	if len(s.auditLog) > memoryAuditCapacity {
+		s.auditLog = s.auditLog[len(s.auditLog)-memoryAuditCapacity:]
+	}
+	return nil
+}
+
+// AuditEvents returns the retained audit trail (newest last).
+func (s *Store) AuditEvents() []*model.AuditEvent {
+	out := make([]*model.AuditEvent, len(s.auditLog))
+	copy(out, s.auditLog)
+	return out
 }
 
 // ---------------- Tools ----------------

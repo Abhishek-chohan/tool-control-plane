@@ -1,12 +1,12 @@
 package observability
 
 import (
-	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"sync"
-	"sync/atomic"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"toolplane/pkg/trace"
 )
@@ -23,22 +23,179 @@ type taskMetricsSource interface {
 	TaskMetricsSnapshot() (pending, running, completed, failed, cancelled, deadLetter int)
 }
 
-// RuntimeMetricsCollector maintains the supported operator metrics surface.
+// RuntimeMetricsCollector maintains the supported operator metrics surface
+// on a private prometheus registry: runtime gauges and lifecycle counters
+// plus per-RPC request counters and duration histograms recorded by the
+// gRPC interceptors.
 type RuntimeMetricsCollector struct {
 	mu       sync.RWMutex
 	requests requestMetricsSource
 	machines machineMetricsSource
 	tasks    taskMetricsSource
 
-	requestRequeues    atomic.Int64
-	requestDeadLetters atomic.Int64
-	taskRetries        atomic.Int64
-	taskDeadLetters    atomic.Int64
+	registry *prometheus.Registry
+
+	requestRequeues    prometheus.Counter
+	requestDeadLetters prometheus.Counter
+	taskRetries        prometheus.Counter
+	taskDeadLetters    prometheus.Counter
+
+	grpcRequests  *prometheus.CounterVec
+	grpcDurations *prometheus.HistogramVec
 }
 
 // NewRuntimeMetricsCollector creates an empty collector ready to bind to live services.
 func NewRuntimeMetricsCollector() *RuntimeMetricsCollector {
-	return &RuntimeMetricsCollector{}
+	c := &RuntimeMetricsCollector{
+		registry: prometheus.NewRegistry(),
+	}
+	// Go runtime and process collectors come for free and are what
+	// operators expect from a /metrics endpoint.
+	c.registry.MustRegister(collectors.NewGoCollector())
+	c.registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+
+	c.requestRequeues = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_request_requeues_total",
+		Help: "Total number of request requeues after lease expiry or capacity rejection.",
+	})
+	c.requestDeadLetters = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_request_dead_letters_total",
+		Help: "Total number of requests dead-lettered after retry exhaustion.",
+	})
+	c.taskRetries = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_task_retries_total",
+		Help: "Total number of task retries scheduled.",
+	})
+	c.taskDeadLetters = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_task_dead_letters_total",
+		Help: "Total number of tasks dead-lettered after retry exhaustion.",
+	})
+	c.registry.MustRegister(c.requestRequeues, c.requestDeadLetters, c.taskRetries, c.taskDeadLetters)
+
+	// Labels are bounded by construction: methods by the proto surface,
+	// codes by the gRPC code set.
+	c.grpcRequests = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "toolplane_grpc_requests_total",
+		Help: "Total gRPC requests by full method and resulting status code.",
+	}, []string{"method", "code"})
+	c.grpcDurations = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "toolplane_grpc_request_duration_seconds",
+		Help:    "gRPC request latency by full method.",
+		Buckets: []float64{.001, .0025, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30},
+	}, []string{"method"})
+	c.registry.MustRegister(c.grpcRequests, c.grpcDurations)
+
+	c.registerGauges()
+	return c
+}
+
+func (c *RuntimeMetricsCollector) registerGauges() {
+	gauge := func(name, help string, value func() float64) {
+		c.registry.MustRegister(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+			Name: name,
+			Help: help,
+		}, value))
+	}
+
+	gauge("toolplane_request_queue_depth",
+		"Number of pending requests waiting for dispatch.",
+		func() float64 {
+			if s := c.requestSource(); s != nil {
+				pending, _, _, _, _, _, _ := s.RequestMetricsSnapshot()
+				return float64(pending)
+			}
+			return 0
+		})
+	gauge("toolplane_request_inflight",
+		"Number of claimed or running requests.",
+		func() float64 {
+			if s := c.requestSource(); s != nil {
+				_, claimed, running, _, _, _, _ := s.RequestMetricsSnapshot()
+				return float64(claimed + running)
+			}
+			return 0
+		})
+	gauge("toolplane_request_dead_letter_current",
+		"Number of requests currently marked dead letter.",
+		func() float64 {
+			if s := c.requestSource(); s != nil {
+				_, _, _, _, _, _, dead := s.RequestMetricsSnapshot()
+				return float64(dead)
+			}
+			return 0
+		})
+	gauge("toolplane_machine_active",
+		"Number of active registered machines.",
+		func() float64 {
+			if s := c.machineSource(); s != nil {
+				active, _, _ := s.MachineMetricsSnapshot()
+				return float64(active)
+			}
+			return 0
+		})
+	gauge("toolplane_machine_draining",
+		"Number of machines currently draining.",
+		func() float64 {
+			if s := c.machineSource(); s != nil {
+				_, draining, _ := s.MachineMetricsSnapshot()
+				return float64(draining)
+			}
+			return 0
+		})
+	gauge("toolplane_machine_inflight_load",
+		"Total in-flight machine load reserved by running requests.",
+		func() float64 {
+			if s := c.machineSource(); s != nil {
+				_, _, inflight := s.MachineMetricsSnapshot()
+				return float64(inflight)
+			}
+			return 0
+		})
+	gauge("toolplane_task_pending",
+		"Number of tasks waiting to run or retry.",
+		func() float64 {
+			if s := c.taskSource(); s != nil {
+				pending, _, _, _, _, _ := s.TaskMetricsSnapshot()
+				return float64(pending)
+			}
+			return 0
+		})
+	gauge("toolplane_task_running",
+		"Number of tasks currently running.",
+		func() float64 {
+			if s := c.taskSource(); s != nil {
+				_, running, _, _, _, _ := s.TaskMetricsSnapshot()
+				return float64(running)
+			}
+			return 0
+		})
+	gauge("toolplane_task_dead_letter_current",
+		"Number of tasks currently marked dead letter.",
+		func() float64 {
+			if s := c.taskSource(); s != nil {
+				_, _, _, _, _, dead := s.TaskMetricsSnapshot()
+				return float64(dead)
+			}
+			return 0
+		})
+}
+
+func (c *RuntimeMetricsCollector) requestSource() requestMetricsSource {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.requests
+}
+
+func (c *RuntimeMetricsCollector) machineSource() machineMetricsSource {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.machines
+}
+
+func (c *RuntimeMetricsCollector) taskSource() taskMetricsSource {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.tasks
 }
 
 // Bind attaches live service sources used for gauge snapshots.
@@ -50,10 +207,10 @@ func (c *RuntimeMetricsCollector) Bind(requests requestMetricsSource, machines m
 	c.mu.Unlock()
 }
 
-// Handler returns an HTTP handler serving Prometheus-style metrics at /metrics.
+// Handler returns an HTTP handler serving Prometheus metrics at /metrics.
 func (c *RuntimeMetricsCollector) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/metrics", c.serveMetrics)
+	mux.Handle("/metrics", promhttp.HandlerFor(c.registry, promhttp.HandlerOpts{}))
 	return mux
 }
 
@@ -64,68 +221,18 @@ func (c *RuntimeMetricsCollector) Record(event trace.SessionEvent) {
 	}
 	switch event.Event {
 	case trace.EventRequestRequeued:
-		c.requestRequeues.Add(1)
+		c.requestRequeues.Inc()
 	case trace.EventRequestDeadLettered:
-		c.requestDeadLetters.Add(1)
+		c.requestDeadLetters.Inc()
 	case trace.EventTaskRetryScheduled:
-		c.taskRetries.Add(1)
+		c.taskRetries.Inc()
 	case trace.EventTaskDeadLettered:
-		c.taskDeadLetters.Add(1)
+		c.taskDeadLetters.Inc()
 	}
 }
 
-func (c *RuntimeMetricsCollector) serveMetrics(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	requests, machines, tasks := c.snapshotSources()
-	requestPending, requestClaimed, requestRunning, _, _, _, requestDeadLetterCurrent := 0, 0, 0, 0, 0, 0, 0
-	if requests != nil {
-		requestPending, requestClaimed, requestRunning, _, _, _, requestDeadLetterCurrent = requests.RequestMetricsSnapshot()
-	}
-
-	machineActive, machineDraining, machineInflight := 0, 0, 0
-	if machines != nil {
-		machineActive, machineDraining, machineInflight = machines.MachineMetricsSnapshot()
-	}
-
-	taskPending, taskRunning, _, _, _, taskDeadLetterCurrent := 0, 0, 0, 0, 0, 0
-	if tasks != nil {
-		taskPending, taskRunning, _, _, _, taskDeadLetterCurrent = tasks.TaskMetricsSnapshot()
-	}
-
-	var builder strings.Builder
-	writeMetric(&builder, "toolplane_request_queue_depth", "gauge", "Number of pending requests waiting for dispatch.", int64(requestPending))
-	writeMetric(&builder, "toolplane_request_inflight", "gauge", "Number of claimed or running requests.", int64(requestClaimed+requestRunning))
-	writeMetric(&builder, "toolplane_request_dead_letter_current", "gauge", "Number of requests currently marked dead letter.", int64(requestDeadLetterCurrent))
-	writeMetric(&builder, "toolplane_request_requeues_total", "counter", "Total number of request requeues after lease expiry or capacity rejection.", c.requestRequeues.Load())
-	writeMetric(&builder, "toolplane_request_dead_letters_total", "counter", "Total number of requests dead-lettered after retry exhaustion.", c.requestDeadLetters.Load())
-	writeMetric(&builder, "toolplane_machine_active", "gauge", "Number of active registered machines.", int64(machineActive))
-	writeMetric(&builder, "toolplane_machine_draining", "gauge", "Number of machines currently draining.", int64(machineDraining))
-	writeMetric(&builder, "toolplane_machine_inflight_load", "gauge", "Total in-flight machine load reserved by running requests.", int64(machineInflight))
-	writeMetric(&builder, "toolplane_task_pending", "gauge", "Number of tasks waiting to run or retry.", int64(taskPending))
-	writeMetric(&builder, "toolplane_task_running", "gauge", "Number of tasks currently running.", int64(taskRunning))
-	writeMetric(&builder, "toolplane_task_dead_letter_current", "gauge", "Number of tasks currently marked dead letter.", int64(taskDeadLetterCurrent))
-	writeMetric(&builder, "toolplane_task_retries_total", "counter", "Total number of task retries scheduled.", c.taskRetries.Load())
-	writeMetric(&builder, "toolplane_task_dead_letters_total", "counter", "Total number of tasks dead-lettered after retry exhaustion.", c.taskDeadLetters.Load())
-
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	_, _ = w.Write([]byte(builder.String()))
-}
-
-func (c *RuntimeMetricsCollector) snapshotSources() (requestMetricsSource, machineMetricsSource, taskMetricsSource) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.requests, c.machines, c.tasks
-}
-
-func writeMetric(builder *strings.Builder, name, metricType, help string, value int64) {
-	builder.WriteString(fmt.Sprintf("# HELP %s %s\n", name, help))
-	builder.WriteString(fmt.Sprintf("# TYPE %s %s\n", name, metricType))
-	builder.WriteString(name)
-	builder.WriteByte(' ')
-	builder.WriteString(strconv.FormatInt(value, 10))
-	builder.WriteByte('\n')
+// observeGRPC records one completed RPC for the interceptor metrics.
+func (c *RuntimeMetricsCollector) observeGRPC(method, code string, seconds float64) {
+	c.grpcRequests.WithLabelValues(method, code).Inc()
+	c.grpcDurations.WithLabelValues(method).Observe(seconds)
 }
