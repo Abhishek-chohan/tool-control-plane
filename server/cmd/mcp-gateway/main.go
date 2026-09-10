@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -176,10 +180,33 @@ func main() {
 		Handler:           root,
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       60 * time.Second,
+		// IdleTimeout polices parked keep-alive connections; WriteTimeout
+		// stays unset because JSON-RPC responses ride long-lived streams.
+		IdleTimeout: 120 * time.Second,
 	}
-	if serveTLS {
-		log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
-		log.Fatal(httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile))
+	serveErr := make(chan error, 1)
+	go func() {
+		if serveTLS {
+			log.Printf("client-facing TLS enabled (cert=%s)", *tlsCertFile)
+			serveErr <- httpServer.ListenAndServeTLS(*tlsCertFile, *tlsKeyFile)
+			return
+		}
+		serveErr <- httpServer.ListenAndServe()
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	select {
+	case err := <-serveErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("gateway serve error: %v", err)
+		}
+	case <-sigCh:
+		log.Println("shutdown signal received, draining gateway")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			log.Printf("gateway shutdown error: %v", err)
+		}
 	}
-	log.Fatal(httpServer.ListenAndServe())
 }

@@ -6,6 +6,37 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Added
+
+- Prometheus-native metrics: `prometheus/client_golang` replaces the
+  hand-rolled text renderer (same metric names, plus Go runtime and process
+  collectors) and adds `toolplane_grpc_requests_total{method,code}` and a
+  per-method `toolplane_grpc_request_duration_seconds` histogram recorded by
+  interceptors wrapped outermost — auth rejections count like any other
+  request. The server previously combined a singular auth interceptor with
+  a chained metrics one, silently dropping the chain; it now builds one
+  explicit chain. See
+  `server/docs/release-notes/2026-09-11-observability-lifecycle.md`.
+- Durable audit trail: session/API-key/machine lifecycle events and
+  request/task dead-letters persist to a new `audit_events` table
+  (best-effort — failures log with event identity and never block the
+  operation).
+- `grpc.health.v1`: the gRPC server reports SERVING once listening and
+  NOT_SERVING on shutdown, so load balancers probe the standard service.
+- `TOOLPLANE_LOG_FORMAT=json` switches the server to structured `slog`
+  JSON records; a std-log bridge routes the services' existing `log.Printf`
+  output through the same handler. `traceparent` is forwarded by the JSON
+  proxy and surfaced on RPC log lines for trace correlation.
+
+### Fixed
+
+- Lifecycle: GracefulStop is bounded by a 20s deadline (a stuck stream no
+  longer hangs shutdown forever); the metrics server reports its outcome on
+  a channel instead of `log.Fatalf` in a goroutine (which skipped the
+  deferred storage close); and the proxy and MCP gateway handle SIGTERM
+  with a bounded 10s drain instead of dying mid-stream, plus idle-connection
+  timeouts.
+
 ### Changed
 
 - Chunk storage redesign: stream chunks moved out of the `requests` row's

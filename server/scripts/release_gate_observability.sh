@@ -104,6 +104,9 @@ required_metrics = [
 	"toolplane_task_dead_letter_current",
 	"toolplane_task_retries_total",
 	"toolplane_task_dead_letters_total",
+	"toolplane_grpc_requests_total",
+	"toolplane_grpc_request_duration_seconds_bucket",
+	"go_goroutines",
 ]
 
 missing = [name for name in required_metrics if name not in body]
@@ -220,6 +223,24 @@ if ! wait_for_http_ok "http://127.0.0.1:${http_port}/health" 60; then
 	echo "proxy health endpoint did not become ready on port $http_port" >&2
 	exit 1
 fi
+
+# Drive one real RPC through the gateway before scraping: labeled request
+# counters and latency histograms only render once their label combination
+# has been observed, so the metrics assertion below needs live traffic. Any
+# outcome counts — including an auth rejection — because the metrics
+# interceptor is the outermost layer.
+"$python_bin" - "http://127.0.0.1:${http_port}/api/HealthCheck" <<'PY'
+import sys
+import urllib.error
+import urllib.request
+
+url = sys.argv[1]
+request = urllib.request.Request(url, data=b"{}", method="POST")
+try:
+    urllib.request.urlopen(request, timeout=2.0)
+except urllib.error.HTTPError:
+    pass
+PY
 
 validate_metrics "http://127.0.0.1:${metrics_port}/metrics"
 validate_health "http://127.0.0.1:${http_port}/health"
