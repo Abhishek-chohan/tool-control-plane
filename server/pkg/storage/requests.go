@@ -344,6 +344,9 @@ func (s *Store) GetRequestChunksByRequest(ctx context.Context, requestID string,
 		if err := rows.Scan(&seq, &chunk); err != nil {
 			return model.RequestChunkWindow{}, fmt.Errorf("scan request chunk: %w", err)
 		}
+		if seq != window.StartSeq+int32(len(window.Chunks)) {
+			return model.RequestChunkWindow{}, fmt.Errorf("chunk table gap for request %s: seq %d out of sequence", requestID, seq)
+		}
 		window.Chunks = append(window.Chunks, chunk)
 	}
 	return window, rows.Err()

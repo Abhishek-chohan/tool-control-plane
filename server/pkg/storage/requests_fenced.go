@@ -79,6 +79,9 @@ func selectChunkWindow(ctx context.Context, tx *sql.Tx, requestID string, startS
 		if err := rows.Scan(&seq, &chunk); err != nil {
 			return model.RequestChunkWindow{}, fmt.Errorf("scan request chunk: %w", err)
 		}
+		if seq != window.StartSeq+int32(len(window.Chunks)) {
+			return model.RequestChunkWindow{}, fmt.Errorf("chunk table gap for request %s: seq %d out of sequence", requestID, seq)
+		}
 		window.Chunks = append(window.Chunks, chunk)
 	}
 	return window, rows.Err()
@@ -98,7 +101,7 @@ func enforceChunkWindow(ctx context.Context, tx *sql.Tx, requestID string, nextS
 			SELECT seq FROM (
 				SELECT seq,
 				       ROW_NUMBER() OVER (ORDER BY seq DESC) AS position,
-				       SUM(length(chunk)) OVER (ORDER BY seq DESC) AS running_bytes
+				       SUM(octet_length(chunk)) OVER (ORDER BY seq DESC) AS running_bytes
 				FROM request_chunks WHERE request_id=$1
 			) ranked
 			WHERE position > $2 OR running_bytes > $3
@@ -202,8 +205,7 @@ func (s *Store) SubmitRequestResultFenced(ctx context.Context, sessionID, reques
 			if resultStr, ok := result.(string); ok {
 				seq := req.AddStreamChunk(resultStr)
 				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)
-				 ON CONFLICT (request_id, seq) DO NOTHING`,
+					`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)`,
 					req.ID, int(seq), resultStr, time.Now()); err != nil {
 					return fmt.Errorf("insert trailing request chunk: %w", err)
 				}
@@ -297,8 +299,7 @@ func (s *Store) AppendRequestChunksFenced(ctx context.Context, sessionID, reques
 		// Chunk payloads are append-only rows keyed (request_id, seq).
 		for i, chunk := range chunks {
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)
-				 ON CONFLICT (request_id, seq) DO NOTHING`,
+				`INSERT INTO request_chunks (request_id, seq, chunk, created_at) VALUES ($1,$2,$3,$4)`,
 				req.ID, int(firstSeq)+i, chunk, time.Now()); err != nil {
 				return fmt.Errorf("insert request chunk: %w", err)
 			}

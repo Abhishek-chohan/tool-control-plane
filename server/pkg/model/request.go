@@ -186,27 +186,32 @@ func (r *Request) AddStreamChunk(chunk string) int32 {
 // trimStreamWindow drops oldest chunks until the retained window fits both
 // the count and byte bounds, advancing StartSeq to match.
 func (r *Request) trimStreamWindow() {
-	if over := len(r.StreamResults) - maxRequestStreamChunks; over > 0 {
-		r.StreamResults = append([]string(nil), r.StreamResults[over:]...)
-		r.StreamStartSeq += int32(over)
-	}
-	for len(r.StreamResults) > 0 && r.streamWindowBytes() > MaxRequestStreamWindowBytes {
-		r.StreamResults = r.StreamResults[1:]
-		r.StreamStartSeq++
-	}
-	if r.StreamStartSeq > r.NextStreamSeq {
-		// Degenerate guard: never let the window invert.
-		r.StreamStartSeq = r.NextStreamSeq
-		r.StreamResults = nil
-	}
-}
-
-func (r *Request) streamWindowBytes() int {
+	// Find the retained prefix in one backward pass: the newest chunks that
+	// fit both the count and byte bounds. Copying the remainder into a fresh
+	// slice releases the dropped chunks' backing array for GC.
 	total := 0
-	for _, chunk := range r.StreamResults {
-		total += len(chunk)
+	keep := len(r.StreamResults)
+	for i := len(r.StreamResults) - 1; i >= 0; i-- {
+		total += len(r.StreamResults[i])
+		if total > MaxRequestStreamWindowBytes || (len(r.StreamResults)-i) > maxRequestStreamChunks {
+			// chunk i is the oldest one that no longer fits: everything after it
+			// is the retained window.
+			keep = len(r.StreamResults) - i - 1
+			break
+		}
 	}
-	return total
+	drop := len(r.StreamResults) - keep
+	if drop <= 0 {
+		return
+	}
+	r.StreamStartSeq += int32(drop)
+	if keep == 0 {
+		r.StreamResults = nil
+		return
+	}
+	retained := make([]string, keep)
+	copy(retained, r.StreamResults[len(r.StreamResults)-keep:])
+	r.StreamResults = retained
 }
 
 func (r *Request) ClearStreamChunks() {

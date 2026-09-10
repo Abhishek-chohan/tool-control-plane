@@ -97,8 +97,13 @@ func (s *Store) GetRequestChunksByRequest(ctx context.Context, requestID string,
 	}
 	r.EnsureStreamSequenceDefaults()
 	full := r.StreamChunkWindow()
-	if startSeq > full.StartSeq {
+	// Clamp the requested window into the retained one: never hand out seqs
+	// the model does not hold.
+	if startSeq < full.StartSeq {
 		startSeq = full.StartSeq
+	}
+	if nextSeq > full.NextSeq {
+		nextSeq = full.NextSeq
 	}
 	window := model.RequestChunkWindow{StartSeq: startSeq, NextSeq: nextSeq}
 	for i, chunk := range full.Chunks {
