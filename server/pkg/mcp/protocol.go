@@ -253,9 +253,11 @@ func (m requestMeta) clientSupportsTasks() bool {
 	return ok
 }
 
-// has2026Meta reports whether the request params carry the 2026-07-28
-// per-request _meta (a declared protocol version). Requests without it are
-// served through the initialize-handshake compatibility path.
+// has2026Meta reports whether the request params carry a _meta object —
+// the 2026-07-28 envelope marker. Requests with any _meta take the 2026
+// path (where the full per-request validation applies, so a malformed or
+// unsupported version still surfaces the proper errors); requests with no
+// _meta at all are initialize-handshake clients.
 func has2026Meta(params json.RawMessage) bool {
 	var base baseParams
 	if len(params) == 0 {
@@ -264,9 +266,5 @@ func has2026Meta(params json.RawMessage) bool {
 	if err := json.Unmarshal(params, &base); err != nil {
 		return false
 	}
-	if base.Meta == nil {
-		return false
-	}
-	version, _ := base.Meta[metaProtocolVersion].(string)
-	return version != ""
+	return base.Meta != nil
 }
