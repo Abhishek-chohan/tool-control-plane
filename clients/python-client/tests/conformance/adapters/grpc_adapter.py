@@ -167,7 +167,7 @@ class GrpcConformanceAdapter:
         return request_id
 
     def get_request_status(self, session_id: str, request_id: str) -> Dict[str, Any]:
-        return self.client.get_request_status(request_id, session_id)
+        return self.client.get_request_status(session_id, request_id)
 
     def get_request_chunks_window(
         self, session_id: str, request_id: str

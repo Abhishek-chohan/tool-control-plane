@@ -110,9 +110,13 @@ print(tools)
 result = client.invoke("echo-tool", session_id=session_id, text="Hello World")
 print(result)  # Output: Echo: Hello World
 
-# Execute a tool asynchronously
-request_id = client.ainvoke("echo-tool", session_id=session_id, text="Async Test")
+# Submit a tool invocation without waiting for the result (awaitable)
+import asyncio
+request_id = asyncio.run(
+    client.ainvoke("echo-tool", session_id=session_id, text="Async Test")
+)
 print(f"Request ID: {request_id}")
+# Poll client.get_request_status(session_id, request_id) for the outcome.
 
 # Stream tool execution
 def stream_callback(chunk, is_final):

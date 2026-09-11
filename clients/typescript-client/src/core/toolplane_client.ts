@@ -305,22 +305,6 @@ export class ToolplaneClient {
     return this.normalizeRequest(request);
   }
 
-  async add(a: number, b: number): Promise<number> {
-    return this.executeNumericTool('add', { a, b });
-  }
-
-  async subtract(a: number, b: number): Promise<number> {
-    return this.executeNumericTool('subtract', { a, b });
-  }
-
-  async multiply(a: number, b: number): Promise<number> {
-    return this.executeNumericTool('multiply', { a, b });
-  }
-
-  async divide(a: number, b: number): Promise<number> {
-    return this.executeNumericTool('divide', { a, b });
-  }
-
   async ping(): Promise<string> {
     return this.pingGRPC();
   }
@@ -1013,11 +997,6 @@ export class ToolplaneClient {
     return response.getStatus();
   }
 
-  private async executeNumericTool(toolName: string, params: Record<string, unknown>): Promise<number> {
-    const request = await this.executeToolGRPC(toolName, params);
-    return this.parseNumericResult(request.getResult(), toolName);
-  }
-
   /**
    * Replays the request's retained chunks that follow lastSeq and streams
    * live chunks until the final marker. Resolving rejects with an
@@ -1248,21 +1227,6 @@ export class ToolplaneClient {
     } catch {
       return value;
     }
-  }
-
-  private parseNumericResult(value: string, operation: string): number {
-    const parsed = this.parseResultPayload(value);
-    if (typeof parsed === 'number' && Number.isFinite(parsed)) {
-      return parsed;
-    }
-    if (typeof parsed === 'string') {
-      const numeric = Number.parseFloat(parsed);
-      if (Number.isFinite(numeric)) {
-        return numeric;
-      }
-    }
-
-    throw new ProtocolError(`gRPC ${operation} did not return a numeric result`);
   }
 
   private serializePayload(value: unknown): string {
