@@ -107,6 +107,8 @@ def convert_langchain_tool_to_toolplane_tool(langchain_tool):
                 langchain_tool.arun(kwargs)
             )
         else:
+            from langchain_core.tools import ToolException
+
             raise ToolException(f"Tool '{name}' has no run()/arun()")
 
     # By default we treat it as non‐streaming

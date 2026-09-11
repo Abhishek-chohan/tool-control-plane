@@ -12,3 +12,9 @@ from toolplane.toolkits.standalone_tools.semantic_search import (  # noqa: F401
     search_file,
     semantic_search,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

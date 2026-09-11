@@ -7,3 +7,9 @@ from toolplane.toolkits.standalone_tools.create_directory import (  # noqa: F401
     create_directory,
     main,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

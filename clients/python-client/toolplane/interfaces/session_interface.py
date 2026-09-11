@@ -57,7 +57,7 @@ class ISessionContext(Protocol):
         """Invoke a tool in this session."""
         ...
 
-    def ainvoke(self, tool_name: str, **params) -> str:
+    async def ainvoke(self, tool_name: str, **params) -> str:
         """Invoke a tool asynchronously."""
         ...
 
@@ -65,6 +65,12 @@ class ISessionContext(Protocol):
         self, tool_name: str, callback: Callable[[Any, bool], None], **params
     ) -> List[Any]:
         """Stream tool execution."""
+        ...
+
+    async def astream(
+        self, tool_name: str, callback: Callable[[Any, bool], None], **params
+    ) -> List[Any]:
+        """Awaitable stream: resolves with the collected chunks."""
         ...
 
     def get_available_tools(self) -> Dict[str, Any]:

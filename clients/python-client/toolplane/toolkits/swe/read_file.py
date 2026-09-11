@@ -10,3 +10,9 @@ from toolplane.toolkits.standalone_tools.read_file import (  # noqa: F401
     main,
     read_file,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

@@ -295,15 +295,19 @@ class ToolplaneHTTP:
 
         return context.stream(tool_name, callback, **params)
 
-    def astream(
+    async def astream(
         self,
         tool_name: str,
         callback: Callable[[Any, bool], None],
         session_id: str,
         **params,
     ) -> List[Any]:
-        """Alias for stream method."""
-        return self.stream(tool_name, callback, session_id, **params)
+        """Awaitable stream: resolves with the collected chunks."""
+        context = self.get_session(session_id)
+        if not context:
+            raise ToolplaneError(f"Session {session_id} not found")
+
+        return await context.astream(tool_name, callback, **params)
 
     def get_available_tools(self, session_id: str) -> Dict[str, Any]:
         """Get available tools for a session."""
