@@ -77,14 +77,18 @@ See `server/docs/agent-runtime-integration-seam.md` for the full seam model, min
 
 ## Use with MCP clients
 
-`toolplane-mcp-gateway` is a stateless facade that lets any MCP client speak to Toolplane using the 2026-07-28 protocol. It is a thin JSON-RPC translator in front of the gRPC backend — it holds no request state of its own, so any number of gateway instances can serve any request.
+`toolplane-mcp-gateway` is a stateless facade that speaks Toolplane over MCP. It is a thin JSON-RPC translator in front of the gRPC backend — it holds no request state of its own, so any number of gateway instances can serve any request. Two client generations are supported:
+
+- **MCP 2026-07-28 stateless clients** connect directly: every request declares the protocol version in `_meta` and no handshake is needed.
+- **Initialize-based clients** (the 2025-03-26 / 2025-06-18 / 2025-11-25 revisions used by the installed base of MCP clients) connect through the built-in compatibility path: send the standard `initialize` handshake, then plain `tools/list` / `tools/call` without `_meta`. The Tasks extension is 2026-only; initialize-based clients are served synchronously.
+- **Stdio-only environments:** the TypeScript MCP adapter wraps one Toolplane session behind a stdio transport and handles both protocol generations.
 
 - **Endpoint:** `POST /mcp` (Streamable HTTP). Health is `GET /health`.
 - **Auth:** forward your Toolplane API key as `Authorization` or `X-API-Key`; the gateway passes it to the backend's existing authorizer unchanged.
-- **Session binding:** set `dev.toolplane/session_id` in each request's `_meta` to target an existing Toolplane session. Omit it and the gateway provisions one session per API key.
-- **Discovery:** `server/discover` advertises the supported protocol version, the `tools` capability, and the `io.modelcontextprotocol/tasks` extension.
+- **Session binding:** 2026 clients set `dev.toolplane/session_id` in each request's `_meta` to target an existing Toolplane session. Omit it (or use the initialize path) and the gateway provisions one session per API key.
+- **Discovery:** `server/discover` (2026 clients) advertises the supported protocol version, the `tools` capability, and the `io.modelcontextprotocol/tasks` extension. `initialize` (legacy clients) negotiates the revision and returns the server's capabilities and instructions.
 - **Tools:** `tools/list` mirrors the session's registered tools; `tools/call` enqueues a durable request that a provider machine claims and executes.
-- **Tasks extension:** clients that advertise `io.modelcontextprotocol/tasks` get a task handle from `tools/call` and poll it with `tasks/get` (including retained chunk-window replay behind a `dev.toolplane/last_seq` cursor), cancel it with `tasks/cancel`, and can replay after reconnecting. Clients that do not advertise the extension are served synchronously.
+- **Tasks extension:** 2026 clients that advertise `io.modelcontextprotocol/tasks` get a task handle from `tools/call` and poll it with `tasks/get` (including retained chunk-window replay behind a `dev.toolplane/last_seq` cursor), cancel it with `tasks/cancel`, and can replay after reconnecting. Clients that do not advertise the extension are served synchronously.
 - **Trace context:** W3C `traceparent`/`tracestate` headers are validated and propagated to the backend as gRPC metadata.
 
 Run it beside the server (the reference compose stack includes an `mcp-gateway` service):
@@ -93,7 +97,7 @@ Run it beside the server (the reference compose stack includes an `mcp-gateway` 
 toolplane-mcp-gateway --listen :8081 --backend localhost:9001
 ```
 
-Point an MCP client at `http://<host>:8081/mcp` with your API key. The maintained validation path is the `mcp` transport in the Python conformance suite (`TOOLPLANE_CONFORMANCE_MCP=1`).
+Point an MCP client at `http://<host>:8081/mcp` with your API key. The maintained validation paths are the `mcp` transport in the Python conformance suite (`TOOLPLANE_CONFORMANCE_MCP=1`) and the official `@modelcontextprotocol/sdk` client test in the TypeScript adapter suite.
 
 ## Reliability Proof
 
