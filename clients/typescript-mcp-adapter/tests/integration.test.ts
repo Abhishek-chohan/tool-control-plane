@@ -10,6 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { ConformanceEnvironment } from '../../typescript-client/tests/conformance/environment';
 import { startConformanceEnvironment } from '../../typescript-client/tests/conformance/environment';
 import { GrpcConformanceAdapter } from '../../typescript-client/tests/conformance/adapters/grpc_adapter';
+import { PendingRequestWorker } from './helpers/pending_worker';
 
 import {
   CHUNKS_META_KEY,
@@ -42,62 +43,6 @@ function textContent(result: Awaited<ReturnType<Client['readResource']>>): strin
 
 function adapterCliPath(): string {
   return path.resolve(process.cwd(), 'dist/cli.js');
-}
-
-class PendingRequestWorker {
-  private stopped = false;
-
-  private loopPromise?: Promise<void>;
-
-  private readonly inFlight = new Set<string>();
-
-  constructor(
-    private readonly provider: GrpcConformanceAdapter,
-    private readonly sessionId: string,
-  ) {}
-
-  start(): void {
-    if (!this.loopPromise) {
-      this.loopPromise = this.loop();
-    }
-  }
-
-  async stop(): Promise<void> {
-    this.stopped = true;
-
-    if (this.loopPromise) {
-      await this.loopPromise;
-    }
-
-    while (this.inFlight.size > 0) {
-      await sleep(25);
-    }
-  }
-
-  private async loop(): Promise<void> {
-    while (!this.stopped) {
-      const pendingRequests = await this.provider.listRequests(this.sessionId, {
-        list_status: 'pending',
-        limit: 20,
-      });
-
-      for (const request of pendingRequests) {
-        const requestId = String(request.id ?? '');
-        if (!requestId || this.inFlight.has(requestId)) {
-          continue;
-        }
-
-        this.inFlight.add(requestId);
-        void this.provider
-          .startRequestProcessing(this.sessionId, requestId)
-          .finally(() => {
-            this.inFlight.delete(requestId);
-          });
-      }
-
-      await sleep(50);
-    }
-  }
 }
 
 function isNamedTool(value: unknown): value is { name: string; description?: string; inputSchema: { type: string } } {

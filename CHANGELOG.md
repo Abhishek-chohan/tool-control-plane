@@ -39,6 +39,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- MCP initialize compatibility: the gateway answers the standard
+  `initialize` handshake for the 2025-03-26 / 2025-06-18 / 2025-11-25
+  revisions and serves their `tools/list` / `tools/call` with legacy shapes,
+  so the installed base of initialize-based MCP clients can connect to the
+  2026-07-28 gateway (previously they could not connect at all). Conformance
+  now includes the official `@modelcontextprotocol/sdk` client connecting
+  over StreamableHTTP through initialize and executing a tool end to end.
+  See `server/docs/release-notes/2026-09-11-mcp-interop.md`.
+
+### Added
+
 - Prometheus-native metrics: `prometheus/client_golang` replaces the
   hand-rolled text renderer (same metric names, plus Go runtime and process
   collectors) and adds `toolplane_grpc_requests_total{method,code}` and a
