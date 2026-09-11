@@ -221,3 +221,83 @@ func correlationRef() string {
 	}
 	return hex.EncodeToString(buf[:])
 }
+
+// handleLegacyToolsList serves initialize-handshake clients: the same tool
+// catalog without the 2026 resultType wrapper.
+func (s *Server) handleLegacyToolsList(ctx context.Context, apiKey string) (any, *Error) {
+	sessionID, err := s.resolveSession(ctx, requestMeta{}, apiKey)
+	if err != nil {
+		return nil, internalErrorRef("session resolution", err)
+	}
+
+	response, err := s.tools.ListTools(ctx, &gw.ListToolsRequest{SessionId: sessionID})
+	if err != nil {
+		return nil, backendError("list tools", err)
+	}
+
+	tools := make([]any, 0, len(response.Tools))
+	for _, tool := range response.Tools {
+		entry := map[string]any{
+			"name":        tool.Name,
+			"inputSchema": normalizeToolSchema(tool.Schema),
+		}
+		if strings.TrimSpace(tool.Description) != "" {
+			entry["description"] = tool.Description
+		}
+		tools = append(tools, entry)
+	}
+
+	return map[string]any{"tools": tools}, nil
+}
+
+// legacyCallToolParams is the legacy tools/call params object: identical to
+// the 2026 one minus the required _meta.
+type legacyCallToolParams struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+// handleLegacyToolsCall serves initialize-handshake clients: same execution
+// path (create request, await terminal state), rendered as a plain
+// CallToolResult without the 2026 _meta chunk decoration.
+func (s *Server) handleLegacyToolsCall(ctx context.Context, req *Request, apiKey string) (any, *Error) {
+	var params legacyCallToolParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		return nil, errInvalidParams("tools/call params must be a JSON object: " + err.Error())
+	}
+	if strings.TrimSpace(params.Name) == "" {
+		return nil, errInvalidParams("tools/call requires a non-empty tool name")
+	}
+
+	sessionID, err := s.resolveSession(ctx, requestMeta{}, apiKey)
+	if err != nil {
+		return nil, internalErrorRef("session resolution", err)
+	}
+
+	input, err := json.Marshal(params.Arguments)
+	if err != nil {
+		return nil, errInvalidParams("tool arguments must be JSON-serializable: " + err.Error())
+	}
+
+	request, err := s.requests.CreateRequest(ctx, &gw.CreateRequestRequest{
+		SessionId: sessionID,
+		ToolName:  params.Name,
+		Input:     string(input),
+	})
+	if err != nil {
+		return nil, backendError("create request for tool "+params.Name, err)
+	}
+
+	result, rpcErr := s.awaitSyncResult(ctx, sessionID, request.Id)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
+
+	// Strip the 2026 _meta decoration: legacy revisions carry no _meta on
+	// results and unknown keys only invite strict-client rejections.
+	if resultMap, ok := result.(map[string]any); ok {
+		delete(resultMap, "_meta")
+		return resultMap, nil
+	}
+	return result, nil
+}

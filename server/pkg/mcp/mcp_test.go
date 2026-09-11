@@ -196,17 +196,43 @@ func TestUnsupportedProtocolVersionRejected(t *testing.T) {
 	}
 }
 
-func TestMissingMetaRejected(t *testing.T) {
+func TestLegacyAndMissingMetaRouting(t *testing.T) {
 	conn, _, _ := startBackend(t)
 	handler := newFacade(t, conn)
 
-	status, envelope := postRPC(t, handler, "tools/list", map[string]any{})
-	if status != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", status)
+	// A meta-less request to a 2026-only method gets a JSON-RPC
+	// method-not-found (HTTP 200: the request itself was well-formed).
+	status, envelope := postRPC(t, handler, "tasks/get", map[string]any{"taskId": "t1"})
+	if status != http.StatusOK {
+		t.Fatalf("tasks/get without meta: status = %d, want 200", status)
 	}
 	errObj := rpcError(t, envelope)
+	if code, _ := errObj["code"].(float64); int(code) != mcp.CodeMethodNotFound {
+		t.Fatalf("tasks/get error code = %v, want %d", errObj["code"], mcp.CodeMethodNotFound)
+	}
+
+	// A request declaring the 2026 version but omitting required
+	// clientCapabilities is still validated by the 2026 path.
+	metaLessCaps := map[string]any{
+		"io.modelcontextprotocol/protocolVersion": mcp.ProtocolVersion,
+	}
+	status, envelope = postRPC(t, handler, "tools/list", map[string]any{"_meta": metaLessCaps})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tools/list without capabilities: status = %d, want 400", status)
+	}
+	errObj = rpcError(t, envelope)
 	if code, _ := errObj["code"].(float64); int(code) != mcp.CodeInvalidRequest {
 		t.Fatalf("error code = %v, want %d", errObj["code"], mcp.CodeInvalidRequest)
+	}
+
+	// A meta-less tools/list is a legacy client: served, not rejected.
+	status, envelope = postRPC(t, handler, "tools/list", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("legacy tools/list status = %d, want 200", status)
+	}
+	result := rpcResult(t, envelope)
+	if _, ok := result["tools"].([]any); !ok {
+		t.Fatalf("legacy tools/list missing tools array: %v", result)
 	}
 }
 
