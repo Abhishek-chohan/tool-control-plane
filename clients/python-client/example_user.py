@@ -9,6 +9,7 @@ This example demonstrates:
 """
 
 import json
+import asyncio
 import os
 import sys
 import time
@@ -76,7 +77,7 @@ def list_and_print_tool_schemas(client, session_id):
 def wait_for_request_completion(client, session_id, request_id, timeout_seconds=20):
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        request_state = client.get_request_status(request_id, session_id)
+        request_state = client.get_request_status(session_id, request_id)
         status = request_state.get("status", "unknown")
         if status in {"done", "failure", "stalled"}:
             return request_state
@@ -164,12 +165,14 @@ def main():
 
     print("\n[Test 3] Creating async request for 'incident_brief'")
     try:
-        request_id = client.ainvoke(
-            "incident_brief",
-            session_id,
-            service="http-gateway",
-            state="degraded",
-            owner="platform-team",
+        request_id = asyncio.run(
+            client.ainvoke(
+                "incident_brief",
+                session_id,
+                service="http-gateway",
+                state="degraded",
+                owner="platform-team",
+            )
         )
         print(f"    Request ID: {request_id}")
         request_state = wait_for_request_completion(client, session_id, request_id)
