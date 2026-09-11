@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 
@@ -316,28 +315,6 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 	}
 }
 
-func parseNumericResult(resultJSON string) (float64, error) {
-	if resultJSON == "" {
-		return 0, fmt.Errorf("empty result payload")
-	}
-
-	var numeric float64
-	if err := json.Unmarshal([]byte(resultJSON), &numeric); err == nil {
-		return numeric, nil
-	}
-
-	var numericString string
-	if err := json.Unmarshal([]byte(resultJSON), &numericString); err == nil {
-		parsed, parseErr := strconv.ParseFloat(numericString, 64)
-		if parseErr != nil {
-			return 0, fmt.Errorf("failed to parse numeric string result %q: %w", numericString, parseErr)
-		}
-		return parsed, nil
-	}
-
-	return 0, fmt.Errorf("failed to parse numeric result payload: %s", resultJSON)
-}
-
 // Ping tests server connectivity
 func (c *ToolplaneClient) Ping() (string, error) {
 	if err := c.ensureGRPCConnected(); err != nil {
@@ -352,42 +329,6 @@ func (c *ToolplaneClient) Ping() (string, error) {
 		return "", err
 	}
 	return resp.Status, nil
-}
-
-// Add performs addition
-func (c *ToolplaneClient) Add(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "add", map[string]interface{}{"a": a, "b": b}, "")
-	if err != nil {
-		return 0, err
-	}
-	return parseNumericResult(request.GetResult())
-}
-
-// Subtract performs subtraction
-func (c *ToolplaneClient) Subtract(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "subtract", map[string]interface{}{"a": a, "b": b}, "")
-	if err != nil {
-		return 0, err
-	}
-	return parseNumericResult(request.GetResult())
-}
-
-// Multiply performs multiplication
-func (c *ToolplaneClient) Multiply(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "multiply", map[string]interface{}{"a": a, "b": b}, "")
-	if err != nil {
-		return 0, err
-	}
-	return parseNumericResult(request.GetResult())
-}
-
-// Divide performs division
-func (c *ToolplaneClient) Divide(a, b float64) (float64, error) {
-	request, err := c.executeToolGRPC(context.Background(), "divide", map[string]interface{}{"a": a, "b": b}, "")
-	if err != nil {
-		return 0, err
-	}
-	return parseNumericResult(request.GetResult())
 }
 
 // ExecuteTool executes a tool via gRPC and waits for the final request result.

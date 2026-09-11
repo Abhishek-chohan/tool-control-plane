@@ -362,41 +362,6 @@ func TestGRPCContextPreservesExistingDeadline(t *testing.T) {
 	}
 }
 
-func TestParseNumericResult(t *testing.T) {
-	testCases := []struct {
-		name        string
-		payload     string
-		want        float64
-		wantErrText string
-	}{
-		{name: "number", payload: "42", want: 42},
-		{name: "numeric string", payload: `"42.5"`, want: 42.5},
-		{name: "empty", payload: "", wantErrText: "empty result payload"},
-		{name: "invalid", payload: `{"value":42}`, wantErrText: "failed to parse numeric result payload: {\"value\":42}"},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			got, err := parseNumericResult(testCase.payload)
-			if testCase.wantErrText != "" {
-				if err == nil {
-					t.Fatalf("parseNumericResult(%q) succeeded, want error", testCase.payload)
-				}
-				if err.Error() != testCase.wantErrText {
-					t.Fatalf("parseNumericResult(%q) error = %q, want %q", testCase.payload, err.Error(), testCase.wantErrText)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("parseNumericResult(%q) returned unexpected error: %v", testCase.payload, err)
-			}
-			if got != testCase.want {
-				t.Fatalf("parseNumericResult(%q) = %v, want %v", testCase.payload, got, testCase.want)
-			}
-		})
-	}
-}
 
 func TestNewToolplaneClientRejectsUnsupportedProtocol(t *testing.T) {
 	_, err := NewToolplaneClient(ClientProtocol("http"), "localhost", 9001, "session-1", "user-1", "")

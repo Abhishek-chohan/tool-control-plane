@@ -1,5 +1,6 @@
 """HTTP session context implementation."""
 
+import asyncio
 import json
 import logging
 import time
@@ -110,11 +111,20 @@ class HTTPSessionContext:
         except Exception as e:
             raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}")
 
-    def ainvoke(self, tool_name: str, **params) -> str:
-        """Invoke a tool asynchronously."""
+    async def ainvoke(self, tool_name: str, **params) -> str:
+        """Submit a tool invocation without blocking the caller.
+
+        Returns the request ID once the gateway accepts the work; poll
+        get_request_status (or await astream) for the outcome. The blocking
+        submission runs in a worker thread, so this is safe to await from a
+        running event loop.
+        """
         try:
-            return self.request_manager.create_request(
-                self.session_id, tool_name, json.dumps(params)
+            return await asyncio.to_thread(
+                self.request_manager.create_request,
+                self.session_id,
+                tool_name,
+                json.dumps(params),
             )
         except Exception as e:
             raise ToolplaneError(f"Failed to async invoke tool {tool_name}: {e}")
@@ -278,9 +288,12 @@ class HTTPSessionContext:
 
         return all_chunks
 
-    def astream(self, tool_name: str, callback: Callable[[Any, bool], None], **params):
-        """Stream results from a tool execution (alias)."""
-        return self.stream(tool_name, callback, **params)
+    async def astream(
+        self, tool_name: str, callback: Callable[[Any, bool], None], **params
+    ):
+        """Awaitable stream: runs the blocking stream loop in a worker
+        thread and resolves with the collected chunks."""
+        return await asyncio.to_thread(self.stream, tool_name, callback, **params)
 
     def get_request_status(self, request_id: str) -> Dict[str, Any]:
         """Get request status."""

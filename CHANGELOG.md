@@ -6,6 +6,37 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Removed
+
+- Dead Python SDK layers: `toolplane/factories/` (an alternative
+  construction API imported by nothing), `toolplane/session/` (superseded by
+  `core/session_context.py`), and `MODULAR_ARCHITECTURE.md`. The live module
+  graph is documented in `clients/python-client/ARCHITECTURE.md`.
+- Demo math helpers from the Go (`Add`/`Subtract`/`Multiply`/`Divide`) and
+  TypeScript (`add`/`subtract`/`multiply`/`divide`) clients — they hardcoded
+  a fictional server-side calculator into the client surface. Use
+  `ExecuteTool`/`executeTool` with your own registered tools.
+
+### Changed
+
+- SDK surface cleanup: Python `ainvoke`/`astream` are now real coroutines
+  (previously `ainvoke` was a synchronous submit misusing the "a" prefix and
+  `astream` was a plain alias for the blocking `stream`); the facades'
+  `get_request_status` argument order is now `(session_id, request_id)`,
+  consistent with every other facade method; seven byte-identical toolkit
+  files in `toolkits/swe/` became re-export shims of the
+  `toolkits/standalone_tools/` originals. See
+  `server/docs/release-notes/2026-09-11-sdk-surface-cleanup.md`.
+- Quickstart: `make demo` (in `server/`) runs the README "First Offload
+  Path" — in-memory server, provider example, consumer example — as one
+  verified command.
+
+### Fixed
+
+- `example.py`'s LangChain converter crashed with `AttributeError` on any
+  tool whose `args_schema` was a plain dict; it now handles pydantic v2/v1
+  models, dicts, and empty values.
+
 ### Added
 
 - Prometheus-native metrics: `prometheus/client_golang` replaces the

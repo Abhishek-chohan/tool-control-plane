@@ -188,7 +188,7 @@ class HttpConformanceAdapter:
         return request_id
 
     def get_request_status(self, session_id: str, request_id: str) -> Dict[str, Any]:
-        return self.client.get_request_status(request_id, session_id)
+        return self.client.get_request_status(session_id, request_id)
 
     def get_request_chunks_window(
         self, session_id: str, request_id: str
@@ -430,10 +430,8 @@ class HttpConformanceAdapter:
     def stream(self, session_id: str, tool_name: str, params: Dict[str, Any]) -> Tuple[List[Any], bool]:
         self.start_provider_runtime(session_id)
         try:
-            request_id = self.client.ainvoke(
-                tool_name=tool_name,
-                session_id=session_id,
-                **params,
+            request_id = self.client.create_request(
+                session_id, tool_name, json.dumps(params)
             )
 
             collected: List[Any] = []
@@ -441,7 +439,7 @@ class HttpConformanceAdapter:
             deadline = time.time() + 60
 
             while time.time() < deadline:
-                status = self.client.get_request_status(request_id, session_id)
+                status = self.client.get_request_status(session_id, request_id)
 
                 stream_results = status.get("streamResults", [])
                 if isinstance(stream_results, list) and len(stream_results) > last_count:

@@ -92,7 +92,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `UpdateToolPing` | `partial`: explicit provider heartbeat path | `unsupported` | `unsupported` | No standalone public ping wrapper (provider scope) |
 | `StreamExecuteTool` | `full`: `stream()` / `astream()` | `full`: `StreamExecuteTool()` | `unsupported` | Covered by `conformance/cases/invoke_stream.json` |
 | `ResumeStream` | `full`: `request_manager.resume_stream()` (gRPC + HTTP) | `full`: `ResumeStream()` | `full`: `resumeStream()` | Replays retained chunks after `last_seq` and streams live until the final marker; the server returns `OUT_OF_RANGE` when replay falls behind the retained window. The Python `stream()` fallback resumes through it instead of re-invoking |
-| `ExecuteTool` | `full`: `invoke()` / `ainvoke()` | `full`: `ExecuteTool()` plus math helpers | `full`: `executeTool()` plus math helpers | Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
+| `ExecuteTool` | `full`: `invoke()` / awaitable `ainvoke()` | `full`: `ExecuteTool()` | `full`: `executeTool()`, awaitable `resumeStream()` | Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
 | `HealthCheck` | `partial`: `ToolplaneHTTP.health()` plus connect probes | `full`: gRPC `Ping()` / `Connect()` | `full`: gRPC `ping()` / `connect()` | TypeScript and Go treat health checks as part of the maintained gRPC connection path |
 
 ## SessionsService

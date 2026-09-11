@@ -10,13 +10,10 @@ toolplane/__init__.py
   -> toolplane/provider_runtime.py
     -> toolplane/core/*
     -> toolplane/common/*
-    -> toolplane/factories/*
-    -> toolplane/session/*
     -> toolplane/interfaces/*
   -> toolplane/toolplane_http_client.py
     -> toolplane/http_core/*
     -> toolplane/common/*
-    -> toolplane/session/*
 ```
 
 ## Public Entry Points
@@ -73,9 +70,7 @@ The two facades intentionally mirror each other closely.
 | `toolplane/core/` | gRPC-side connection, error, machine, request, session, and tool primitives |
 | `toolplane/http_core/` | HTTP-side connection and session implementations |
 | `toolplane/common/` | Shared configs, base managers, retries, validation, and cache helpers |
-| `toolplane/factories/` | Factory helpers used to compose transport-specific components |
 | `toolplane/interfaces/` | Interface and protocol contracts for client modules |
-| `toolplane/session/` | Session context models used by both transports |
 | `toolplane/toolkits/` | Toolkit-oriented helpers layered on top of the SDK |
 | `toolplane/utils/` | General utility helpers |
 | `toolplane/proto/` | Python protobuf outputs used by the gRPC facade |
