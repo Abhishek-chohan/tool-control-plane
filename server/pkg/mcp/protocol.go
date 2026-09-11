@@ -19,14 +19,40 @@ const (
 	// JSONRPCVersion is the only JSON-RPC version MCP uses.
 	JSONRPCVersion = "2.0"
 
-	// ProtocolVersion is the MCP revision this facade speaks. There is no
-	// initialize handshake in this revision: every request carries the
+	// ProtocolVersion is the MCP revision this facade speaks natively. There
+	// is no initialize handshake in this revision: every request carries the
 	// version in _meta and the server accepts or rejects each request
 	// independently.
 	ProtocolVersion = "2026-07-28"
 
 	// TasksExtensionID identifies the MCP Tasks extension in capabilities.
 	TasksExtensionID = "io.modelcontextprotocol/tasks"
+)
+
+// Legacy protocol revisions spoken through the initialize compatibility
+// path. These are the initialize-handshake revisions the installed base of
+// MCP clients negotiates; the gateway answers initialize for them and
+// serves their requests with legacy (non-resultType) shapes.
+const (
+	// DefaultLegacyProtocolVersion is returned when a legacy client requests
+	// a version outside LegacyProtocolVersions: per the legacy handshake the
+	// server answers with the revision it supports and the client decides
+	// whether to continue.
+	DefaultLegacyProtocolVersion = "2025-06-18"
+)
+
+// LegacyProtocolVersions are the initialize-handshake revisions accepted on
+// the compatibility path.
+var LegacyProtocolVersions = []string{
+	"2025-03-26",
+	"2025-06-18",
+	"2025-11-25",
+}
+
+// Server identification returned by initialize.
+const (
+	ServerName    = "toolplane-mcp-gateway"
+	ServerVersion = "1.0.0"
 )
 
 // Reserved _meta keys defined by the 2026-07-28 core spec.
@@ -225,4 +251,20 @@ func (m requestMeta) clientSupportsTasks() bool {
 	}
 	_, ok := extensions[TasksExtensionID]
 	return ok
+}
+
+// has2026Meta reports whether the request params carry a _meta object —
+// the 2026-07-28 envelope marker. Requests with any _meta take the 2026
+// path (where the full per-request validation applies, so a malformed or
+// unsupported version still surfaces the proper errors); requests with no
+// _meta at all are initialize-handshake clients.
+func has2026Meta(params json.RawMessage) bool {
+	var base baseParams
+	if len(params) == 0 {
+		return false
+	}
+	if err := json.Unmarshal(params, &base); err != nil {
+		return false
+	}
+	return base.Meta != nil
 }

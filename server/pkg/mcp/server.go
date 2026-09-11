@@ -160,8 +160,15 @@ func (s *Server) serveMCP(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, httpStatus, response)
 }
 
-// dispatch validates the per-request _meta once, then routes the method.
+// dispatch routes the method. Requests carrying the 2026-07-28 per-request
+// _meta follow the stateless surface; requests without it are initialize-
+// handshake clients (2025-03-26 / 2025-06-18 / 2025-11-25) and are served
+// with legacy shapes.
 func (s *Server) dispatch(ctx context.Context, req *Request, apiKey string) Response {
+	if !has2026Meta(req.Params) {
+		return s.dispatchLegacy(ctx, req, apiKey)
+	}
+
 	meta, metaErr := parseRequestMeta(req.Params)
 	if metaErr != nil {
 		return newErrorResponse(req.ID, metaErr)
@@ -174,10 +181,46 @@ func (s *Server) dispatch(ctx context.Context, req *Request, apiKey string) Resp
 	return newResultResponse(req.ID, result)
 }
 
+// dispatchLegacy serves initialize-handshake clients: initialize and ping
+// directly, tools with plain legacy shapes (no resultType wrapper, no 2026
+// _meta decoration), and nothing else — the Tasks extension is 2026-only on
+// this gateway.
+func (s *Server) dispatchLegacy(ctx context.Context, req *Request, apiKey string) Response {
+	switch req.Method {
+	case "initialize":
+		result, rpcErr := handleInitialize(req.Params)
+		if rpcErr != nil {
+			return newErrorResponse(req.ID, rpcErr)
+		}
+		return newResultResponse(req.ID, result)
+	case "ping":
+		return newResultResponse(req.ID, map[string]any{})
+	case "tools/list":
+		result, rpcErr := s.handleLegacyToolsList(ctx, apiKey)
+		if rpcErr != nil {
+			return newErrorResponse(req.ID, rpcErr)
+		}
+		return newResultResponse(req.ID, result)
+	case "tools/call":
+		result, rpcErr := s.handleLegacyToolsCall(ctx, req, apiKey)
+		if rpcErr != nil {
+			return newErrorResponse(req.ID, rpcErr)
+		}
+		return newResultResponse(req.ID, result)
+	case "tasks/get", "tasks/cancel", "tasks/update", "server/discover":
+		return newErrorResponse(req.ID, errMethodNotFound(
+			req.Method+" requires MCP "+ProtocolVersion+" (send _meta with "+metaProtocolVersion+" and "+metaClientCapabilities+")"))
+	default:
+		return newErrorResponse(req.ID, errMethodNotFound("unknown method: "+req.Method))
+	}
+}
+
 func (s *Server) route(ctx context.Context, req *Request, meta requestMeta, apiKey string) (any, *Error) {
 	switch req.Method {
 	case "server/discover":
 		return s.handleDiscover()
+	case "ping":
+		return map[string]any{}, nil
 	case "tools/list":
 		return s.handleToolsList(ctx, meta, apiKey)
 	case "tools/call":
