@@ -211,6 +211,21 @@ func TestLegacyAndMissingMetaRouting(t *testing.T) {
 		t.Fatalf("tasks/get error code = %v, want %d", errObj["code"], mcp.CodeMethodNotFound)
 	}
 
+	// A request with _meta but no declared protocol version takes the 2026
+	// path and is rejected for the missing version (not silently served as
+	// legacy).
+	status, envelope = postRPC(t, handler, "tools/call", map[string]any{
+		"_meta": map[string]any{},
+		"name":  "echo",
+	})
+	if status != http.StatusBadRequest {
+		t.Fatalf("tools/call with bare _meta: status = %d, want 400", status)
+	}
+	errObj = rpcError(t, envelope)
+	if code, _ := errObj["code"].(float64); int(code) != mcp.CodeInvalidRequest {
+		t.Fatalf("error code = %v, want %d", errObj["code"], mcp.CodeInvalidRequest)
+	}
+
 	// A request declaring the 2026 version but omitting required
 	// clientCapabilities is still validated by the 2026 path.
 	metaLessCaps := map[string]any{

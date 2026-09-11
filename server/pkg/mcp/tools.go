@@ -293,10 +293,12 @@ func (s *Server) handleLegacyToolsCall(ctx context.Context, req *Request, apiKey
 		return nil, rpcErr
 	}
 
-	// Strip the 2026 _meta decoration: legacy revisions carry no _meta on
-	// results and unknown keys only invite strict-client rejections.
+	// Strip the 2026 decorations (resultType discriminator and _meta):
+	// legacy revisions carry neither on results and unknown keys only
+	// invite strict-client rejections.
 	if resultMap, ok := result.(map[string]any); ok {
 		delete(resultMap, "_meta")
+		delete(resultMap, "resultType")
 		return resultMap, nil
 	}
 	return result, nil
