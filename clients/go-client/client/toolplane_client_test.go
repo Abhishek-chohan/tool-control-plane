@@ -362,7 +362,6 @@ func TestGRPCContextPreservesExistingDeadline(t *testing.T) {
 	}
 }
 
-
 func TestNewToolplaneClientRejectsUnsupportedProtocol(t *testing.T) {
 	_, err := NewToolplaneClient(ClientProtocol("http"), "localhost", 9001, "session-1", "user-1", "")
 	if err == nil {
