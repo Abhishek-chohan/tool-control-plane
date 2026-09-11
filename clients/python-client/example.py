@@ -38,7 +38,9 @@ config = {
 }
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("session_id", nargs="?", default=os.getenv("TOOLPLANE_SESSION_ID", ""))
+parser.add_argument(
+    "session_id", nargs="?", default=os.getenv("TOOLPLANE_SESSION_ID", "")
+)
 parser.add_argument(
     "--toolkit",
     choices=["echo", "swe"],
@@ -49,7 +51,9 @@ args = parser.parse_args()
 
 config["session_id"] = (args.session_id or "").strip()
 if not config["session_id"]:
-    print("❌ Error: set TOOLPLANE_SESSION_ID or pass the session ID as the first argument.")
+    print(
+        "❌ Error: set TOOLPLANE_SESSION_ID or pass the session ID as the first argument."
+    )
     sys.exit(1)
 
 client = Toolplane(
@@ -72,16 +76,24 @@ def convert_langchain_tool_to_toolplane_tool(langchain_tool):
     Convert a LangChain StructuredTool into Toolplane tool components:
       (name, func, schema_dict, description, stream_flag).
     """
-    from langchain_core.tools import ToolException
-
     name = langchain_tool.name
     description = getattr(langchain_tool, "description", "") or ""
-    args_schema = getattr(langchain_tool, "args_schema", {}) or {}
-    schema = {}
-    args_schema = args_schema.model_json_schema()
-    schema["name"] = name
-    schema["description"] = description
-    schema["schema"] = args_schema
+    args_schema = getattr(langchain_tool, "args_schema", None)
+
+    # args_schema varies by LangChain version and tool: a pydantic model
+    # class (v2), a pydantic BaseModel subclass (v1), or an already-material
+    # JSON-schema dict. Handle each; never assume model_json_schema exists.
+    if hasattr(args_schema, "model_json_schema"):
+        args_schema = args_schema.model_json_schema()
+    elif hasattr(args_schema, "schema"):
+        args_schema = args_schema.schema()
+    elif not isinstance(args_schema, dict):
+        args_schema = {}
+
+    schema = {
+        "description": description,
+        "schema": args_schema or {},
+    }
 
     def func(**kwargs):
         # Try sync run first
@@ -102,7 +114,9 @@ def convert_langchain_tool_to_toolplane_tool(langchain_tool):
     return name, func, schema, description, stream_flag
 
 
-def register_langchain_tool(provider, session_id: str, langchain_tool, stream: bool = False):
+def register_langchain_tool(
+    provider, session_id: str, langchain_tool, stream: bool = False
+):
     """
     Register a LangChain StructuredTool as an Toolplane tool.
     """

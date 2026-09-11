@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race python-unit
+.PHONY: all demo build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race python-unit
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -94,6 +94,13 @@ gen-proto-all: gen-proto gen-client-protos
 
 check-proto-drift: gen-proto-all
 	git --no-pager diff --exit-code -- $(PROTO_DRIFT_FILES)
+
+# End-to-end quickstart demo: boots an in-memory server, runs the provider
+# example (example_client.py), then the consumer example against the session
+# it printed. This is the README "First Offload Path" as a single command.
+.PHONY: demo
+demo:
+	./scripts/demo_quickstart.sh
 
 # Conformance tests (Python SDK)
 conformance-python:

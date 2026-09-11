@@ -273,13 +273,13 @@ class ToolplaneHTTP:
 
         return context.invoke(tool_name, **params)
 
-    def ainvoke(self, tool_name: str, session_id: str, **params) -> str:
-        """Invoke a tool asynchronously."""
+    async def ainvoke(self, tool_name: str, session_id: str, **params) -> str:
+        """Submit a tool invocation without blocking; awaits the request ID."""
         context = self.get_session(session_id)
         if not context:
             raise ToolplaneError(f"Session {session_id} not found")
 
-        return context.ainvoke(tool_name, **params)
+        return await context.ainvoke(tool_name, **params)
 
     def stream(
         self,
@@ -341,8 +341,8 @@ class ToolplaneHTTP:
                 raise ConnectionError("Failed to connect to server")
         return self.tool_manager.delete_tool(session_id, tool_id)
 
-    def get_request_status(self, request_id: str, session_id: str) -> Dict[str, Any]:
-        """Get request status."""
+    def get_request_status(self, session_id: str, request_id: str) -> Dict[str, Any]:
+        """Get request status (session-scoped, like every other facade method)."""
         context = self.get_session(session_id)
         if not context:
             raise ToolplaneError(f"Session {session_id} not found")
