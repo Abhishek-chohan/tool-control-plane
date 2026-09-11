@@ -62,7 +62,7 @@ echo "==> Starting provider (example_client.py; log: $provider_log)..."
 (
 	cd "$client_dir"
 	PYTHONUNBUFFERED=1 \
-	TOOLPLANE_HOST=127.0.0.1 TOOLPLANE_PORT="$grpc_port" TOOLPLANE_API_KEY="$api_key" \
+	TOOLPLANE_SERVER_HOST=127.0.0.1 TOOLPLANE_SERVER_PORT="$grpc_port" TOOLPLANE_API_KEY="$api_key" \
 		python3 example_client.py
 ) >"$provider_log" 2>&1 &
 provider_pid=$!
@@ -87,9 +87,25 @@ if [[ -z "$session_id" ]]; then
 fi
 echo "    session: $session_id"
 
+# The session ID is printed before tool registration and runtime start;
+# wait for the runtime-ready marker so the consumer cannot race the
+# provider and find no tools.
+echo "==> Waiting for the provider runtime to report ready..."
+for _ in $(seq 1 60); do
+	if grep -q "ready to claim requests" "$provider_log" 2>/dev/null; then
+		break
+	fi
+	if ! kill -0 "$provider_pid" 2>/dev/null; then
+		echo "provider exited before its runtime was ready:" >&2
+		tail -20 "$provider_log" >&2
+		exit 1
+	fi
+	sleep 0.5
+done
+
 echo "==> Running consumer (example_user.py)..."
 cd "$client_dir"
-TOOLPLANE_HOST=127.0.0.1 TOOLPLANE_PORT="$grpc_port" TOOLPLANE_API_KEY="$api_key" \
+TOOLPLANE_SERVER_HOST=127.0.0.1 TOOLPLANE_SERVER_PORT="$grpc_port" TOOLPLANE_API_KEY="$api_key" \
 TOOLPLANE_SESSION_ID="$session_id" \
 	python3 example_user.py
 

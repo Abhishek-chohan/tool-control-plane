@@ -11,3 +11,9 @@ from toolplane.toolkits.standalone_tools.grep_search import (  # noqa: F401
     main,
     search_file,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

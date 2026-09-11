@@ -7,3 +7,9 @@ from toolplane.toolkits.standalone_tools.create_file import (  # noqa: F401
     create_file,
     main,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

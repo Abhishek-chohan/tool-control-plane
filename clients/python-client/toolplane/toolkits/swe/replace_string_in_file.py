@@ -9,3 +9,9 @@ from toolplane.toolkits.standalone_tools.replace_string_in_file import (  # noqa
     replace_string_in_file,
     validate_old_string_uniqueness,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()

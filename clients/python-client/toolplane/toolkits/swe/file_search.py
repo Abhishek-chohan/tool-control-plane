@@ -8,3 +8,9 @@ from toolplane.toolkits.standalone_tools.file_search import (  # noqa: F401
     format_size,
     main,
 )
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()
