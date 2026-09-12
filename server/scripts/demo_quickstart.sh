@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end quickstart demo: the README "First Offload Path" as one command.
+# End-to-end quickstart demo: server + Python provider + consumer as one command.
 #
 # Boots an in-memory Toolplane server, runs example_client.py (the provider:
 # registers tools and serves them), then example_user.py (the consumer:

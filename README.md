@@ -1,153 +1,195 @@
 # Toolplane
 
-Toolplane is a remote tool-execution control plane for tools that outlive a single caller, process, or deploy.
+[![Lint](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/lint.yml/badge.svg)](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/lint.yml)
+[![Proto Drift](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/proto-drift.yml/badge.svg)](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/proto-drift.yml)
+[![SDK Conformance & Verification](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/conformance-python.yml/badge.svg)](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/conformance-python.yml)
+[![Release Gate](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/release-gate.yml/badge.svg)](https://github.com/Abhishek-chohan/tool-control-plane/actions/workflows/release-gate.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> Public project name: `Toolplane`
-> Intended repository slug: `tool-control-plane`
+Toolplane is a gRPC control plane for tool execution that has to outlive the caller that started it. It owns the request lifecycle — durable requests, provider machine ownership with leases and heartbeats, bounded stream replay after disconnects, and drain-safe rollouts — so callers don't rebuild that machinery around every remote tool.
 
-It exposes a protobuf/gRPC contract, a maintained HTTP gateway compatibility layer, and optional ecosystem adapters. The canonical API is `server/proto/service.proto`, and the Go server owns the runtime semantics.
+A model being able to call a tool is not a reason to use Toolplane. If the work is quick, in-process, and shares the caller's lifecycle, call it directly.
 
-## Decision Rule
+## Status
 
-Use Toolplane when at least one of the following is true and direct in-process tool calling would otherwise force the caller to own remote execution concerns itself:
+Pre-1.0 and under active development; there are no tagged releases yet, and notable changes land under CHANGELOG `[Unreleased]` until the first tag — expect breaking changes. The wire contract is versioned: `api.v1` is the compatibility boundary per the [compatibility policy](server/docs/compatibility-policy.md). None of the packages are published to a registry, so install from source and pin to a commit.
 
-- The tool may outlive the model turn, HTTP request, websocket, or caller process.
-- Execution must survive or recover cleanly from consumer disconnects.
-- The provider needs explicit machine ownership, heartbeats, or drain behavior.
-- Streaming output needs bounded replay or later inspection after disconnect.
-- Deploys or restarts must avoid blindly dropping in-flight remote work.
-- The workload is queue-backed, multi-worker, or capacity-limited enough that request lifecycle control matters.
+## When to use it
 
-Do not use Toolplane just because a model can call a tool. If the work is quick, in-process, same-lifecycle, and not operationally sensitive, direct tool calling is simpler.
+Use Toolplane when at least one of these is true:
 
-## Quick Comparison
+- The tool may outlive the model turn, HTTP request, or caller process.
+- Execution must survive consumer disconnects, with results inspectable or replayable afterwards.
+- The provider needs explicit machine ownership, heartbeats, or drain behavior for safe rollouts.
+- Streaming output needs bounded replay or later inspection.
+- Restarts and deploys must not blindly drop in-flight remote work.
+- The workload is queue-backed, multi-worker, or capacity-limited enough that request lifecycle control is load-bearing.
 
-| Approach | Best fit | Not enough when |
-| --- | --- | --- |
-| Direct tool calling | Work is quick, local, and shares the caller lifecycle | The caller would need to add request persistence, replay, provider ownership, or drain behavior |
-| Queue-only execution | Deferred work is enough and operators do not need request inspection or replay | The workload also needs retained-window recovery, explicit machine ownership, or deploy-safe drain |
-| Thin adapter layers | You are mapping an external tool or agent protocol onto an existing Toolplane session | The adapter itself is being treated as the product wedge |
-| Toolplane | One remote tool is long-running, stateful, streaming, restart-sensitive, deploy-sensitive, or multi-worker | The work is already simple enough for a local function or a thin synchronous network call |
+When none of these hold, a plain queue with idempotent workers — or a direct function call — is the simpler right answer.
 
-## Reference Workload
+## Quickstart
 
-A strong first offload candidate is one sandboxed code-execution worker. It runs in a separate environment, may outlive the original caller, benefits from request inspection or cancellation, and often needs drain-safe rollout plus later recovery after disconnect. The bundled examples stay intentionally simple, but they follow the same control-plane shape.
+A Toolplane deployment is three cooperating processes: the **server** (owns state), a **provider** (registers machine-backed tools and executes requests), and a **consumer** (discovers tools and submits work). The quickstart paths below all follow that shape.
 
-## What Toolplane Is Not
+Prerequisites: Go 1.24+, Python 3.8–3.12, and `make`/bash (on Windows, use WSL). Docker is only needed for the reference deployment. Install the Python client dependencies once:
 
-- Not a generic RPC tutorial layer.
-- Not a thin model-SDK tool wrapper.
-- Not an MCP specification or a one-for-one MCP replacement.
+```bash
+pip install -r clients/python-client/requirements.txt
+```
 
-## Repository Shape
+### One command
 
-- A Go server that owns the contract, request lifecycle, machine lifecycle, and task orchestration for distributed tool execution.
-- A multi-SDK repo where Python is the richest current client surface, and Go and TypeScript are narrower maintained gRPC clients.
-- A conformance-driven codebase with shared transport-neutral fixtures in `conformance/` for supported public behaviors.
+From `server/`:
 
-## Validated Wedge
+```bash
+make demo
+```
 
-- Explicit provider runtimes in Python and TypeScript that own machine-backed execution.
-- Request inspection plus retained-window replay after disconnect.
-- Postgres-backed restart recovery for request state and lease expiry handling.
-- Machine drain that stops new routing immediately and lets in-flight work finish or age out.
-- Maintained SDKs with intentionally different public surfaces. Read `SDK_MAP.md` before assuming parity from folder names alone.
+This boots an in-memory server, starts the Python provider example (registers tools and serves them), then runs the consumer example against the provider's session — discovery, invocation, and result polling, end to end. Everything is torn down on exit; logs land in `server/.tmp-demo/`.
 
-## Support Snapshot
+### Manually
 
-| Surface | Status | Notes |
-| --- | --- | --- |
-| Go server + protobuf contract | Primary | Source of truth lives in `server/proto/service.proto` and `server/pkg/service/` |
-| Python client | Primary maintained SDK | Richest end-to-end surface across gRPC and the maintained HTTP gateway |
-| Go client | Supported secondary SDK | Maintained gRPC lifecycle, request, and task helpers; no provider runtime harness |
-| TypeScript client | Supported secondary SDK | Maintained JavaScript-family gRPC client with an explicit `ProviderRuntime`; repository-internal HTTP adapters remain conformance-only |
-| MCP gateway (`toolplane-mcp-gateway`) | Supported edge facade | Stateless MCP 2026-07-28 JSON-RPC endpoint exposing tools plus the Tasks extension over the gRPC backend |
-| TypeScript MCP adapter | Optional ecosystem adapter | Stdio adapter for one Toolplane session exposing the MCP 2026-07-28 stateless surface with the Tasks extension, alongside the legacy protocol for pre-2026 clients |
+Development defaults are explicit and non-secret: in-memory storage, fixed auth, no TLS.
 
-## Agent-Runtime Seam
+```bash
+cd server
+export TOOLPLANE_ENV_MODE=development
+export TOOLPLANE_AUTH_MODE=fixed
+export TOOLPLANE_AUTH_FIXED_API_KEY=dev-key
+export TOOLPLANE_STORAGE_MODE=memory
 
-Toolplane keeps external runtime integrations on a stable four-layer seam so adapters stay thin and replaceable:
+make build && ./bin/toolplane-server --port 9001 &
+go run ./cmd/proxy --listen :8080 --backend localhost:9001
+```
 
-- Layer 1: `server/proto/service.proto` plus the Go server runtime own session scope, request lifecycle, retained replay, machine ownership, and drain semantics.
-- Layer 2: the maintained SDK projections expose the public wrappers available today; `SDK_MAP.md` is the truth source for current surface area and gaps.
-- Layer 3: Python and TypeScript `ProviderRuntime` surfaces package provider-side session attach or create, machine and tool registration, polling, claim, heartbeat, result submission, and drain.
-- Layer 4: edge adapters bind one explicit Toolplane session and translate foreign discovery, invocation, and inspection shapes without redefining lifecycle semantics.
+The server and gateway alone don't execute any tools — start a provider (see the SDK snippets below) to register tools, then invoke from a consumer sharing the same session. These defaults are for local work and CI only; production mode requires Postgres storage, Postgres-backed auth, and gRPC TLS, and both gateways require explicit allowed origins (`TOOLPLANE_PROXY_ALLOWED_ORIGINS`, `TOOLPLANE_MCP_ALLOWED_ORIGINS`). See [server/docs/local-development.md](server/docs/local-development.md).
 
-See `server/docs/agent-runtime-integration-seam.md` for the full seam model, minimal adapter contract, current gap caveats, and the reference edge pattern.
+### Reference deployment (Docker Compose)
+
+The production-shaped stack lives at `server/deploy/reference/compose.yaml`: Postgres 16, a one-shot migrate service, the server with TLS, the HTTP gateway, and the MCP gateway. There are no default credentials — copy `server/deploy/reference/.env.example` and set a Postgres password first. See [server/docs/reference-deployment.md](server/docs/reference-deployment.md).
+
+## Architecture
+
+The canonical API contract is `server/proto/service.proto` (package `api.v1`, 44 RPCs across five services). The Go server owns the runtime semantics; every other component is a projection of them.
+
+| Component | Binary | Default port | Purpose |
+| --- | --- | --- | --- |
+| Control plane server | `server/cmd/server` | `9001` (gRPC) | Contract, request/machine/task lifecycle, storage, auth; Prometheus metrics on a separate listener (loopback-random by default, `:9102` in the reference deployment) |
+| HTTP/JSON gateway | `server/cmd/proxy` (`toolplane-gateway`) | `8080` | grpc-gateway v2 transcoding with CORS, rate limiting, and circuit breaker |
+| Model Context Protocol (MCP) gateway | `server/cmd/mcp-gateway` (`toolplane-mcp-gateway`) | `8081` | Stateless MCP JSON-RPC facade over the gRPC backend |
+
+## Runtime guarantees
+
+Details in [server/DOCUMENTATION.md](server/DOCUMENTATION.md).
+
+- **Request lifecycle**: `PENDING → CLAIMED → RUNNING → DONE/FAILED` with explicit claim, cancel, and result submission.
+- **Leases and fencing**: 30s renewable execution leases; storage-level fenced writes (machine ID + lease epoch) reject stale executors after a reclaim. Reclaimed requests re-execute under a fresh lease, so tools should be idempotent.
+- **Active-active safe**: no-double-claim and fenced requeue hold across instances; proven by a two-replica suite sharing one Postgres in the release gate.
+- **Bounded stream replay**: the newest 100 chunks (up to 8 MiB) are retained with absolute sequence numbers; `ResumeStream` replays them after a disconnect and returns `OUT_OF_RANGE` once trimmed or expired.
+- **Machine ownership**: per-session registration, heartbeat TTL, per-machine in-flight capacity, and `DrainMachine` that stops new routing while in-flight work finishes.
+- **Tasks**: fire-and-forget orchestration with retries, backoff, dead-lettering, and cancellation that propagates to the underlying request.
+- **Idempotency**: `idempotency_key` on request creation deduplicates.
+- **Auth**: API keys with explicit capabilities (`read`/`invoke`/`provide`/`admin`), scoped to their session; the dev-only fixed key is shared full access and is rejected in production mode.
+
+## SDKs
+
+`SDK_MAP.md` is the truth source for per-RPC parity — the SDK surfaces are intentionally different, so don't infer parity from folder names.
+
+| SDK | Install | Transports | Provider runtime |
+| --- | --- | --- | --- |
+| [Python](clients/python-client/README.md) | `pip install -e clients/python-client` | gRPC + HTTP, sync + async | Yes |
+| [Go](clients/go-client/README.md) | `cd clients/go-client && go mod tidy` | gRPC | No (raw machine wrappers only) |
+| [TypeScript](clients/typescript-client/README.md) | `cd clients/typescript-client && npm install && npm run build` | gRPC | Yes |
+| [MCP adapter](clients/typescript-mcp-adapter/README.md) | build typescript-client first, then `cd clients/typescript-mcp-adapter && npm install && npm run build` | stdio | — |
+
+A provider and consumer in one process, using the manual server from the quickstart:
+
+```python
+from toolplane import Toolplane
+
+client = Toolplane(server_host="localhost", server_port=9001, api_key="dev-key")
+runtime = client.provider_runtime()
+session = runtime.create_session(user_id="demo", name="demo")
+
+@runtime.tool(session_id=session.session_id, name="add", description="Add two numbers")
+def add(a: int, b: int) -> int:
+    return a + b
+
+runtime.start_in_background()
+print(client.invoke("add", session.session_id, a=2, b=3))  # -> 5
+runtime.stop()
+```
+
+Tools are session-scoped: a consumer can only invoke tools registered into the *same* session, so separate provider and consumer processes must share a session ID (this is what `make demo` arranges). The runnable walkthroughs are [clients/python-client/example_client.py](clients/python-client/example_client.py) (provider) and [example_user.py](clients/python-client/example_user.py) (consumer) — see [clients/python-client/README_EXAMPLES.md](clients/python-client/README_EXAMPLES.md). The examples default to `TOOLPLANE_API_KEY=toolplane-conformance-fixture-key`, matching `server/.env.example`; if you started the server with a different fixed key, export `TOOLPLANE_API_KEY` to match.
 
 ## Use with MCP clients
 
-`toolplane-mcp-gateway` is a stateless facade that speaks Toolplane over MCP. It is a thin JSON-RPC translator in front of the gRPC backend — it holds no request state of its own, so any number of gateway instances can serve any request. Two client generations are supported:
+`toolplane-mcp-gateway` is a stateless JSON-RPC facade that exposes Toolplane tools over MCP at `POST /mcp` (health: `GET /health`). It holds no request state, so any number of instances can serve any request.
 
-- **MCP 2026-07-28 stateless clients** connect directly: every request declares the protocol version in `_meta` and no handshake is needed.
-- **Initialize-based clients** (the 2025-03-26 / 2025-06-18 / 2025-11-25 revisions used by the installed base of MCP clients) connect through the built-in compatibility path: send the standard `initialize` handshake, then plain `tools/list` / `tools/call` without `_meta`. The Tasks extension is 2026-only; initialize-based clients are served synchronously.
-- **Stdio-only environments:** the TypeScript MCP adapter wraps one Toolplane session behind a stdio transport and handles both protocol generations.
-
-- **Endpoint:** `POST /mcp` (Streamable HTTP). Health is `GET /health`.
-- **Auth:** forward your Toolplane API key as `Authorization` or `X-API-Key`; the gateway passes it to the backend's existing authorizer unchanged.
-- **Session binding:** 2026 clients set `dev.toolplane/session_id` in each request's `_meta` to target an existing Toolplane session. Omit it (or use the initialize path) and the gateway provisions one session per API key.
-- **Discovery:** `server/discover` (2026 clients) advertises the supported protocol version, the `tools` capability, and the `io.modelcontextprotocol/tasks` extension. `initialize` (legacy clients) negotiates the revision and returns the server's capabilities and instructions.
-- **Tools:** `tools/list` mirrors the session's registered tools; `tools/call` enqueues a durable request that a provider machine claims and executes.
-- **Tasks extension:** 2026 clients that advertise `io.modelcontextprotocol/tasks` get a task handle from `tools/call` and poll it with `tasks/get` (including retained chunk-window replay behind a `dev.toolplane/last_seq` cursor), cancel it with `tasks/cancel`, and can replay after reconnecting. Clients that do not advertise the extension are served synchronously.
-- **Trace context:** W3C `traceparent`/`tracestate` headers are validated and propagated to the backend as gRPC metadata.
-
-Run it beside the server (the reference compose stack includes an `mcp-gateway` service):
+- **MCP 2026-07-28 stateless clients** connect directly: each request declares the protocol version in `_meta`; no handshake is needed.
+- **Initialize-based clients** (2025-03-26 through 2025-11-25 revisions) connect through the built-in compatibility path: standard `initialize` handshake, then plain `tools/list` / `tools/call`.
+- **Session binding**: 2026 clients set `dev.toolplane/session_id` in `_meta`; otherwise the gateway provisions one session per API key.
+- **Tasks extension**: clients advertising `io.modelcontextprotocol/tasks` get durable task handles from `tools/call`, poll with `tasks/get` (including bounded stream replay behind a `dev.toolplane/last_seq` cursor), and cancel with `tasks/cancel`. Other clients are served synchronously.
+- **Auth**: forward the Toolplane API key as `Authorization` or `X-API-Key`.
 
 ```bash
 toolplane-mcp-gateway --listen :8081 --backend localhost:9001
 ```
 
-Point an MCP client at `http://<host>:8081/mcp` with your API key. The maintained validation paths are the `mcp` transport in the Python conformance suite (`TOOLPLANE_CONFORMANCE_MCP=1`) and the official `@modelcontextprotocol/sdk` client test in the TypeScript adapter suite.
+For stdio-only environments, `clients/typescript-mcp-adapter` wraps one Toolplane session behind a stdio transport and handles both protocol generations.
 
-## Reliability Proof
+## Development and testing
 
-The maintained failure story is packaged as six drills: provider crash or lease expiry mid-run, caller disconnect during streaming, replay behind the retained window, drain under load, durable restart recovery, and claim-state or capacity safety. See `server/docs/reliability-drills.md` for triggers, expected outcomes, explicit limits, and the first runnable validation path.
+`conformance/cases/` holds 22 transport-neutral JSON fixtures covering sessions, requests, bounded stream replay, invocation, machines, provider runtime, multi-instance, and MCP. Python and TypeScript run every fixture over both gRPC and HTTP; Go has opt-in live integration tests instead of the shared harness.
 
-## First Offload Path
+```bash
+cd server
+make test-race                    # full Go server suite under -race
+make python-unit                  # Python SDK unit tests
+make conformance-python           # shared-fixture conformance (auto-boots a server)
+make conformance-python-mcp       # adds the MCP transport (boots the MCP gateway)
+make release-gate                 # authoritative gate: conformance + observability + runtime slices
+make check-proto-drift            # regenerated stubs must match what's committed
+```
 
-The maintained first-touch path is a Python provider and consumer pair because it shows how to offload one painful remote tool first on the richest SDK surface. Use it as the scaffold for a sandboxed code-execution worker or another environment-bound tool that needs explicit provider ownership, request inspection, and drain-safe rollout:
+CI runs Lint, SDK Conformance & Verification, and Release Gate on every push to `main` and pull request; Proto Drift runs when proto inputs change. Release Gate is the authoritative gate: a Postgres-backed end-to-end scenario plus multi-instance and MCP slices. The pin set for proto regeneration is in [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md).
 
-1. **Provider** (`clients/python-client/example_client.py`): connects via gRPC, creates a session, registers machine-backed tools, and starts the explicit provider loop.
-2. **Consumer** (`clients/python-client/example_user.py`): joins the same session, lists tools, invokes provider-backed work, and polls request state.
+## Contributing
 
-Run the provider first. Copy the printed `TOOLPLANE_SESSION_ID`, then run the consumer with that value. See `clients/python-client/README_EXAMPLES.md` for environment defaults and the full example flow. The sample tools stay intentionally simple so the lifecycle is easy to trace; replace them with the first remote tool you want to offload without replacing the rest of the caller stack.
+Issues are welcome for bugs, questions, and design discussion. Before pushing a PR, run the affected checks above — at minimum `make test-race`, `make conformance-python`, and `make check-proto-drift` from `server/`. Proto changes must follow [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md); SDK surface changes update [SDK_MAP.md](SDK_MAP.md) and `CHANGELOG.md` in the same PR. Local setup: [server/docs/local-development.md](server/docs/local-development.md).
 
-The intended migration shape is explicit: bind one painful remote tool to one Toolplane session, keep the surrounding agent runtime or orchestration layer as the caller of record, and exercise inspection, cancellation, and drain before moving a second tool. See `server/docs/incremental-adoption.md` for the stepwise first-tool guide.
+Report security issues privately via [SECURITY.md](SECURITY.md) — please don't open public issues for them.
 
-For runtime semantics behind this flow, including request lifecycle, streaming, retained-window recovery, and machine drain, see `server/DOCUMENTATION.md`.
+## Repository layout
 
-## Economic Case
+```text
+server/                      Go control plane: cmd/server, cmd/proxy, cmd/mcp-gateway,
+                             pkg/service, pkg/storage (memory + postgres), pkg/mcp,
+                             deploy/reference (production compose stack)
+clients/
+  python-client/             Primary SDK (gRPC + HTTP, sync + async)
+  go-client/                 Go SDK (separate Go module)
+  typescript-client/         TypeScript SDK
+  typescript-mcp-adapter/    MCP stdio adapter (depends on typescript-client via file:)
+conformance/                 Shared transport-neutral fixtures + JSON schema
+SDK_MAP.md                   Per-RPC SDK parity map
+CHANGELOG.md                 Keep-a-Changelog; detailed notes under server/docs/release-notes/
+LICENSE                      Apache-2.0
+```
 
-Toolplane's economic case is not raw cost savings. For wedge workloads, the repo argues for operational simplification: request lifecycle, replay, provider drain, operator signals, rollout checks, and compatibility expectations move into one maintained control plane instead of being rebuilt around each remote tool family.
+## Documentation
 
-That case is intentionally narrow. The control-plane layer is justified only when one remote tool already forces the team to own retry, recovery, inspection, or rollout logic itself. Direct tool calling remains simpler for short-lived same-lifecycle work. See `server/docs/economic-case.md` for the full simplification memo, before-and-after scenario, and decision rubric.
+- [server/DOCUMENTATION.md](server/DOCUMENTATION.md) — runtime semantics, request lifecycle, drain, bounded stream recovery.
+- [server/docs/local-development.md](server/docs/local-development.md) — supported local bootstrap.
+- [server/docs/reference-deployment.md](server/docs/reference-deployment.md) — production topology, rollout, drain, rollback, validation.
+- [server/docs/operator-runbook.md](server/docs/operator-runbook.md) — symptom-first day-2 workflows.
+- [server/docs/reliability-drills.md](server/docs/reliability-drills.md) — named failure drills, expected outcomes, and what the drills do not claim.
+- [server/docs/compatibility-policy.md](server/docs/compatibility-policy.md) — protobuf, gateway, and SDK compatibility rules; `api.v1` is the version boundary.
+- [server/docs/agent-runtime-integration-seam.md](server/docs/agent-runtime-integration-seam.md) — the integration seam for external agent runtimes and adapters.
+- [server/docs/incremental-adoption.md](server/docs/incremental-adoption.md) — stepwise first-tool migration guide.
+- [server/docs/economic-case.md](server/docs/economic-case.md) — the operational-simplification argument and decision rubric (background).
+- [SDK_MAP.md](SDK_MAP.md) — per-RPC parity and support tiers.
 
-## Start Here
+## License
 
-- `server/DOCUMENTATION.md`: runtime semantics, request lifecycle, drain behavior, and retained-window recovery.
-- `server/docs/agent-runtime-integration-seam.md`: four-layer integration seam, minimal adapter contract, current gap caveats, and the reference edge pattern.
-- `server/docs/reliability-drills.md`: named failure drills, expected outcomes, explicit limits, and the shortest validation path.
-- `server/docs/incremental-adoption.md`: stepwise first-tool migration, coexistence model, reference workload shape, and validation path.
-- `server/docs/economic-case.md`: operational simplification memo, before-and-after first-tool scenario, and the decision rubric against simpler options.
-- `server/docs/operator-runbook.md`: symptom-first operator workflows for queue stalls, stuck requests, drain, throttling, policy denial, and safe control actions.
-- `server/docs/reference-deployment.md`: maintained production topology, bootstrap, rollout, drain, rollback, and validation path.
-- `server/docs/compatibility-policy.md`: protobuf, HTTP gateway, and maintained SDK compatibility rules.
-- `server/docs/local-development.md`: explicit local bootstrap path with env-based auth, storage, and proxy settings.
-- `SDK_MAP.md`: per-RPC parity plus support-tier caveats.
-- `clients/typescript-mcp-adapter/README.md`: optional stdio adapter usage, session binding, and validation path.
-- MCP gateway: see "Use with MCP clients" above for the stateless 2026-07-28 facade, Tasks extension, and conformance validation path.
-
-## Local Development
-
-Use `server/.env.example` plus `server/docs/local-development.md` for the supported bootstrap path. The development default is explicit and intentionally non-secret:
-
-- `TOOLPLANE_ENV_MODE=development`
-- `TOOLPLANE_AUTH_MODE=fixed`
-- `TOOLPLANE_AUTH_FIXED_API_KEY=toolplane-conformance-fixture-key`
-- `TOOLPLANE_STORAGE_MODE=memory`
-
-That path exists for local work and CI fixtures only. Production-oriented startup should move to explicit auth and storage configuration.
-
-The maintained production reference path is the split `Postgres + migrate + server + gateway` stack documented in `server/docs/reference-deployment.md`.
-
-Production mode requires maintained auth, Postgres-backed storage, explicit proxy origins, and operator-visible runtime diagnostics.
+[Apache License 2.0](LICENSE)
