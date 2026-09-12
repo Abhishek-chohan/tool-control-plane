@@ -52,6 +52,8 @@ node_modules/
 .github/instructions/
 .plans/
 .tmp/
+# Demo and scratch directories anywhere in the tree (.tmp-demo/, …).
+.tmp*/
 # Root-level scratch files (.tmp_*.py and friends); anchored so nested
 # files with similar names stay tracked.
 /.tmp*
