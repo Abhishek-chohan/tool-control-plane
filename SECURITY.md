@@ -16,6 +16,6 @@ The development defaults (memory storage, a fixed shared API key, no TLS) are fo
 
 ## Notes
 
-- API keys carry explicit capabilities (`read`/`invoke`/`provide`/`admin`) and are bound to their session; mint them with least privilege.
-- The HTTP and MCP gateways forward caller credentials to the backend unchanged and enforce per-key and per-IP rate limits.
+- API keys carry explicit capabilities (`read`/`invoke`/`provide`/`admin`) and are bound to their session; mint them with least privilege. The development fixed key bypasses capability and session checks — it is shared full access and is refused in production mode.
+- The HTTP gateway forwards caller credentials to the backend unchanged and enforces configurable per-key and per-IP rate limits (enabled in the reference deployment). The MCP gateway has the same rate-limit flags but leaves them disabled by default — set them explicitly before exposing it. Both gateways require explicit allowed origins in production mode (`TOOLPLANE_PROXY_ALLOWED_ORIGINS`, `TOOLPLANE_MCP_ALLOWED_ORIGINS`).
 - See `server/docs/release-notes/2026-09-05-security-posture.md` for the security-posture change history.

@@ -62,7 +62,7 @@ make build && ./bin/toolplane-server --port 9001 &
 go run ./cmd/proxy --listen :8080 --backend localhost:9001
 ```
 
-The server and gateway alone don't execute any tools — start a provider (see the SDK snippets below) to register tools, then invoke from a consumer sharing the same session. These defaults are for local work and CI only; production mode requires Postgres storage, Postgres-backed auth, and gRPC TLS. See [server/docs/local-development.md](server/docs/local-development.md).
+The server and gateway alone don't execute any tools — start a provider (see the SDK snippets below) to register tools, then invoke from a consumer sharing the same session. These defaults are for local work and CI only; production mode requires Postgres storage, Postgres-backed auth, and gRPC TLS, and both gateways require explicit allowed origins (`TOOLPLANE_PROXY_ALLOWED_ORIGINS`, `TOOLPLANE_MCP_ALLOWED_ORIGINS`). See [server/docs/local-development.md](server/docs/local-development.md).
 
 ### Reference deployment (Docker Compose)
 
@@ -89,7 +89,7 @@ Details in [server/DOCUMENTATION.md](server/DOCUMENTATION.md).
 - **Machine ownership**: per-session registration, heartbeat TTL, per-machine in-flight capacity, and `DrainMachine` that stops new routing while in-flight work finishes.
 - **Tasks**: fire-and-forget orchestration with retries, backoff, dead-lettering, and cancellation that propagates to the underlying request.
 - **Idempotency**: `idempotency_key` on request creation deduplicates.
-- **Auth**: API keys with explicit capabilities (`read`/`invoke`/`provide`/`admin`), scoped to their session.
+- **Auth**: API keys with explicit capabilities (`read`/`invoke`/`provide`/`admin`), scoped to their session; the dev-only fixed key is shared full access and is rejected in production mode.
 
 ## SDKs
 
@@ -99,8 +99,8 @@ Details in [server/DOCUMENTATION.md](server/DOCUMENTATION.md).
 | --- | --- | --- | --- |
 | [Python](clients/python-client/README.md) | `pip install -e clients/python-client` | gRPC + HTTP, sync + async | Yes |
 | [Go](clients/go-client/README.md) | `cd clients/go-client && go mod tidy` | gRPC | No (raw machine wrappers only) |
-| [TypeScript](clients/typescript-client/README.md) | `npm install && npm run build` | gRPC | Yes |
-| [MCP adapter](clients/typescript-mcp-adapter/README.md) | build the TS client first, then `npm install && npm run build` | stdio | — |
+| [TypeScript](clients/typescript-client/README.md) | `cd clients/typescript-client && npm install && npm run build` | gRPC | Yes |
+| [MCP adapter](clients/typescript-mcp-adapter/README.md) | build typescript-client first, then `cd clients/typescript-mcp-adapter && npm install && npm run build` | stdio | — |
 
 A provider and consumer in one process, using the manual server from the quickstart:
 
@@ -120,7 +120,7 @@ print(client.invoke("add", session.session_id, a=2, b=3))  # -> 5
 runtime.stop()
 ```
 
-Tools are session-scoped: a consumer can only invoke tools registered into the *same* session, so separate provider and consumer processes must share a session ID (this is what `make demo` arranges). The runnable walkthroughs are [clients/python-client/example_client.py](clients/python-client/example_client.py) (provider) and [example_user.py](clients/python-client/example_user.py) (consumer) — see [clients/python-client/README_EXAMPLES.md](clients/python-client/README_EXAMPLES.md). The examples default to `TOOLPLANE_API_KEY=toolplane-conformance-fixture-key`, as do `make run` and `server/.env.example`; if you started the server with a different fixed key, export `TOOLPLANE_API_KEY` to match.
+Tools are session-scoped: a consumer can only invoke tools registered into the *same* session, so separate provider and consumer processes must share a session ID (this is what `make demo` arranges). The runnable walkthroughs are [clients/python-client/example_client.py](clients/python-client/example_client.py) (provider) and [example_user.py](clients/python-client/example_user.py) (consumer) — see [clients/python-client/README_EXAMPLES.md](clients/python-client/README_EXAMPLES.md). The examples default to `TOOLPLANE_API_KEY=toolplane-conformance-fixture-key`, matching `server/.env.example`; if you started the server with a different fixed key, export `TOOLPLANE_API_KEY` to match.
 
 ## Use with MCP clients
 
