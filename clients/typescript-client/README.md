@@ -261,8 +261,8 @@ Public methods parsed from `src/provider_runtime.ts`:
 | `async attachSession(sessionId: string, options: ProviderSessionAttachOptions = {})` | `Promise<Session>` |
 | `async createSession(options: ProviderSessionCreateOptions)` | `Promise<Session>` |
 | `async registerTool(definition: ProviderToolRegistration)` | `Promise<ProviderToolHandler>` |
-| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler: ProviderToolHandler)` | `Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, ): (handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
-| `tool(definition: Omit<ProviderToolRegistration, 'handler'>)` | `(handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler: ProviderToolHandler)` | `Promise<ProviderToolHandler>` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>)` | `(handler: ProviderToolHandler) => Promise<ProviderToolHandler>` |
 | `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler)` | `Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
 | `async pollOnce()` | `Promise<void>` |
 | `async startInBackground(sessionIds?: Iterable<string>)` | `Promise<ProviderRuntime>` |

@@ -217,6 +217,9 @@ def ts_class_rows(path: Path, class_name: str) -> list[tuple[str, str]]:
                 # one attached to type characters opens an object-literal type.
                 if ch == "{" and depth == 0 and body[k - 1] in " \t\r\n":
                     break
+                # ';' at depth 0 ends an overload declaration.
+                if ch == ";" and depth == 0:
+                    break
                 if ch in "([{":
                     depth += 1
                 elif ch in ")]}":
