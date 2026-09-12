@@ -229,7 +229,7 @@ fi
 # has been observed, so the metrics assertion below needs live traffic. Any
 # outcome counts — including an auth rejection — because the metrics
 # interceptor is the outermost layer.
-"$python_bin" - "http://127.0.0.1:${http_port}/api/HealthCheck" <<'PY'
+"$python_bin" - "http://127.0.0.1:${http_port}/api.v1/HealthCheck" <<'PY'
 import sys
 import urllib.error
 import urllib.request
