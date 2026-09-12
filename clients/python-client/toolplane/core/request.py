@@ -674,7 +674,26 @@ class RequestManager:
         """List requests in a session.
 
         page_token is the opaque cursor from a previous page's response;
-        an empty string starts from the first page.
+        an empty string starts from the first page. Use list_requests_page
+        when you need the continuation cursor.
+        """
+        return self.list_requests_page(
+            session_id, status, tool_name, limit, page_token
+        )["requests"]
+
+    def list_requests_page(
+        self,
+        session_id: str,
+        status: str = "",
+        tool_name: str = "",
+        limit: int = 10,
+        page_token: str = "",
+    ) -> Dict[str, Any]:
+        """List one page of requests in a session.
+
+        Returns the page alongside the requests: next_page_token is the
+        opaque cursor for the next call (empty on the last page) and
+        total_size is the filtered total across all pages.
         """
         try:
             self.connection_manager.ensure_connected()
@@ -690,7 +709,13 @@ class RequestManager:
             response = self.connection_manager.requests_stub.ListRequests(
                 request, metadata=self.connection_manager.get_metadata()
             )
-            return [self._normalize_request(entry) for entry in response.requests]
+            return {
+                "requests": [
+                    self._normalize_request(entry) for entry in response.requests
+                ],
+                "next_page_token": response.page.next_page_token,
+                "total_size": response.page.total_size,
+            }
 
         except Exception as e:
             raise RequestError(f"Failed to list requests: {e}")

@@ -188,7 +188,9 @@ func TestSessionsServiceListUserSessionsReturnsNewestSessionsFirst(t *testing.T)
 		t.Fatalf("page 0 ids = %v, want [%s %s]", got, newest.ID, middle.ID)
 	}
 
-	pageOne, totalCount, err := svc.ListUserSessions("user-order", 2, 1, "")
+	// The third argument is the item offset the opaque v1 cursor decodes
+	// to: page two of a size-2 listing starts at item 2.
+	pageOne, totalCount, err := svc.ListUserSessions("user-order", 2, 2, "")
 	if err != nil {
 		t.Fatalf("list user sessions page 1: %v", err)
 	}

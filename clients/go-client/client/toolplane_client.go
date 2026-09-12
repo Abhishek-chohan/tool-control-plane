@@ -1064,9 +1064,10 @@ func (c *ToolplaneClient) GetRequest(requestID string) (*pb.Request, error) {
 //
 // status takes the friendly lowercase lifecycle name ("pending", "running",
 // "done", ...); an empty string lists every status. pageToken is the opaque
-// cursor from a previous page's response; an empty string starts from the
-// first page.
-func (c *ToolplaneClient) ListRequests(status, toolName string, limit int32, pageToken string) ([]*pb.Request, error) {
+// cursor from a previous page's response (ListRequestsResponse.Page
+// .NextPageToken); an empty string starts from the first page. The response
+// carries the page trailer so callers can continue pagination.
+func (c *ToolplaneClient) ListRequests(status, toolName string, limit int32, pageToken string) (*pb.ListRequestsResponse, error) {
 	if c.protocol != ProtocolGRPC {
 		return nil, fmt.Errorf("request listing only supported with gRPC protocol")
 	}
@@ -1095,7 +1096,7 @@ func (c *ToolplaneClient) ListRequests(status, toolName string, limit int32, pag
 		return nil, err
 	}
 
-	return response.Requests, nil
+	return response, nil
 }
 
 // requestStatusForWire maps a friendly status name onto the v1 wire enum; an

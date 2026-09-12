@@ -141,7 +141,7 @@ func TestLegacyToolsListAndCallEndToEnd(t *testing.T) {
 		var requestID string
 		deadline := time.Now().Add(5 * time.Second)
 		for time.Now().Before(deadline) {
-			requests, err := requestService.ListRequests(sessionID, model.RequestStatusPending, "", 10, 0)
+			requests, _, err := requestService.ListRequests(sessionID, model.RequestStatusPending, "", 10, 0)
 			if err == nil && len(requests) > 0 {
 				requestID = requests[0].ID
 				break
