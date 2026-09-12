@@ -36,27 +36,27 @@ func TestNormalizeAPIKeyCapabilitiesSplitsLegacyExecute(t *testing.T) {
 
 func TestMethodPoliciesPartitionByRole(t *testing.T) {
 	provide := []string{
-		"/api.ToolService/RegisterTool",
-		"/api.ToolService/DeleteTool",
-		"/api.ToolService/UpdateToolPing",
-		"/api.MachinesService/RegisterMachine",
-		"/api.MachinesService/UpdateMachinePing",
-		"/api.MachinesService/UnregisterMachine",
-		"/api.MachinesService/DrainMachine",
-		"/api.RequestsService/UpdateRequest",
-		"/api.RequestsService/ClaimRequest",
-		"/api.RequestsService/SubmitRequestResult",
-		"/api.RequestsService/AppendRequestChunks",
-		"/api.RequestsService/RenewRequestLease",
+		"/api.v1.ToolService/RegisterTool",
+		"/api.v1.ToolService/DeleteTool",
+		"/api.v1.ToolService/UpdateToolPing",
+		"/api.v1.MachinesService/RegisterMachine",
+		"/api.v1.MachinesService/UpdateMachinePing",
+		"/api.v1.MachinesService/UnregisterMachine",
+		"/api.v1.MachinesService/DrainMachine",
+		"/api.v1.RequestsService/UpdateRequest",
+		"/api.v1.RequestsService/ClaimRequest",
+		"/api.v1.RequestsService/SubmitRequestResult",
+		"/api.v1.RequestsService/AppendRequestChunks",
+		"/api.v1.RequestsService/RenewRequestLease",
 	}
 	invoke := []string{
-		"/api.ToolService/ExecuteTool",
-		"/api.ToolService/StreamExecuteTool",
-		"/api.ToolService/ResumeStream",
-		"/api.RequestsService/CreateRequest",
-		"/api.RequestsService/CancelRequest",
-		"/api.TasksService/CreateTask",
-		"/api.TasksService/CancelTask",
+		"/api.v1.ToolService/ExecuteTool",
+		"/api.v1.ToolService/StreamExecuteTool",
+		"/api.v1.ToolService/ResumeStream",
+		"/api.v1.RequestsService/CreateRequest",
+		"/api.v1.RequestsService/CancelRequest",
+		"/api.v1.TasksService/CreateTask",
+		"/api.v1.TasksService/CancelTask",
 	}
 
 	for _, method := range provide {
@@ -123,7 +123,7 @@ func (h *machineAuthHarness) call(t *testing.T, ctx context.Context, req interfa
 	_, err := h.authorizer.UnaryInterceptor()(
 		ctx,
 		req,
-		&grpc.UnaryServerInfo{FullMethod: "/api.MachinesService/UpdateMachinePing"},
+		&grpc.UnaryServerInfo{FullMethod: "/api.v1.MachinesService/UpdateMachinePing"},
 		func(ctx context.Context, _ interface{}) (interface{}, error) { return nil, nil },
 	)
 	return err
@@ -186,7 +186,7 @@ func TestMachineTokenGateSkipsFixedModeAndNonProvideRPCs(t *testing.T) {
 	_, err := authorizer.UnaryInterceptor()(
 		fixedCtx,
 		req,
-		&grpc.UnaryServerInfo{FullMethod: "/api.MachinesService/UpdateMachinePing"},
+		&grpc.UnaryServerInfo{FullMethod: "/api.v1.MachinesService/UpdateMachinePing"},
 		func(ctx context.Context, _ interface{}) (interface{}, error) { return nil, nil },
 	)
 	if err != nil {
@@ -214,7 +214,7 @@ func TestMachineTokenGateSkipsFixedModeAndNonProvideRPCs(t *testing.T) {
 	_, err = sessionAuthorizer.UnaryInterceptor()(
 		metadata.NewIncomingContext(context.Background(), metadata.Pairs("api_key", "session-key")),
 		&proto.CreateRequestRequest{SessionId: "session-1", ToolName: "echo"},
-		&grpc.UnaryServerInfo{FullMethod: "/api.RequestsService/CreateRequest"},
+		&grpc.UnaryServerInfo{FullMethod: "/api.v1.RequestsService/CreateRequest"},
 		func(ctx context.Context, _ interface{}) (interface{}, error) { return nil, nil },
 	)
 	if err != nil {

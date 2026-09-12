@@ -264,3 +264,25 @@ def api_error_from_http_response(
         request_id=request_id,
         details=body,
     )
+
+
+def status_for_wire(name):
+    """Map a friendly status ("done", "pending") onto the v1 enum name
+    ("REQUEST_STATUS_DONE") used on requests with status filters. An empty
+    value maps to 0 (UNSPECIFIED), which gRPC accepts and means "no filter".
+    """
+    if not isinstance(name, str) or not name:
+        return 0
+    return "REQUEST_STATUS_" + name.upper()
+
+
+def normalize_status_name(status):
+    """Map a v1 enum status name (e.g. "REQUEST_STATUS_DONE") onto the
+    friendly lowercase form ("done") clients have always seen. Passes
+    through anything else unchanged."""
+    if not isinstance(status, str):
+        return status
+    for prefix in ("REQUEST_STATUS_", "TASK_STATUS_"):
+        if status.startswith(prefix):
+            return status[len(prefix) :].lower()
+    return status

@@ -19,6 +19,7 @@ from toolplane.proto.service_pb2 import (
 )
 
 from ..common.base_session_manager import BaseSessionManager
+from ..common.utils import timestamp_to_iso
 from .connection import ConnectionManager
 from .errors import SessionError
 
@@ -39,7 +40,7 @@ class SessionManager(BaseSessionManager):
             "name": session.name,
             "description": session.description,
             "namespace": session.namespace,
-            "created_at": session.created_at,
+            "created_at": timestamp_to_iso(session.created_at),
             "created_by": created_by,
             "user_id": created_by,
             "api_key": "",
@@ -54,9 +55,9 @@ class SessionManager(BaseSessionManager):
             "key_preview": getattr(api_key, "key_preview", ""),
             "capabilities": list(getattr(api_key, "capabilities", [])),
             "session_id": api_key.session_id,
-            "created_at": api_key.created_at,
+            "created_at": timestamp_to_iso(api_key.created_at),
             "created_by": api_key.created_by,
-            "revoked_at": getattr(api_key, "revoked_at", ""),
+            "revoked_at": timestamp_to_iso(getattr(api_key, "revoked_at", None)),
         }
 
     def _create_session_on_server(
@@ -206,16 +207,20 @@ class SessionManager(BaseSessionManager):
 
     # New methods for user session management
     def list_user_sessions(
-        self, user_id: str, page_size: int = 10, page_token: int = 0, filter: str = ""
+        self, user_id: str, page_size: int = 10, page_token: str = "", filter: str = ""
     ) -> Dict[str, Any]:
-        """List user sessions with pagination and filtering."""
+        """List user sessions with pagination and filtering.
+
+        page_token is the opaque cursor from a previous page's response;
+        an empty string starts from the first page.
+        """
         try:
             self.connection_manager.ensure_connected()
 
             request = ListUserSessionsRequest(
                 user_id=user_id,
                 page_size=page_size,
-                page_token=page_token,
+                page_token=page_token or "",
                 filter=filter,
             )
 
@@ -229,8 +234,8 @@ class SessionManager(BaseSessionManager):
 
             return {
                 "sessions": sessions,
-                "total_count": response.total_count,
-                "next_page_token": response.next_page_token,
+                "total_count": response.page.total_size,
+                "next_page_token": response.page.next_page_token,
             }
 
         except Exception as e:

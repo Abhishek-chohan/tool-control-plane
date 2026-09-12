@@ -92,7 +92,7 @@ func TestAPIKeyAuthorizerUnaryInterceptorRecordsValidationAndDenial(t *testing.T
 
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("api_key", "token-1"))
 	handlerCalled := false
-	_, err := authorizer.UnaryInterceptor()(ctx, &proto.CreateSessionRequest{UserId: "user-1", SessionId: "session-2"}, &grpc.UnaryServerInfo{FullMethod: "/api.SessionsService/CreateSession"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	_, err := authorizer.UnaryInterceptor()(ctx, &proto.CreateSessionRequest{UserId: "user-1", SessionId: "session-2"}, &grpc.UnaryServerInfo{FullMethod: "/api.v1.SessionsService/CreateSession"}, func(ctx context.Context, req interface{}) (interface{}, error) {
 		handlerCalled = true
 		resolved, ok := PrincipalFromContext(ctx)
 		if !ok || resolved == nil || resolved.KeyID != "key-1" {
@@ -122,7 +122,7 @@ func TestAPIKeyAuthorizerUnaryInterceptorRecordsValidationAndDenial(t *testing.T
 		}, nil
 	}, deniedTracer)
 
-	_, err = deniedAuthorizer.UnaryInterceptor()(ctx, &proto.CreateApiKeyRequest{SessionId: "session-1", Name: "denied"}, &grpc.UnaryServerInfo{FullMethod: "/api.SessionsService/CreateApiKey"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	_, err = deniedAuthorizer.UnaryInterceptor()(ctx, &proto.CreateApiKeyRequest{SessionId: "session-1", Name: "denied"}, &grpc.UnaryServerInfo{FullMethod: "/api.v1.SessionsService/CreateApiKey"}, func(ctx context.Context, req interface{}) (interface{}, error) {
 		t.Fatal("handler should not be called when authorization fails")
 		return nil, nil
 	})
@@ -146,7 +146,7 @@ func TestAPIKeyAuthorizerUnaryInterceptorDeniesUserBoundRequestWithoutPrincipalU
 	}, trace.NopTracer())
 
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("api_key", "token-1"))
-	_, err := authorizer.UnaryInterceptor()(ctx, &proto.CreateSessionRequest{UserId: "user-1", SessionId: "session-2"}, &grpc.UnaryServerInfo{FullMethod: "/api.SessionsService/CreateSession"}, func(ctx context.Context, req interface{}) (interface{}, error) {
+	_, err := authorizer.UnaryInterceptor()(ctx, &proto.CreateSessionRequest{UserId: "user-1", SessionId: "session-2"}, &grpc.UnaryServerInfo{FullMethod: "/api.v1.SessionsService/CreateSession"}, func(ctx context.Context, req interface{}) (interface{}, error) {
 		t.Fatal("handler should not be called when principal user scope is missing")
 		return nil, nil
 	})

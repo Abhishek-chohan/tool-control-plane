@@ -9,10 +9,12 @@ from toolplane.proto.service_pb2 import (
     CreateTaskRequest,
     GetTaskRequest,
     ListTasksRequest,
+    TaskStatus,
 )
 
+from ..common.utils import proto_enum_name, timestamp_to_iso
 from .connection import ConnectionManager
-from .errors import TaskError, api_error_from_rpc_error
+from .errors import TaskError, api_error_from_rpc_error, normalize_status_name
 
 
 class TaskManager:
@@ -27,14 +29,14 @@ class TaskManager:
             "id": task.id,
             "session_id": task.session_id,
             "tool_name": task.tool_name,
-            "status": task.status,
+            "status": normalize_status_name(proto_enum_name(task.status, TaskStatus)),
             "input": task.input,
             "result": task.result,
             "result_type": task.result_type,
             "error": task.error,
-            "created_at": task.created_at,
-            "updated_at": task.updated_at,
-            "completed_at": getattr(task, "completed_at", ""),
+            "created_at": timestamp_to_iso(task.created_at),
+            "updated_at": timestamp_to_iso(task.updated_at),
+            "completed_at": timestamp_to_iso(getattr(task, "completed_at", None)),
         }
 
     def create_task(

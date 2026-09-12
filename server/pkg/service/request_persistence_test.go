@@ -41,7 +41,7 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 	defer stopRequestSweep()
 	requestSvc := NewRequestsService(requestCtx, toolSvc, machineSvc, tracer, store)
 
-	session, err := sessionSvc.CreateSession("persistent-user", "Persistent Recovery", "tier 4 persistence validation", "", "", "")
+	session, err := sessionSvc.CreateSession("persistent-user", "Persistent Recovery", "tier 4 persistence validation", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

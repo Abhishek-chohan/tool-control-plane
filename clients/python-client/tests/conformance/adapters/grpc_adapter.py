@@ -10,6 +10,7 @@ from toolplane.proto.service_pb2 import (
     GetRequestChunksRequest,
     RegisterMachineRequest,
     RenewRequestLeaseRequest,
+    RequestStatus,
     ResumeStreamRequest,
     SubmitRequestResultRequest,
 )
@@ -23,6 +24,34 @@ def _parse_maybe_json(value: Any) -> Any:
         return json.loads(value)
     except Exception:
         return value
+
+
+def _timestamp_str(value: Any) -> str:
+    """Render a v1 Timestamp message as an RFC3339 string."""
+    if value is None:
+        return ""
+    to_json = getattr(value, "ToJsonString", None)
+    if callable(to_json):
+        try:
+            if not getattr(value, "seconds", 1) and not getattr(value, "nanos", 1):
+                return ""
+            return to_json()
+        except Exception:
+            return ""
+    return value if isinstance(value, str) else ""
+
+
+def _request_status_name(value: Any) -> str:
+    """Map a v1 RequestStatus enum onto the friendly lowercase name."""
+    if isinstance(value, str):
+        for prefix in ("REQUEST_STATUS_", "TASK_STATUS_"):
+            if value.startswith(prefix):
+                return value[len(prefix):].lower()
+        return value
+    try:
+        return RequestStatus.Name(value).replace("REQUEST_STATUS_", "").lower()
+    except (ValueError, AttributeError, TypeError):
+        return ""
 
 
 def _normalize_grpc_error_code(exc: grpc.RpcError) -> str:
@@ -100,7 +129,7 @@ class GrpcConformanceAdapter:
         return self.client.list_user_sessions(
             user_id=request["user_id"],
             page_size=request.get("page_size", 10),
-            page_token=request.get("page_token", 0),
+            page_token=str(request.get("page_token", "") or ""),
             filter=request.get("filter", ""),
         )
 
@@ -237,7 +266,7 @@ class GrpcConformanceAdapter:
             status=request.get("list_status", ""),
             tool_name=request.get("tool_name_filter", ""),
             limit=request.get("limit", 10),
-            offset=request.get("offset", 0),
+            page_token=str(request.get("page_token", "") or ""),
         )
 
     # ---------------- Fenced provider primitives ----------------
@@ -260,10 +289,10 @@ class GrpcConformanceAdapter:
             )
             return {
                 "id": response.id,
-                "status": response.status,
+                "status": _request_status_name(response.status),
                 "leasedBy": response.leased_by,
                 "leaseEpoch": response.lease_epoch,
-                "leaseExpiresAt": response.lease_expires_at,
+                "leaseExpiresAt": _timestamp_str(response.lease_expires_at),
             }
         except grpc.RpcError as exc:
             return {
@@ -313,10 +342,10 @@ class GrpcConformanceAdapter:
             )
             return {
                 "id": response.id,
-                "status": response.status,
+                "status": _request_status_name(response.status),
                 "leasedBy": response.leased_by,
                 "leaseEpoch": response.lease_epoch,
-                "leaseExpiresAt": response.lease_expires_at,
+                "leaseExpiresAt": _timestamp_str(response.lease_expires_at),
             }
         except grpc.RpcError as exc:
             return {

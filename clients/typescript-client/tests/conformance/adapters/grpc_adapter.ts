@@ -16,8 +16,7 @@ import {
   GetRequestChunksRequest,
   GetRequestRequest,
   GetSessionRequest,
-  GetToolByIdRequest,
-  GetToolByNameRequest,
+  GetToolRequest,
   GetToolResponse,
   HealthCheckRequest,
   ListApiKeysRequest,
@@ -30,6 +29,7 @@ import {
   Machine as ProtoMachine,
   RegisterMachineRequest,
   RenewRequestLeaseRequest,
+  RequestStatus,
   RevokeApiKeyRequest,
   SubmitRequestResultRequest,
   UnregisterMachineRequest,
@@ -87,6 +87,47 @@ function numberValue(value: unknown, fallback: number): number {
     }
   }
   return fallback;
+}
+
+// v1 wire statuses are enums; conformance assertions keep using the friendly
+// lowercase names.
+function normalizeRequestStatus(status: number): string {
+  switch (status) {
+    case RequestStatus.REQUEST_STATUS_DONE:
+      return 'done';
+    case RequestStatus.REQUEST_STATUS_FAILED:
+      return 'failure';
+    case RequestStatus.REQUEST_STATUS_PENDING:
+      return 'pending';
+    case RequestStatus.REQUEST_STATUS_CLAIMED:
+      return 'claimed';
+    case RequestStatus.REQUEST_STATUS_RUNNING:
+      return 'running';
+    default:
+      return '';
+  }
+}
+
+function requestStatusForWire(status: unknown): number {
+  switch (String(status ?? '').trim().toLowerCase()) {
+    case 'done':
+      return RequestStatus.REQUEST_STATUS_DONE;
+    case 'failure':
+    case 'failed':
+      return RequestStatus.REQUEST_STATUS_FAILED;
+    case 'pending':
+      return RequestStatus.REQUEST_STATUS_PENDING;
+    case 'claimed':
+      return RequestStatus.REQUEST_STATUS_CLAIMED;
+    case 'running':
+      return RequestStatus.REQUEST_STATUS_RUNNING;
+    default:
+      return RequestStatus.REQUEST_STATUS_UNSPECIFIED;
+  }
+}
+
+function timestampToIso(value: { toDate(): Date } | undefined): string {
+  return value ? value.toDate().toISOString() : '';
 }
 
 function normalizeGrpcErrorCode(code: grpc.status): string {
@@ -159,7 +200,6 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     message.setName(String(request.name ?? ''));
     message.setDescription(String(request.description ?? ''));
     message.setNamespace(String(request.namespace ?? ''));
-		message.setApiKey('');
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.sessionClient.createSession(message, metadata, options, callback),
@@ -206,7 +246,7 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     const message = new ListUserSessionsRequest();
     message.setUserId(String(request.user_id ?? this.userId));
     message.setPageSize(numberValue(request.page_size, 10));
-    message.setPageToken(numberValue(request.page_token, 0));
+    message.setPageToken(String(request.page_token ?? ''));
     message.setFilter(String(request.filter ?? ''));
 
     const response = await this.callUnary(
@@ -214,10 +254,11 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       'failed to list user sessions',
     );
 
+    const page = response.getPage();
     return {
       sessions: response.getSessionsList().map((session) => this.normalizeSession(session)),
-      nextPageToken: response.getNextPageToken(),
-      totalCount: response.getTotalCount(),
+      nextPageToken: page?.getNextPageToken() ?? '',
+      totalCount: page?.getTotalSize() ?? 0,
     };
   }
 
@@ -286,12 +327,12 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async getToolById(sessionId: string, toolId: string): Promise<Record<string, unknown>> {
-    const request = new GetToolByIdRequest();
+    const request = new GetToolRequest();
     request.setSessionId(sessionId);
     request.setToolId(toolId);
 
     const response = await this.callUnary<GetToolResponse>(
-      (metadata, options, callback) => this.toolClient.getToolById(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient.getTool(request, metadata, options, callback),
       `failed to fetch tool ${toolId}`,
     );
 
@@ -303,12 +344,12 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   }
 
   async getToolByName(sessionId: string, toolName: string): Promise<Record<string, unknown>> {
-    const request = new GetToolByNameRequest();
+    const request = new GetToolRequest();
     request.setSessionId(sessionId);
     request.setToolName(toolName);
 
     const response = await this.callUnary<GetToolResponse>(
-      (metadata, options, callback) => this.toolClient.getToolByName(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient.getTool(request, metadata, options, callback),
       `failed to fetch tool ${toolName}`,
     );
 
@@ -481,10 +522,10 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   async listRequests(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>[]> {
     const message = new ListRequestsRequest();
     message.setSessionId(sessionId);
-    message.setStatus(String(request.list_status ?? ''));
+    message.setStatus(requestStatusForWire(request.list_status));
     message.setToolName(String(request.tool_name_filter ?? ''));
-    message.setLimit(numberValue(request.limit, 10));
-    message.setOffset(numberValue(request.offset, 0));
+    message.setPageSize(numberValue(request.limit, 10));
+    message.setPageToken(String(request.page_token ?? ''));
 
     const response = await this.callUnary(
       (metadata, options, callback) => this.requestsClient.listRequests(message, metadata, options, callback),
@@ -608,13 +649,13 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     request.setInput(JSON.stringify(params));
 
     const response = await this.callUnary(
-      (metadata, options, callback) => this.toolClient.executeTool(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient.invokeTool(request, metadata, options, callback),
       `failed to execute tool ${toolName}`,
     );
 
     const requestId = response.getRequestId();
     if (!requestId.trim()) {
-      throw new Error('No request ID returned from ExecuteTool');
+      throw new Error('No request ID returned from InvokeTool');
     }
 
     this.triggerPoll(sessionId);
@@ -733,10 +774,10 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       name: session.getName(),
       description: session.getDescription(),
       namespace: session.getNamespace(),
-      created_at: session.getCreatedAt(),
+      created_at: timestampToIso(session.getCreatedAt()),
       created_by: createdBy,
       user_id: createdBy,
-      api_key: session.getApiKey(),
+      api_key: '',
       status: 'active',
     };
   }
@@ -746,12 +787,12 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       id: apiKey.getId(),
       name: apiKey.getName(),
       key: apiKey.getKey(),
-		key_preview: apiKey.getKeyPreview(),
+      key_preview: apiKey.getKeyPreview(),
       session_id: apiKey.getSessionId(),
-      created_at: apiKey.getCreatedAt(),
+      created_at: timestampToIso(apiKey.getCreatedAt()),
       created_by: apiKey.getCreatedBy(),
-		capabilities: apiKey.getCapabilitiesList(),
-      revoked_at: apiKey.getRevokedAt(),
+      capabilities: apiKey.getCapabilitiesList(),
+      revoked_at: timestampToIso(apiKey.getRevokedAt()),
     };
   }
 
@@ -762,8 +803,8 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       sdk_version: machine.getSdkVersion(),
       sdk_language: machine.getSdkLanguage(),
       ip: machine.getIp(),
-      created_at: machine.getCreatedAt(),
-      last_ping_at: machine.getLastPingAt(),
+      created_at: timestampToIso(machine.getCreatedAt()),
+      last_ping_at: timestampToIso(machine.getLastPingAt()),
     };
   }
 
@@ -779,8 +820,8 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       description: tool.getDescription(),
       schema: parseMaybeJSON(tool.getSchema()),
       config,
-      created_at: tool.getCreatedAt(),
-      last_ping_at: tool.getLastPingAt(),
+      created_at: timestampToIso(tool.getCreatedAt()),
+      last_ping_at: timestampToIso(tool.getLastPingAt()),
       session_id: tool.getSessionId(),
       tags: tool.getTagsList(),
     };
@@ -791,10 +832,10 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
       id: request.getId(),
       sessionId: request.getSessionId(),
       toolName: request.getToolName(),
-      status: request.getStatus(),
+      status: normalizeRequestStatus(request.getStatus()),
       input: request.getInput(),
-      createdAt: request.getCreatedAt(),
-      updatedAt: request.getUpdatedAt(),
+      createdAt: timestampToIso(request.getCreatedAt()),
+      updatedAt: timestampToIso(request.getUpdatedAt()),
       executingMachineId: request.getExecutingMachineId(),
     };
 
@@ -808,11 +849,6 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
 
     if (request.getError()) {
       normalized.error = request.getError();
-    }
-
-    const streamResults = request.getStreamResultsList().map((value) => parseMaybeJSON(value));
-    if (streamResults.length > 0) {
-      normalized.streamResults = streamResults;
     }
 
     return normalized;
@@ -911,10 +947,10 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     const response = settled.response;
     return {
       id: response.getId(),
-      status: response.getStatus(),
+      status: normalizeRequestStatus(response.getStatus()),
       leasedBy: response.getLeasedBy(),
       leaseEpoch: response.getLeaseEpoch(),
-      leaseExpiresAt: response.getLeaseExpiresAt(),
+      leaseExpiresAt: timestampToIso(response.getLeaseExpiresAt()),
     };
   }
 
@@ -963,10 +999,10 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     const response = settled.response;
     return {
       id: response.getId(),
-      status: response.getStatus(),
+      status: normalizeRequestStatus(response.getStatus()),
       leasedBy: response.getLeasedBy(),
       leaseEpoch: response.getLeaseEpoch(),
-      leaseExpiresAt: response.getLeaseExpiresAt(),
+      leaseExpiresAt: timestampToIso(response.getLeaseExpiresAt()),
     };
   }
 }

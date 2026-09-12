@@ -290,9 +290,9 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 		}
 
 		switch request.Status {
-		case "done":
+		case pb.RequestStatus_REQUEST_STATUS_DONE:
 			return request, nil
-		case "failure":
+		case pb.RequestStatus_REQUEST_STATUS_FAILED:
 			errMsg := request.Error
 			if errMsg == "" {
 				errMsg = "tool execution failed"
@@ -357,7 +357,7 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 	execCtx, cancel := c.executionContext(ctx)
 	defer cancel()
 
-	response, err := c.toolClient.ExecuteTool(execCtx, request)
+	response, err := c.toolClient.InvokeTool(execCtx, request)
 	if err != nil {
 		return nil, FromGRPC("execute tool", "", err)
 	}
@@ -1061,7 +1061,13 @@ func (c *ToolplaneClient) GetRequest(requestID string) (*pb.Request, error) {
 }
 
 // ListRequests lists requests for the current session (gRPC only).
-func (c *ToolplaneClient) ListRequests(status, toolName string, limit, offset int32) ([]*pb.Request, error) {
+//
+// status takes the friendly lowercase lifecycle name ("pending", "running",
+// "done", ...); an empty string lists every status. pageToken is the opaque
+// cursor from a previous page's response (ListRequestsResponse.Page
+// .NextPageToken); an empty string starts from the first page. The response
+// carries the page trailer so callers can continue pagination.
+func (c *ToolplaneClient) ListRequests(status, toolName string, limit int32, pageToken string) (*pb.ListRequestsResponse, error) {
 	if c.protocol != ProtocolGRPC {
 		return nil, fmt.Errorf("request listing only supported with gRPC protocol")
 	}
@@ -1076,10 +1082,10 @@ func (c *ToolplaneClient) ListRequests(status, toolName string, limit, offset in
 
 	request := &pb.ListRequestsRequest{
 		SessionId: sessionID,
-		Status:    status,
+		Status:    requestStatusForWire(status),
 		ToolName:  toolName,
-		Limit:     limit,
-		Offset:    offset,
+		PageSize:  limit,
+		PageToken: pageToken,
 	}
 
 	ctx, cancel := c.grpcContext(context.Background(), defaultGRPCCallTimeout)
@@ -1090,7 +1096,27 @@ func (c *ToolplaneClient) ListRequests(status, toolName string, limit, offset in
 		return nil, err
 	}
 
-	return response.Requests, nil
+	return response, nil
+}
+
+// requestStatusForWire maps a friendly status name onto the v1 wire enum; an
+// empty or unrecognized name maps to UNSPECIFIED, which the server treats as
+// "no filter".
+func requestStatusForWire(status string) pb.RequestStatus {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "pending":
+		return pb.RequestStatus_REQUEST_STATUS_PENDING
+	case "claimed":
+		return pb.RequestStatus_REQUEST_STATUS_CLAIMED
+	case "running":
+		return pb.RequestStatus_REQUEST_STATUS_RUNNING
+	case "done":
+		return pb.RequestStatus_REQUEST_STATUS_DONE
+	case "failure", "failed":
+		return pb.RequestStatus_REQUEST_STATUS_FAILED
+	default:
+		return pb.RequestStatus_REQUEST_STATUS_UNSPECIFIED
+	}
 }
 
 // CancelRequest cancels a request for the current session (gRPC only).

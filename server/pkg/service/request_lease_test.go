@@ -350,7 +350,7 @@ func TestGRPCServerFencedWritesMapLeaseConflictToFailedPrecondition(t *testing.T
 	if renewed.GetLeasedBy() != machineID {
 		t.Fatalf("renewed leasedBy = %q, want %q", renewed.GetLeasedBy(), machineID)
 	}
-	if renewed.GetLeaseExpiresAt() == "" {
+	if renewed.GetLeaseExpiresAt() == nil {
 		t.Fatal("renewed lease_expires_at should be populated for an active lease")
 	}
 

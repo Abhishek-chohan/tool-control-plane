@@ -22,7 +22,7 @@ type toolServiceClientStub struct {
 	getToolByIDFunc   func(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error)
 	getToolByNameFunc func(ctx context.Context, in *pb.GetToolByNameRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error)
 	deleteToolFunc    func(ctx context.Context, in *pb.DeleteToolRequest, opts ...grpc.CallOption) (*pb.DeleteToolResponse, error)
-	executeToolFunc   func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error)
+	invokeToolFunc    func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error)
 }
 
 type sessionsServiceClientStub struct {
@@ -106,6 +106,10 @@ func (s *toolServiceClientStub) ListTools(ctx context.Context, in *pb.ListToolsR
 	return nil, unexpectedToolCall("ListTools")
 }
 
+func (s *toolServiceClientStub) GetTool(ctx context.Context, in *pb.GetToolRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
+	return nil, unexpectedToolCall("GetTool")
+}
+
 func (s *toolServiceClientStub) GetToolById(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
 	if s.getToolByIDFunc != nil {
 		return s.getToolByIDFunc(ctx, in, opts...)
@@ -139,10 +143,14 @@ func (s *toolServiceClientStub) ResumeStream(ctx context.Context, in *pb.ResumeS
 	return nil, unexpectedToolCall("ResumeStream")
 }
 
-func (s *toolServiceClientStub) ExecuteTool(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error) {
-	if s.executeToolFunc != nil {
-		return s.executeToolFunc(ctx, in, opts...)
+func (s *toolServiceClientStub) InvokeTool(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error) {
+	if s.invokeToolFunc != nil {
+		return s.invokeToolFunc(ctx, in, opts...)
 	}
+	return nil, unexpectedToolCall("InvokeTool")
+}
+
+func (s *toolServiceClientStub) ExecuteTool(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error) {
 	return nil, unexpectedToolCall("ExecuteTool")
 }
 
@@ -376,12 +384,12 @@ func TestExecuteToolUsesGRPCRequestLifecycle(t *testing.T) {
 	requestPolls := 0
 	client := newConnectedExecutionClient(
 		&toolServiceClientStub{
-			executeToolFunc: func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error) {
+			invokeToolFunc: func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error) {
 				if in.SessionId != "session-1" {
-					t.Fatalf("ExecuteTool SessionId = %q, want session-1", in.SessionId)
+					t.Fatalf("InvokeTool SessionId = %q, want session-1", in.SessionId)
 				}
 				if in.ToolName != "demo_tool" {
-					t.Fatalf("ExecuteTool ToolName = %q, want demo_tool", in.ToolName)
+					t.Fatalf("InvokeTool ToolName = %q, want demo_tool", in.ToolName)
 				}
 				if in.Input != `{"message":"hello"}` {
 					t.Fatalf("ExecuteTool Input = %q, want JSON payload", in.Input)
@@ -392,10 +400,10 @@ func TestExecuteToolUsesGRPCRequestLifecycle(t *testing.T) {
 		&requestsServiceClientStub{
 			getRequestFunc: func(ctx context.Context, in *pb.GetRequestRequest, opts ...grpc.CallOption) (*pb.Request, error) {
 				requestPolls++
-				status := "running"
+				status := pb.RequestStatus_REQUEST_STATUS_RUNNING
 				result := ""
 				if requestPolls > 1 {
-					status = "done"
+					status = pb.RequestStatus_REQUEST_STATUS_DONE
 					result = `{"echo":"hello"}`
 				}
 				return &pb.Request{
@@ -413,7 +421,7 @@ func TestExecuteToolUsesGRPCRequestLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExecuteTool returned unexpected error: %v", err)
 	}
-	if request.Id != "request-99" || request.Status != "done" || request.Result != `{"echo":"hello"}` {
+	if request.Id != "request-99" || request.Status != pb.RequestStatus_REQUEST_STATUS_DONE || request.Result != `{"echo":"hello"}` {
 		t.Fatalf("ExecuteTool returned %#v, want request-99/done/{\"echo\":\"hello\"}", request)
 	}
 }
@@ -430,7 +438,7 @@ func TestCreateRequestUsesSessionID(t *testing.T) {
 			if in.Input != `{"message":"hello"}` {
 				t.Fatalf("CreateRequest Input = %q, want JSON payload", in.Input)
 			}
-			return &pb.Request{Id: "request-1", SessionId: in.SessionId, ToolName: in.ToolName, Status: "pending"}, nil
+			return &pb.Request{Id: "request-1", SessionId: in.SessionId, ToolName: in.ToolName, Status: pb.RequestStatus_REQUEST_STATUS_PENDING}, nil
 		},
 	})
 
@@ -438,7 +446,7 @@ func TestCreateRequestUsesSessionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRequest returned unexpected error: %v", err)
 	}
-	if request.Id != "request-1" || request.ToolName != "echo" || request.Status != "pending" {
+	if request.Id != "request-1" || request.ToolName != "echo" || request.Status != pb.RequestStatus_REQUEST_STATUS_PENDING {
 		t.Fatalf("CreateRequest returned %#v, want request-1/echo/pending", request)
 	}
 }
@@ -452,7 +460,7 @@ func TestGetRequestUsesSessionID(t *testing.T) {
 			if in.RequestId != "request-42" {
 				t.Fatalf("GetRequest RequestId = %q, want request-42", in.RequestId)
 			}
-			return &pb.Request{Id: in.RequestId, SessionId: in.SessionId, ToolName: "echo", Status: "done"}, nil
+			return &pb.Request{Id: in.RequestId, SessionId: in.SessionId, ToolName: "echo", Status: pb.RequestStatus_REQUEST_STATUS_DONE}, nil
 		},
 	})
 
@@ -460,7 +468,7 @@ func TestGetRequestUsesSessionID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRequest returned unexpected error: %v", err)
 	}
-	if request.Id != "request-42" || request.Status != "done" {
+	if request.Id != "request-42" || request.Status != pb.RequestStatus_REQUEST_STATUS_DONE {
 		t.Fatalf("GetRequest returned %#v, want request-42/done", request)
 	}
 }
@@ -471,21 +479,21 @@ func TestListRequestsPassesFilters(t *testing.T) {
 			if in.SessionId != "session-1" {
 				t.Fatalf("ListRequests SessionId = %q, want session-1", in.SessionId)
 			}
-			if in.Status != "running" || in.ToolName != "echo" || in.Limit != 5 || in.Offset != 2 {
+			if in.Status != pb.RequestStatus_REQUEST_STATUS_RUNNING || in.ToolName != "echo" || in.PageSize != 5 || in.PageToken != "offset:2" {
 				t.Fatalf("ListRequests request = %#v, want status=running toolName=echo limit=5 offset=2", in)
 			}
 			return &pb.ListRequestsResponse{
-				Requests: []*pb.Request{{Id: "request-1", Status: "running"}, {Id: "request-2", Status: "running"}},
+				Requests: []*pb.Request{{Id: "request-1", Status: pb.RequestStatus_REQUEST_STATUS_RUNNING}, {Id: "request-2", Status: pb.RequestStatus_REQUEST_STATUS_RUNNING}},
 			}, nil
 		},
 	})
 
-	requests, err := client.ListRequests("running", "echo", 5, 2)
+	requests, err := client.ListRequests("running", "echo", 5, "offset:2")
 	if err != nil {
 		t.Fatalf("ListRequests returned unexpected error: %v", err)
 	}
-	if len(requests) != 2 || requests[0].Id != "request-1" || requests[1].Id != "request-2" {
-		t.Fatalf("ListRequests returned %#v, want two request IDs", requests)
+	if got := requests.Requests; len(got) != 2 || got[0].Id != "request-1" || got[1].Id != "request-2" {
+		t.Fatalf("ListRequests returned %#v, want two request IDs", got)
 	}
 }
 
@@ -618,7 +626,7 @@ func TestUpdateSessionUsesCurrentSession(t *testing.T) {
 	}
 }
 
-func TestCreateSessionOmitsLegacyAPIKey(t *testing.T) {
+func TestCreateSessionSendsUserScopedFields(t *testing.T) {
 	client := newConnectedSessionClient(&sessionsServiceClientStub{
 		createSessionFunc: func(ctx context.Context, in *pb.CreateSessionRequest, opts ...grpc.CallOption) (*pb.CreateSessionResponse, error) {
 			if in.UserId != "user-1" {
@@ -626,9 +634,6 @@ func TestCreateSessionOmitsLegacyAPIKey(t *testing.T) {
 			}
 			if in.Name != "created" || in.Description != "desc" || in.Namespace != "ns" {
 				t.Fatalf("CreateSession request = %#v, want created session fields", in)
-			}
-			if in.ApiKey != "" {
-				t.Fatalf("CreateSession ApiKey = %q, want empty legacy field", in.ApiKey)
 			}
 			return &pb.CreateSessionResponse{Session: &pb.Session{Id: in.SessionId, Name: in.Name, Description: in.Description, Namespace: in.Namespace}}, nil
 		},
