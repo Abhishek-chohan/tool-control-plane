@@ -139,7 +139,9 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 	return svc
 }
 
-// CreateSession creates a new session with an optional api key and an initial API key
+// CreateSession creates a new session owned by userID. Session-scoped
+// credentials are minted separately via CreateApiKey; creating a session
+// does not produce a key.
 func (s *SessionsService) CreateSession(userID, name, description, requestedID, namespace string) (*model.Session, error) {
 	userLock := s.userLock(userID)
 	userLock.Lock()
@@ -631,7 +633,12 @@ func (s *SessionsService) ListUserSessions(userID string, pageSize, pageToken in
 		pageSize = 10 // Default page size
 	}
 
-	startIdx := pageToken * pageSize
+	// pageToken is the item offset the caller's opaque cursor decoded to,
+	// not a page number.
+	startIdx := pageToken
+	if startIdx < 0 {
+		startIdx = 0
+	}
 	if startIdx >= totalCount {
 		return []*model.Session{}, totalCount, nil
 	}

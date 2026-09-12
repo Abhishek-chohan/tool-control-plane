@@ -374,6 +374,30 @@ class Toolplane:
             page_token=page_token,
         )
 
+    def list_requests_page(
+        self,
+        session_id: str,
+        status: str = "",
+        tool_name: str = "",
+        limit: int = 10,
+        page_token: str = "",
+    ) -> Dict[str, Any]:
+        """List one page of requests, with the continuation cursor.
+
+        Returns {"requests", "next_page_token", "total_size"};
+        next_page_token is empty on the last page.
+        """
+        if not self.connection_manager.connected:
+            if not self.connect():
+                raise ConnectionError("Failed to connect to server")
+        return self.request_manager.list_requests_page(
+            session_id=session_id,
+            status=status,
+            tool_name=tool_name,
+            limit=limit,
+            page_token=page_token,
+        )
+
     def cancel_request(self, session_id: str, request_id: str) -> bool:
         """Cancel a request in a session."""
         if not self.connection_manager.connected:

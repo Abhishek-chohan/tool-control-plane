@@ -237,7 +237,8 @@ export interface RequestListOptions {
   status?: string;
   toolName?: string;
   limit?: number;
-  offset?: number;
+  /** Opaque cursor from a previous page; omit to start from the first page. */
+  pageToken?: string;
 }
 
 /**

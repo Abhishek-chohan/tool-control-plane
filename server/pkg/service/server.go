@@ -15,6 +15,10 @@ import (
 	proto "toolplane/proto"
 )
 
+// defaultListPageSize is the page size the list handlers apply when the
+// caller omits page_size; the service layers share the same default.
+const defaultListPageSize = 10
+
 // GRPCServer is the adapter between our service implementation and the gRPC interface
 type GRPCServer struct {
 	proto.UnimplementedToolServiceServer
@@ -507,11 +511,16 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
 	}
 
-	requests, err := s.requestService.ListRequests(
+	pageSize := int(req.PageSize)
+	if pageSize <= 0 {
+		pageSize = defaultListPageSize
+	}
+
+	requests, totalCount, err := s.requestService.ListRequests(
 		req.SessionId,
 		requestStatusFromProto(req.Status),
 		req.ToolName,
-		int(req.PageSize),
+		pageSize,
 		offset,
 	)
 	if err != nil {
@@ -524,8 +533,8 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 		protoRequests = append(protoRequests, convertModelRequestToProto(request))
 	}
 
-	page := &proto.ListPage{TotalSize: int32(len(protoRequests))}
-	if len(protoRequests) == int(req.PageSize) && len(protoRequests) > 0 {
+	page := &proto.ListPage{TotalSize: int32(totalCount)}
+	if len(protoRequests) == pageSize && len(protoRequests) > 0 {
 		token, tokErr := encodePageOffset(offset + len(protoRequests))
 		if tokErr != nil {
 			return nil, status.Errorf(codes.Internal, "page token: %v", tokErr)

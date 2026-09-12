@@ -492,8 +492,8 @@ func TestListRequestsPassesFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListRequests returned unexpected error: %v", err)
 	}
-	if len(requests) != 2 || requests[0].Id != "request-1" || requests[1].Id != "request-2" {
-		t.Fatalf("ListRequests returned %#v, want two request IDs", requests)
+	if got := requests.Requests; len(got) != 2 || got[0].Id != "request-1" || got[1].Id != "request-2" {
+		t.Fatalf("ListRequests returned %#v, want two request IDs", got)
 	}
 }
 

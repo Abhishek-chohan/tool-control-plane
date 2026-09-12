@@ -134,7 +134,7 @@ func TestListRequestsSeesOtherReplicaCreates(t *testing.T) {
 		t.Fatalf("seed local request: %v", err)
 	}
 
-	requests, err := svcB.ListRequests("sess-coherence-list", "", "", 10, 0)
+	requests, _, err := svcB.ListRequests("sess-coherence-list", "", "", 10, 0)
 	if err != nil {
 		t.Fatalf("list requests: %v", err)
 	}
