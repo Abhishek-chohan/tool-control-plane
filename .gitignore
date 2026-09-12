@@ -52,6 +52,9 @@ node_modules/
 .github/instructions/
 .plans/
 .tmp/
+# Root-level scratch files (.tmp_*.py and friends); anchored so nested
+# files with similar names stay tracked.
+/.tmp*
 attached_assets/
 # Python bytecode and cache
 __pycache__/
