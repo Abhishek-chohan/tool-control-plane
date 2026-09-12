@@ -19,7 +19,7 @@ It does not apply to the separate server-side `/rpc` removal path documented in 
 ## Protobuf Contract Rules
 
 - Additive protobuf changes are the default compatibility path. New RPCs, new optional fields, and new enum values should preserve existing behavior for unchanged clients.
-- Breaking protobuf changes require an explicit version boundary. Removing or renaming RPCs, reusing field numbers, changing wire-visible field types, or changing required request semantics must not ship as an unannounced in-place change on the current major line.
+- Breaking protobuf changes require an explicit version boundary. Removing or renaming RPCs, reusing field numbers, changing wire-visible field types, or changing required request semantics must not ship as an unannounced in-place change on the current major line. The contract's version boundary is the `api.v1` package (see `server/docs/release-notes/2026-09-12-contract-v1.md`); changes that break the v1 wire shape require a `v2` boundary, not an in-place edit.
 - Deprecated protobuf behavior must be documented before removal. The deprecation target and migration path belong in repo docs, not only in generated code comments.
 - The HTTP gateway is coupled to the protobuf contract. If an RPC or field changes in the canonical proto, the generated HTTP gateway behavior changes with it and must be reviewed under the same compatibility policy.
 

@@ -38,52 +38,62 @@ class ToolServiceStub(object):
             channel: A grpc.Channel.
         """
         self.RegisterTool = channel.unary_unary(
-                '/api.ToolService/RegisterTool',
+                '/api.v1.ToolService/RegisterTool',
                 request_serializer=proto_dot_service__pb2.RegisterToolRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.RegisterToolResponse.FromString,
                 _registered_method=True)
         self.ListTools = channel.unary_unary(
-                '/api.ToolService/ListTools',
+                '/api.v1.ToolService/ListTools',
                 request_serializer=proto_dot_service__pb2.ListToolsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListToolsResponse.FromString,
                 _registered_method=True)
+        self.GetTool = channel.unary_unary(
+                '/api.v1.ToolService/GetTool',
+                request_serializer=proto_dot_service__pb2.GetToolRequest.SerializeToString,
+                response_deserializer=proto_dot_service__pb2.GetToolResponse.FromString,
+                _registered_method=True)
         self.GetToolById = channel.unary_unary(
-                '/api.ToolService/GetToolById',
+                '/api.v1.ToolService/GetToolById',
                 request_serializer=proto_dot_service__pb2.GetToolByIdRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetToolResponse.FromString,
                 _registered_method=True)
         self.GetToolByName = channel.unary_unary(
-                '/api.ToolService/GetToolByName',
+                '/api.v1.ToolService/GetToolByName',
                 request_serializer=proto_dot_service__pb2.GetToolByNameRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetToolResponse.FromString,
                 _registered_method=True)
         self.DeleteTool = channel.unary_unary(
-                '/api.ToolService/DeleteTool',
+                '/api.v1.ToolService/DeleteTool',
                 request_serializer=proto_dot_service__pb2.DeleteToolRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.DeleteToolResponse.FromString,
                 _registered_method=True)
         self.UpdateToolPing = channel.unary_unary(
-                '/api.ToolService/UpdateToolPing',
+                '/api.v1.ToolService/UpdateToolPing',
                 request_serializer=proto_dot_service__pb2.UpdateToolPingRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Tool.FromString,
                 _registered_method=True)
         self.StreamExecuteTool = channel.unary_stream(
-                '/api.ToolService/StreamExecuteTool',
+                '/api.v1.ToolService/StreamExecuteTool',
                 request_serializer=proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ExecuteToolChunk.FromString,
                 _registered_method=True)
         self.ResumeStream = channel.unary_stream(
-                '/api.ToolService/ResumeStream',
+                '/api.v1.ToolService/ResumeStream',
                 request_serializer=proto_dot_service__pb2.ResumeStreamRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ExecuteToolChunk.FromString,
                 _registered_method=True)
+        self.InvokeTool = channel.unary_unary(
+                '/api.v1.ToolService/InvokeTool',
+                request_serializer=proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
+                response_deserializer=proto_dot_service__pb2.ExecuteToolResponse.FromString,
+                _registered_method=True)
         self.ExecuteTool = channel.unary_unary(
-                '/api.ToolService/ExecuteTool',
+                '/api.v1.ToolService/ExecuteTool',
                 request_serializer=proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ExecuteToolResponse.FromString,
                 _registered_method=True)
         self.HealthCheck = channel.unary_unary(
-                '/api.ToolService/HealthCheck',
+                '/api.v1.ToolService/HealthCheck',
                 request_serializer=proto_dot_service__pb2.HealthCheckRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.HealthCheckResponse.FromString,
                 _registered_method=True)
@@ -108,14 +118,24 @@ class ToolServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetTool(self, request, context):
+        """GetTool resolves a tool by ID or by name: exactly one of the reference
+        fields should be set; the ID wins when both are provided.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GetToolById(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Deprecated: use GetTool. Retained as a stable alias.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetToolByName(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Deprecated: use GetTool. Retained as a stable alias.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -149,8 +169,16 @@ class ToolServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def InvokeTool(self, request, context):
+        """InvokeTool is the v1 name for synchronous tool invocation.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def ExecuteTool(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """Deprecated: use InvokeTool. Retained as a stable alias.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -174,6 +202,11 @@ def add_ToolServiceServicer_to_server(servicer, server):
                     servicer.ListTools,
                     request_deserializer=proto_dot_service__pb2.ListToolsRequest.FromString,
                     response_serializer=proto_dot_service__pb2.ListToolsResponse.SerializeToString,
+            ),
+            'GetTool': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetTool,
+                    request_deserializer=proto_dot_service__pb2.GetToolRequest.FromString,
+                    response_serializer=proto_dot_service__pb2.GetToolResponse.SerializeToString,
             ),
             'GetToolById': grpc.unary_unary_rpc_method_handler(
                     servicer.GetToolById,
@@ -205,6 +238,11 @@ def add_ToolServiceServicer_to_server(servicer, server):
                     request_deserializer=proto_dot_service__pb2.ResumeStreamRequest.FromString,
                     response_serializer=proto_dot_service__pb2.ExecuteToolChunk.SerializeToString,
             ),
+            'InvokeTool': grpc.unary_unary_rpc_method_handler(
+                    servicer.InvokeTool,
+                    request_deserializer=proto_dot_service__pb2.ExecuteToolRequest.FromString,
+                    response_serializer=proto_dot_service__pb2.ExecuteToolResponse.SerializeToString,
+            ),
             'ExecuteTool': grpc.unary_unary_rpc_method_handler(
                     servicer.ExecuteTool,
                     request_deserializer=proto_dot_service__pb2.ExecuteToolRequest.FromString,
@@ -217,9 +255,9 @@ def add_ToolServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'api.ToolService', rpc_method_handlers)
+            'api.v1.ToolService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('api.ToolService', rpc_method_handlers)
+    server.add_registered_method_handlers('api.v1.ToolService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -243,7 +281,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/RegisterTool',
+            '/api.v1.ToolService/RegisterTool',
             proto_dot_service__pb2.RegisterToolRequest.SerializeToString,
             proto_dot_service__pb2.RegisterToolResponse.FromString,
             options,
@@ -270,9 +308,36 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/ListTools',
+            '/api.v1.ToolService/ListTools',
             proto_dot_service__pb2.ListToolsRequest.SerializeToString,
             proto_dot_service__pb2.ListToolsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetTool(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/api.v1.ToolService/GetTool',
+            proto_dot_service__pb2.GetToolRequest.SerializeToString,
+            proto_dot_service__pb2.GetToolResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -297,7 +362,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/GetToolById',
+            '/api.v1.ToolService/GetToolById',
             proto_dot_service__pb2.GetToolByIdRequest.SerializeToString,
             proto_dot_service__pb2.GetToolResponse.FromString,
             options,
@@ -324,7 +389,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/GetToolByName',
+            '/api.v1.ToolService/GetToolByName',
             proto_dot_service__pb2.GetToolByNameRequest.SerializeToString,
             proto_dot_service__pb2.GetToolResponse.FromString,
             options,
@@ -351,7 +416,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/DeleteTool',
+            '/api.v1.ToolService/DeleteTool',
             proto_dot_service__pb2.DeleteToolRequest.SerializeToString,
             proto_dot_service__pb2.DeleteToolResponse.FromString,
             options,
@@ -378,7 +443,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/UpdateToolPing',
+            '/api.v1.ToolService/UpdateToolPing',
             proto_dot_service__pb2.UpdateToolPingRequest.SerializeToString,
             proto_dot_service__pb2.Tool.FromString,
             options,
@@ -405,7 +470,7 @@ class ToolService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/api.ToolService/StreamExecuteTool',
+            '/api.v1.ToolService/StreamExecuteTool',
             proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
             proto_dot_service__pb2.ExecuteToolChunk.FromString,
             options,
@@ -432,9 +497,36 @@ class ToolService(object):
         return grpc.experimental.unary_stream(
             request,
             target,
-            '/api.ToolService/ResumeStream',
+            '/api.v1.ToolService/ResumeStream',
             proto_dot_service__pb2.ResumeStreamRequest.SerializeToString,
             proto_dot_service__pb2.ExecuteToolChunk.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def InvokeTool(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/api.v1.ToolService/InvokeTool',
+            proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
+            proto_dot_service__pb2.ExecuteToolResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -459,7 +551,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/ExecuteTool',
+            '/api.v1.ToolService/ExecuteTool',
             proto_dot_service__pb2.ExecuteToolRequest.SerializeToString,
             proto_dot_service__pb2.ExecuteToolResponse.FromString,
             options,
@@ -486,7 +578,7 @@ class ToolService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.ToolService/HealthCheck',
+            '/api.v1.ToolService/HealthCheck',
             proto_dot_service__pb2.HealthCheckRequest.SerializeToString,
             proto_dot_service__pb2.HealthCheckResponse.FromString,
             options,
@@ -513,62 +605,62 @@ class SessionsServiceStub(object):
             channel: A grpc.Channel.
         """
         self.CreateSession = channel.unary_unary(
-                '/api.SessionsService/CreateSession',
+                '/api.v1.SessionsService/CreateSession',
                 request_serializer=proto_dot_service__pb2.CreateSessionRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.CreateSessionResponse.FromString,
                 _registered_method=True)
         self.GetSession = channel.unary_unary(
-                '/api.SessionsService/GetSession',
+                '/api.v1.SessionsService/GetSession',
                 request_serializer=proto_dot_service__pb2.GetSessionRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Session.FromString,
                 _registered_method=True)
         self.ListSessions = channel.unary_unary(
-                '/api.SessionsService/ListSessions',
+                '/api.v1.SessionsService/ListSessions',
                 request_serializer=proto_dot_service__pb2.ListSessionsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListSessionsResponse.FromString,
                 _registered_method=True)
         self.UpdateSession = channel.unary_unary(
-                '/api.SessionsService/UpdateSession',
+                '/api.v1.SessionsService/UpdateSession',
                 request_serializer=proto_dot_service__pb2.UpdateSessionRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Session.FromString,
                 _registered_method=True)
         self.DeleteSession = channel.unary_unary(
-                '/api.SessionsService/DeleteSession',
+                '/api.v1.SessionsService/DeleteSession',
                 request_serializer=proto_dot_service__pb2.DeleteSessionRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.DeleteSessionResponse.FromString,
                 _registered_method=True)
         self.ListUserSessions = channel.unary_unary(
-                '/api.SessionsService/ListUserSessions',
+                '/api.v1.SessionsService/ListUserSessions',
                 request_serializer=proto_dot_service__pb2.ListUserSessionsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListUserSessionsResponse.FromString,
                 _registered_method=True)
         self.BulkDeleteSessions = channel.unary_unary(
-                '/api.SessionsService/BulkDeleteSessions',
+                '/api.v1.SessionsService/BulkDeleteSessions',
                 request_serializer=proto_dot_service__pb2.BulkDeleteSessionsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.BulkDeleteSessionsResponse.FromString,
                 _registered_method=True)
         self.GetSessionStats = channel.unary_unary(
-                '/api.SessionsService/GetSessionStats',
+                '/api.v1.SessionsService/GetSessionStats',
                 request_serializer=proto_dot_service__pb2.GetSessionStatsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetSessionStatsResponse.FromString,
                 _registered_method=True)
         self.InvalidateSession = channel.unary_unary(
-                '/api.SessionsService/InvalidateSession',
+                '/api.v1.SessionsService/InvalidateSession',
                 request_serializer=proto_dot_service__pb2.InvalidateSessionRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.InvalidateSessionResponse.FromString,
                 _registered_method=True)
         self.CreateApiKey = channel.unary_unary(
-                '/api.SessionsService/CreateApiKey',
+                '/api.v1.SessionsService/CreateApiKey',
                 request_serializer=proto_dot_service__pb2.CreateApiKeyRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ApiKey.FromString,
                 _registered_method=True)
         self.ListApiKeys = channel.unary_unary(
-                '/api.SessionsService/ListApiKeys',
+                '/api.v1.SessionsService/ListApiKeys',
                 request_serializer=proto_dot_service__pb2.ListApiKeysRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListApiKeysResponse.FromString,
                 _registered_method=True)
         self.RevokeApiKey = channel.unary_unary(
-                '/api.SessionsService/RevokeApiKey',
+                '/api.v1.SessionsService/RevokeApiKey',
                 request_serializer=proto_dot_service__pb2.RevokeApiKeyRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.RevokeApiKeyResponse.FromString,
                 _registered_method=True)
@@ -724,9 +816,9 @@ def add_SessionsServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'api.SessionsService', rpc_method_handlers)
+            'api.v1.SessionsService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('api.SessionsService', rpc_method_handlers)
+    server.add_registered_method_handlers('api.v1.SessionsService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -750,7 +842,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/CreateSession',
+            '/api.v1.SessionsService/CreateSession',
             proto_dot_service__pb2.CreateSessionRequest.SerializeToString,
             proto_dot_service__pb2.CreateSessionResponse.FromString,
             options,
@@ -777,7 +869,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/GetSession',
+            '/api.v1.SessionsService/GetSession',
             proto_dot_service__pb2.GetSessionRequest.SerializeToString,
             proto_dot_service__pb2.Session.FromString,
             options,
@@ -804,7 +896,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/ListSessions',
+            '/api.v1.SessionsService/ListSessions',
             proto_dot_service__pb2.ListSessionsRequest.SerializeToString,
             proto_dot_service__pb2.ListSessionsResponse.FromString,
             options,
@@ -831,7 +923,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/UpdateSession',
+            '/api.v1.SessionsService/UpdateSession',
             proto_dot_service__pb2.UpdateSessionRequest.SerializeToString,
             proto_dot_service__pb2.Session.FromString,
             options,
@@ -858,7 +950,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/DeleteSession',
+            '/api.v1.SessionsService/DeleteSession',
             proto_dot_service__pb2.DeleteSessionRequest.SerializeToString,
             proto_dot_service__pb2.DeleteSessionResponse.FromString,
             options,
@@ -885,7 +977,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/ListUserSessions',
+            '/api.v1.SessionsService/ListUserSessions',
             proto_dot_service__pb2.ListUserSessionsRequest.SerializeToString,
             proto_dot_service__pb2.ListUserSessionsResponse.FromString,
             options,
@@ -912,7 +1004,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/BulkDeleteSessions',
+            '/api.v1.SessionsService/BulkDeleteSessions',
             proto_dot_service__pb2.BulkDeleteSessionsRequest.SerializeToString,
             proto_dot_service__pb2.BulkDeleteSessionsResponse.FromString,
             options,
@@ -939,7 +1031,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/GetSessionStats',
+            '/api.v1.SessionsService/GetSessionStats',
             proto_dot_service__pb2.GetSessionStatsRequest.SerializeToString,
             proto_dot_service__pb2.GetSessionStatsResponse.FromString,
             options,
@@ -966,7 +1058,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/InvalidateSession',
+            '/api.v1.SessionsService/InvalidateSession',
             proto_dot_service__pb2.InvalidateSessionRequest.SerializeToString,
             proto_dot_service__pb2.InvalidateSessionResponse.FromString,
             options,
@@ -993,7 +1085,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/CreateApiKey',
+            '/api.v1.SessionsService/CreateApiKey',
             proto_dot_service__pb2.CreateApiKeyRequest.SerializeToString,
             proto_dot_service__pb2.ApiKey.FromString,
             options,
@@ -1020,7 +1112,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/ListApiKeys',
+            '/api.v1.SessionsService/ListApiKeys',
             proto_dot_service__pb2.ListApiKeysRequest.SerializeToString,
             proto_dot_service__pb2.ListApiKeysResponse.FromString,
             options,
@@ -1047,7 +1139,7 @@ class SessionsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.SessionsService/RevokeApiKey',
+            '/api.v1.SessionsService/RevokeApiKey',
             proto_dot_service__pb2.RevokeApiKeyRequest.SerializeToString,
             proto_dot_service__pb2.RevokeApiKeyResponse.FromString,
             options,
@@ -1074,32 +1166,32 @@ class MachinesServiceStub(object):
             channel: A grpc.Channel.
         """
         self.RegisterMachine = channel.unary_unary(
-                '/api.MachinesService/RegisterMachine',
+                '/api.v1.MachinesService/RegisterMachine',
                 request_serializer=proto_dot_service__pb2.RegisterMachineRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Machine.FromString,
                 _registered_method=True)
         self.ListMachines = channel.unary_unary(
-                '/api.MachinesService/ListMachines',
+                '/api.v1.MachinesService/ListMachines',
                 request_serializer=proto_dot_service__pb2.ListMachinesRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListMachinesResponse.FromString,
                 _registered_method=True)
         self.GetMachine = channel.unary_unary(
-                '/api.MachinesService/GetMachine',
+                '/api.v1.MachinesService/GetMachine',
                 request_serializer=proto_dot_service__pb2.GetMachineRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Machine.FromString,
                 _registered_method=True)
         self.UpdateMachinePing = channel.unary_unary(
-                '/api.MachinesService/UpdateMachinePing',
+                '/api.v1.MachinesService/UpdateMachinePing',
                 request_serializer=proto_dot_service__pb2.UpdateMachinePingRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Machine.FromString,
                 _registered_method=True)
         self.UnregisterMachine = channel.unary_unary(
-                '/api.MachinesService/UnregisterMachine',
+                '/api.v1.MachinesService/UnregisterMachine',
                 request_serializer=proto_dot_service__pb2.UnregisterMachineRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.UnregisterMachineResponse.FromString,
                 _registered_method=True)
         self.DrainMachine = channel.unary_unary(
-                '/api.MachinesService/DrainMachine',
+                '/api.v1.MachinesService/DrainMachine',
                 request_serializer=proto_dot_service__pb2.DrainMachineRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.DrainMachineResponse.FromString,
                 _registered_method=True)
@@ -1184,9 +1276,9 @@ def add_MachinesServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'api.MachinesService', rpc_method_handlers)
+            'api.v1.MachinesService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('api.MachinesService', rpc_method_handlers)
+    server.add_registered_method_handlers('api.v1.MachinesService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -1210,7 +1302,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/RegisterMachine',
+            '/api.v1.MachinesService/RegisterMachine',
             proto_dot_service__pb2.RegisterMachineRequest.SerializeToString,
             proto_dot_service__pb2.Machine.FromString,
             options,
@@ -1237,7 +1329,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/ListMachines',
+            '/api.v1.MachinesService/ListMachines',
             proto_dot_service__pb2.ListMachinesRequest.SerializeToString,
             proto_dot_service__pb2.ListMachinesResponse.FromString,
             options,
@@ -1264,7 +1356,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/GetMachine',
+            '/api.v1.MachinesService/GetMachine',
             proto_dot_service__pb2.GetMachineRequest.SerializeToString,
             proto_dot_service__pb2.Machine.FromString,
             options,
@@ -1291,7 +1383,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/UpdateMachinePing',
+            '/api.v1.MachinesService/UpdateMachinePing',
             proto_dot_service__pb2.UpdateMachinePingRequest.SerializeToString,
             proto_dot_service__pb2.Machine.FromString,
             options,
@@ -1318,7 +1410,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/UnregisterMachine',
+            '/api.v1.MachinesService/UnregisterMachine',
             proto_dot_service__pb2.UnregisterMachineRequest.SerializeToString,
             proto_dot_service__pb2.UnregisterMachineResponse.FromString,
             options,
@@ -1345,7 +1437,7 @@ class MachinesService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.MachinesService/DrainMachine',
+            '/api.v1.MachinesService/DrainMachine',
             proto_dot_service__pb2.DrainMachineRequest.SerializeToString,
             proto_dot_service__pb2.DrainMachineResponse.FromString,
             options,
@@ -1372,52 +1464,52 @@ class RequestsServiceStub(object):
             channel: A grpc.Channel.
         """
         self.CreateRequest = channel.unary_unary(
-                '/api.RequestsService/CreateRequest',
+                '/api.v1.RequestsService/CreateRequest',
                 request_serializer=proto_dot_service__pb2.CreateRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
         self.GetRequest = channel.unary_unary(
-                '/api.RequestsService/GetRequest',
+                '/api.v1.RequestsService/GetRequest',
                 request_serializer=proto_dot_service__pb2.GetRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
         self.ListRequests = channel.unary_unary(
-                '/api.RequestsService/ListRequests',
+                '/api.v1.RequestsService/ListRequests',
                 request_serializer=proto_dot_service__pb2.ListRequestsRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListRequestsResponse.FromString,
                 _registered_method=True)
         self.UpdateRequest = channel.unary_unary(
-                '/api.RequestsService/UpdateRequest',
+                '/api.v1.RequestsService/UpdateRequest',
                 request_serializer=proto_dot_service__pb2.UpdateRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
         self.ClaimRequest = channel.unary_unary(
-                '/api.RequestsService/ClaimRequest',
+                '/api.v1.RequestsService/ClaimRequest',
                 request_serializer=proto_dot_service__pb2.ClaimRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
         self.CancelRequest = channel.unary_unary(
-                '/api.RequestsService/CancelRequest',
+                '/api.v1.RequestsService/CancelRequest',
                 request_serializer=proto_dot_service__pb2.CancelRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.CancelRequestResponse.FromString,
                 _registered_method=True)
         self.SubmitRequestResult = channel.unary_unary(
-                '/api.RequestsService/SubmitRequestResult',
+                '/api.v1.RequestsService/SubmitRequestResult',
                 request_serializer=proto_dot_service__pb2.SubmitRequestResultRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.SubmitRequestResultResponse.FromString,
                 _registered_method=True)
         self.AppendRequestChunks = channel.unary_unary(
-                '/api.RequestsService/AppendRequestChunks',
+                '/api.v1.RequestsService/AppendRequestChunks',
                 request_serializer=proto_dot_service__pb2.AppendRequestChunksRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.AppendRequestChunksResponse.FromString,
                 _registered_method=True)
         self.GetRequestChunks = channel.unary_unary(
-                '/api.RequestsService/GetRequestChunks',
+                '/api.v1.RequestsService/GetRequestChunks',
                 request_serializer=proto_dot_service__pb2.GetRequestChunksRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.GetRequestChunksResponse.FromString,
                 _registered_method=True)
         self.RenewRequestLease = channel.unary_unary(
-                '/api.RequestsService/RenewRequestLease',
+                '/api.v1.RequestsService/RenewRequestLease',
                 request_serializer=proto_dot_service__pb2.RenewRequestLeaseRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
@@ -1552,9 +1644,9 @@ def add_RequestsServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'api.RequestsService', rpc_method_handlers)
+            'api.v1.RequestsService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('api.RequestsService', rpc_method_handlers)
+    server.add_registered_method_handlers('api.v1.RequestsService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -1578,7 +1670,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/CreateRequest',
+            '/api.v1.RequestsService/CreateRequest',
             proto_dot_service__pb2.CreateRequestRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
             options,
@@ -1605,7 +1697,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/GetRequest',
+            '/api.v1.RequestsService/GetRequest',
             proto_dot_service__pb2.GetRequestRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
             options,
@@ -1632,7 +1724,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/ListRequests',
+            '/api.v1.RequestsService/ListRequests',
             proto_dot_service__pb2.ListRequestsRequest.SerializeToString,
             proto_dot_service__pb2.ListRequestsResponse.FromString,
             options,
@@ -1659,7 +1751,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/UpdateRequest',
+            '/api.v1.RequestsService/UpdateRequest',
             proto_dot_service__pb2.UpdateRequestRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
             options,
@@ -1686,7 +1778,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/ClaimRequest',
+            '/api.v1.RequestsService/ClaimRequest',
             proto_dot_service__pb2.ClaimRequestRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
             options,
@@ -1713,7 +1805,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/CancelRequest',
+            '/api.v1.RequestsService/CancelRequest',
             proto_dot_service__pb2.CancelRequestRequest.SerializeToString,
             proto_dot_service__pb2.CancelRequestResponse.FromString,
             options,
@@ -1740,7 +1832,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/SubmitRequestResult',
+            '/api.v1.RequestsService/SubmitRequestResult',
             proto_dot_service__pb2.SubmitRequestResultRequest.SerializeToString,
             proto_dot_service__pb2.SubmitRequestResultResponse.FromString,
             options,
@@ -1767,7 +1859,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/AppendRequestChunks',
+            '/api.v1.RequestsService/AppendRequestChunks',
             proto_dot_service__pb2.AppendRequestChunksRequest.SerializeToString,
             proto_dot_service__pb2.AppendRequestChunksResponse.FromString,
             options,
@@ -1794,7 +1886,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/GetRequestChunks',
+            '/api.v1.RequestsService/GetRequestChunks',
             proto_dot_service__pb2.GetRequestChunksRequest.SerializeToString,
             proto_dot_service__pb2.GetRequestChunksResponse.FromString,
             options,
@@ -1821,7 +1913,7 @@ class RequestsService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.RequestsService/RenewRequestLease',
+            '/api.v1.RequestsService/RenewRequestLease',
             proto_dot_service__pb2.RenewRequestLeaseRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
             options,
@@ -1848,22 +1940,22 @@ class TasksServiceStub(object):
             channel: A grpc.Channel.
         """
         self.CreateTask = channel.unary_unary(
-                '/api.TasksService/CreateTask',
+                '/api.v1.TasksService/CreateTask',
                 request_serializer=proto_dot_service__pb2.CreateTaskRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Task.FromString,
                 _registered_method=True)
         self.GetTask = channel.unary_unary(
-                '/api.TasksService/GetTask',
+                '/api.v1.TasksService/GetTask',
                 request_serializer=proto_dot_service__pb2.GetTaskRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Task.FromString,
                 _registered_method=True)
         self.ListTasks = channel.unary_unary(
-                '/api.TasksService/ListTasks',
+                '/api.v1.TasksService/ListTasks',
                 request_serializer=proto_dot_service__pb2.ListTasksRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.ListTasksResponse.FromString,
                 _registered_method=True)
         self.CancelTask = channel.unary_unary(
-                '/api.TasksService/CancelTask',
+                '/api.v1.TasksService/CancelTask',
                 request_serializer=proto_dot_service__pb2.CancelTaskRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.CancelTaskResponse.FromString,
                 _registered_method=True)
@@ -1925,9 +2017,9 @@ def add_TasksServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'api.TasksService', rpc_method_handlers)
+            'api.v1.TasksService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('api.TasksService', rpc_method_handlers)
+    server.add_registered_method_handlers('api.v1.TasksService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -1951,7 +2043,7 @@ class TasksService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.TasksService/CreateTask',
+            '/api.v1.TasksService/CreateTask',
             proto_dot_service__pb2.CreateTaskRequest.SerializeToString,
             proto_dot_service__pb2.Task.FromString,
             options,
@@ -1978,7 +2070,7 @@ class TasksService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.TasksService/GetTask',
+            '/api.v1.TasksService/GetTask',
             proto_dot_service__pb2.GetTaskRequest.SerializeToString,
             proto_dot_service__pb2.Task.FromString,
             options,
@@ -2005,7 +2097,7 @@ class TasksService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.TasksService/ListTasks',
+            '/api.v1.TasksService/ListTasks',
             proto_dot_service__pb2.ListTasksRequest.SerializeToString,
             proto_dot_service__pb2.ListTasksResponse.FromString,
             options,
@@ -2032,7 +2124,7 @@ class TasksService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/api.TasksService/CancelTask',
+            '/api.v1.TasksService/CancelTask',
             proto_dot_service__pb2.CancelTaskRequest.SerializeToString,
             proto_dot_service__pb2.CancelTaskResponse.FromString,
             options,

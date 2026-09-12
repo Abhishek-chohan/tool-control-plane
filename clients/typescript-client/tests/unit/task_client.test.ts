@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Timestamp } from 'google-protobuf/google/protobuf/timestamp_pb';
+
 import { ToolplaneClient } from '../../src/core/toolplane_client';
 import { ClientProtocol } from '../../src/interfaces';
 import {
   CancelTaskResponse,
   ListTasksResponse,
   Task as ProtoTask,
+  TaskStatus,
 } from '../../src/proto/proto/service_pb';
 
 type MutableClientState = {
@@ -18,11 +21,17 @@ type MutableClientState = {
   machineClient: unknown;
 };
 
+function timestamp(date: string): Timestamp {
+  const value = new Timestamp();
+  value.fromDate(new Date(date));
+  return value;
+}
+
 function createTask(overrides: Partial<{
   id: string;
   sessionId: string;
   toolName: string;
-  status: string;
+  status: TaskStatus;
   input: string;
   result: string;
   resultType: string;
@@ -35,14 +44,16 @@ function createTask(overrides: Partial<{
   task.setId(overrides.id ?? 'task-1');
   task.setSessionId(overrides.sessionId ?? 'session-1');
   task.setToolName(overrides.toolName ?? 'demo_tool');
-  task.setStatus(overrides.status ?? 'pending');
+  task.setStatus(overrides.status ?? TaskStatus.TASK_STATUS_PENDING);
   task.setInput(overrides.input ?? '{"message":"hello"}');
   task.setResult(overrides.result ?? '');
   task.setResultType(overrides.resultType ?? '');
   task.setError(overrides.error ?? '');
-  task.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
-  task.setUpdatedAt(overrides.updatedAt ?? '2025-01-01T00:01:00Z');
-  task.setCompletedAt(overrides.completedAt ?? '');
+  task.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
+  task.setUpdatedAt(timestamp(overrides.updatedAt ?? '2025-01-01T00:01:00Z'));
+  if (overrides.completedAt) {
+    task.setCompletedAt(timestamp(overrides.completedAt));
+  }
   return task;
 }
 
@@ -74,7 +85,7 @@ function createConnectedClient(taskClient: Record<string, unknown>): ToolplaneCl
 }
 
 test('createTask returns a normalized task payload', async () => {
-  const task = createTask({ status: 'running' });
+  const task = createTask({ status: TaskStatus.TASK_STATUS_RUNNING });
   const client = createConnectedClient({
     createTask: unaryResponse(task),
   });
@@ -95,14 +106,14 @@ test('getTask returns a normalized task payload', async () => {
   const result = await client.getTask('task-42');
 
   assert.equal(result.id, 'task-42');
-  assert.equal(result.completedAt, '2025-01-01T00:02:00Z');
+  assert.equal(result.completedAt, '2025-01-01T00:02:00.000Z');
 });
 
 test('listTasks normalizes task responses', async () => {
   const response = new ListTasksResponse();
   response.setTasksList([
-    createTask({ id: 'task-1', status: 'pending' }),
-    createTask({ id: 'task-2', status: 'done', result: '{"ok":true}', resultType: 'json' }),
+    createTask({ id: 'task-1', status: TaskStatus.TASK_STATUS_PENDING }),
+    createTask({ id: 'task-2', status: TaskStatus.TASK_STATUS_COMPLETED, result: '{"ok":true}', resultType: 'json' }),
   ]);
 
   const client = createConnectedClient({
@@ -112,7 +123,7 @@ test('listTasks normalizes task responses', async () => {
   const tasks = await client.listTasks();
 
   assert.deepEqual(tasks.map((task) => task.id), ['task-1', 'task-2']);
-  assert.equal(tasks[1].status, 'done');
+  assert.equal(tasks[1].status, 'completed');
   assert.equal(tasks[1].resultType, 'json');
 });
 

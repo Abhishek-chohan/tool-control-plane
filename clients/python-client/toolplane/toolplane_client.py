@@ -276,9 +276,12 @@ class Toolplane:
 
     # Session admin helpers (admin scope — Python-only; not portable across SDKs)
     def list_user_sessions(
-        self, user_id: str, page_size: int = 10, page_token: int = 0, filter: str = ""
+        self, user_id: str, page_size: int = 10, page_token: str = "", filter: str = ""
     ) -> Dict[str, Any]:
-        """List user sessions with pagination and filtering."""
+        """List user sessions with pagination and filtering.
+
+        page_token is the opaque cursor returned by the previous page.
+        """
         if not self.connection_manager.connected:
             if not self.connect():
                 raise ConnectionError("Failed to connect to server")
@@ -354,9 +357,12 @@ class Toolplane:
         status: str = "",
         tool_name: str = "",
         limit: int = 10,
-        offset: int = 0,
+        page_token: str = "",
     ) -> List[Dict[str, Any]]:
-        """List requests in a session."""
+        """List requests in a session.
+
+        page_token is the opaque cursor returned by the previous page.
+        """
         if not self.connection_manager.connected:
             if not self.connect():
                 raise ConnectionError("Failed to connect to server")
@@ -365,7 +371,7 @@ class Toolplane:
             status=status,
             tool_name=tool_name,
             limit=limit,
-            offset=offset,
+            page_token=page_token,
         )
 
     def cancel_request(self, session_id: str, request_id: str) -> bool:

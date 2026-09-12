@@ -54,6 +54,40 @@ def parse_json_safe(json_str: str, default: Any = None) -> Any:
         return default
 
 
+def proto_enum_name(value: Any, enum_type: Any) -> str:
+    """Return the symbolic name for a v1 enum value.
+
+    The gRPC transport delivers proto3 enums as plain ints while the HTTP
+    transport delivers the symbolic name; normalize both to the name so
+    callers can map it through normalize_status_name.
+    """
+    if isinstance(value, str):
+        return value
+    try:
+        return enum_type.Name(value)
+    except (ValueError, AttributeError, TypeError):
+        return ""
+
+
+def timestamp_to_iso(value: Any) -> str:
+    """Render a v1 Timestamp message as an RFC3339 string.
+
+    Tolerates strings (HTTP transport), None, and unset (epoch-zero)
+    timestamps so callers always get a plain str.
+    """
+    if value is None:
+        return ""
+    to_json = getattr(value, "ToJsonString", None)
+    if callable(to_json):
+        try:
+            if not getattr(value, "seconds", 1) and not getattr(value, "nanos", 1):
+                return ""
+            return to_json()
+        except Exception:
+            return ""
+    return value if isinstance(value, str) else str(value)
+
+
 def format_error_message(error: Exception, context: str = "") -> str:
     """Format error message with context."""
     if context:

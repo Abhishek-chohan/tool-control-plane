@@ -23,7 +23,7 @@ func newSessionPair(t *testing.T) (*memory.Store, *SessionsService) {
 func TestAPIKeyRevocationPropagatesAcrossReplicas(t *testing.T) {
 	store, svcA := newSessionPair(t)
 
-	session, err := svcA.CreateSession("user-coherence", "revocation", "coherence", "", "", "tenant")
+	session, err := svcA.CreateSession("user-coherence", "revocation", "coherence", "", "tenant")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestAPIKeyRevocationPropagatesAcrossReplicas(t *testing.T) {
 func TestSessionDeletionPropagatesToAuthAcrossReplicas(t *testing.T) {
 	store, svcA := newSessionPair(t)
 
-	session, err := svcA.CreateSession("user-coherence", "deletion", "coherence", "", "", "tenant")
+	session, err := svcA.CreateSession("user-coherence", "deletion", "coherence", "", "tenant")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -92,14 +92,14 @@ func TestCreateSessionDedupAcrossReplicas(t *testing.T) {
 	svcB := NewSessionsService(trace.NopTracer(), store)
 
 	const requestedID = "session-coherence-dup"
-	if _, err := svcA.CreateSession("user-a", "first", "", "", requestedID, "tenant"); err != nil {
+	if _, err := svcA.CreateSession("user-a", "first", "", requestedID, "tenant"); err != nil {
 		t.Fatalf("first create: %v", err)
 	}
 
 	// Replica B has no local copy of the session, so only the store insert can
 	// detect the collision. It must report AlreadyExists rather than
 	// overwriting replica A's row.
-	_, err := svcB.CreateSession("user-b", "second", "", "", requestedID, "tenant")
+	_, err := svcB.CreateSession("user-b", "second", "", requestedID, "tenant")
 	if err == nil {
 		t.Fatal("duplicate session create across replicas succeeded")
 	}
