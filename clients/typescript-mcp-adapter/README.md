@@ -19,7 +19,7 @@ This adapter is the repo's reference Layer 4 edge adapter in the maintained agen
 - It translates MCP discovery, invocation, and read-only inspection onto existing Toolplane session and request concepts instead of inventing a parallel runtime.
 - It is an edge example, not proof of general SDK parity. The source of truth remains `server/proto/service.proto`, the Go server runtime, and `SDK_MAP.md`.
 
-See `server/docs/agent-runtime-integration-seam.md` for the full four-layer seam model and the minimal adapter contract.
+See [server/docs/agent-runtime-integration-seam.md](../../server/docs/agent-runtime-integration-seam.md) for the full four-layer seam model and the minimal adapter contract.
 
 ## Incremental Adoption Role
 
@@ -29,7 +29,7 @@ Use this adapter as coexistence proof after one Toolplane-backed session already
 - Direct local tools can remain outside Toolplane entirely.
 - Session ownership, request lifecycle, retained replay, and drain remain native Toolplane behavior underneath the adapter.
 
-This adapter is supporting evidence for the incremental-adoption story, not a requirement for the first migration and not a replacement for the control plane itself. See `../../server/docs/incremental-adoption.md` for the maintained first-tool migration guide.
+This adapter is supporting evidence for the incremental-adoption story, not a requirement for the first migration and not a replacement for the control plane itself. See the [maintained first-tool migration guide](../../server/docs/incremental-adoption.md) for the stepwise path.
 
 ## Adapter Behavior
 
@@ -68,18 +68,25 @@ cd clients/typescript-mcp-adapter && npm run build
 
 ## Environment
 
-The adapter reads these variables:
+<!-- BEGIN GENERATED: api-surface -- tooling: tools/gen_sdk_readmes.py; edits inside this block are overwritten -->
+Generated from `src/config.ts`:
 
-- `TOOLPLANE_MCP_GRPC_HOST`
-- `TOOLPLANE_MCP_GRPC_PORT`
-- `TOOLPLANE_MCP_USER_ID`
-- `TOOLPLANE_MCP_API_KEY`
 - `TOOLPLANE_MCP_SESSION_ID`
+- `TOOLPLANE_MCP_API_KEY`
+- `TOOLPLANE_CONFORMANCE_API_KEY`
+- `TOOLPLANE_AUTH_FIXED_API_KEY`
+- `TOOLPLANE_MCP_GRPC_HOST`
+- `TOOLPLANE_CONFORMANCE_GRPC_HOST`
+- `TOOLPLANE_MCP_GRPC_PORT`
+- `TOOLPLANE_CONFORMANCE_GRPC_PORT`
+- `TOOLPLANE_MCP_USER_ID`
+- `TOOLPLANE_CONFORMANCE_USER_ID`
 - `TOOLPLANE_MCP_SESSION_NAME`
 - `TOOLPLANE_MCP_SESSION_DESCRIPTION`
 - `TOOLPLANE_MCP_SESSION_NAMESPACE`
 - `TOOLPLANE_MCP_TIMEOUT_MS`
 - `TOOLPLANE_MCP_REQUEST_RESOURCE_LIMIT`
+<!-- END GENERATED: api-surface -->
 
 If `TOOLPLANE_MCP_SESSION_ID` is omitted, the adapter creates a new Toolplane session at startup. For tests and local fixture bootstraps it also falls back to the `TOOLPLANE_CONFORMANCE_*` variables.
 

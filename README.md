@@ -156,7 +156,7 @@ CI runs Lint, SDK Conformance & Verification, and Release Gate on every push to 
 
 ## Contributing
 
-Issues are welcome for bugs, questions, and design discussion. Before pushing a PR, run the affected checks above — at minimum `make test-race`, `make conformance-python`, and `make check-proto-drift` from `server/`. Proto changes must follow [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md); SDK surface changes update [SDK_MAP.md](SDK_MAP.md) and `CHANGELOG.md` in the same PR. Local setup: [server/docs/local-development.md](server/docs/local-development.md).
+Issues are welcome for bugs, questions, and design discussion. Before pushing a PR, run the affected checks above — at minimum `make test-race`, `make conformance-python`, and `make check-proto-drift` from `server/`. Proto changes must follow [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md); SDK surface changes update [SDK_MAP.md](SDK_MAP.md) and `CHANGELOG.md` in the same PR, and regenerate the README API sections with `python tools/gen_sdk_readmes.py` (CI enforces this via the drift check). Local setup: [server/docs/local-development.md](server/docs/local-development.md).
 
 Report security issues privately via [SECURITY.md](SECURITY.md) — please don't open public issues for them.
 

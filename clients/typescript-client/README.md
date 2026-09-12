@@ -28,7 +28,7 @@ This package spans two layers of the maintained agent-runtime seam:
 - Layer 2: the maintained JavaScript-family gRPC projection for session, tool, machine, request, and task lifecycle helpers.
 - Layer 3: the explicit `ProviderRuntime` packaging for session attach or create, machine registration, tool registration, polling, claim, heartbeat, chunk append, result submission, and drain.
 
-Build foreign-protocol adapters on top of these surfaces instead of reimplementing claim, heartbeat, or drain logic in the adapter itself. This package still does not make every server capability portable: `ResumeStream` and `GetRequestChunks` remain server-level capabilities without maintained public wrappers here. For the full seam model and current gap caveats, see `server/docs/agent-runtime-integration-seam.md`.
+Build foreign-protocol adapters on top of these surfaces instead of reimplementing claim, heartbeat, or drain logic in the adapter itself. Retained-window recovery is available through the public `resumeStream()` and `getRequestChunksWindow()` wrappers; capabilities outside the mapped RPC set stay server-side. For the full seam model and current gap caveats, see [server/docs/agent-runtime-integration-seam.md](../../server/docs/agent-runtime-integration-seam.md).
 
 ## Features
 
@@ -54,7 +54,7 @@ The canonical end-to-end path for Toolplane is to offload one painful remote too
 ## Quick Start
 
 ```typescript
-import { ToolplaneClient } from './src';
+import { ToolplaneClient } from 'toolplane-typescript-client';
 
 const client = ToolplaneClient.createGRPCClient(
   'localhost',
@@ -105,7 +105,7 @@ Tool registration is machine-aware, so register a machine first or embed tool de
 ### Explicit Provider Runtime
 
 ```typescript
-import { ToolplaneClient } from './src';
+import { ToolplaneClient } from 'toolplane-typescript-client';
 
 const client = ToolplaneClient.createGRPCClient(
   'localhost',
@@ -187,7 +187,7 @@ The client exposes public wrappers for:
 - API keys: `createApiKey`, `listApiKeys`, `revokeApiKey`
 - Tools: `registerTool`, `listTools`, `getToolById`, `getToolByName`, `deleteTool`
 - Machines: `registerMachine`, `listMachines`, `getMachine`, `updateMachinePing`, `unregisterMachine`, `drainMachine`
-- Requests: `createRequest`, `getRequest`, `listRequests`, `updateRequest`, `claimRequest`, `appendRequestChunks`, `submitRequestResult`, `cancelRequest`
+- Requests: `createRequest`, `getRequest`, `listRequests`, `updateRequest`, `claimRequest`, `appendRequestChunks`, `submitRequestResult`, `renewRequestLease`, `cancelRequest`, `resumeStream`, `getRequestChunksWindow`
 - Tasks: `createTask`, `getTask`, `listTasks`, `cancelTask`
 
 ### Provider Runtime
@@ -200,6 +200,78 @@ The explicit `ProviderRuntime` exposes:
 
 For the reference deployment, set `TOOLPLANE_SERVER_PORT=9001`, `TOOLPLANE_USE_TLS=true`, `TOOLPLANE_TLS_CA_CERT_PATH=/path/to/ca.crt`, and `TOOLPLANE_TLS_SERVER_NAME=localhost` before running the maintained examples.
 
+<!-- BEGIN GENERATED: api-surface -- tooling: tools/gen_sdk_readmes.py; edits inside this block are overwritten -->
+#### `ToolplaneClient`
+
+Public methods parsed from `src/core/toolplane_client.ts`:
+
+| Method | Returns |
+| --- | --- |
+| `async connect()` | `Promise<void>` |
+| `async disconnect()` | `Promise<void>` |
+| `isConnected()` | `boolean` |
+| `getConnectionStatus()` | `ConnectionStatus` |
+| `async executeTool(toolName: string, params: Record<string, unknown> = {}, options: { idempotencyKey?: string } = {})` | `Promise<RequestModel>` |
+| `async ping()` | `Promise<string>` |
+| `async registerTool(name: string, description: string, schema: string, config: Record<string, string> = {}, tags: string[] = [], options: RegisterToolOptions = {})` | `Promise<Tool>` |
+| `async listTools()` | `Promise<Tool[]>` |
+| `async getToolById(toolId: string)` | `Promise<Tool>` |
+| `async getToolByName(toolName: string)` | `Promise<Tool>` |
+| `async deleteTool(toolId: string)` | `Promise<boolean>` |
+| `async createSession(name: string, description: string, namespace: string = 'default', requestedSessionId: string = '')` | `Promise<Session>` |
+| `async getSession()` | `Promise<Session>` |
+| `async listSessions()` | `Promise<Session[]>` |
+| `async updateSession(name: string = '', description: string = '', namespace: string = '')` | `Promise<Session>` |
+| `async createApiKey(name: string, capabilities: string[])` | `Promise<ApiKey>` |
+| `async listApiKeys()` | `Promise<ApiKey[]>` |
+| `async revokeApiKey(keyId: string)` | `Promise<boolean>` |
+| `async registerMachine(machineId: string = '', sdkVersion: string = '1.0.0', tools: RegisterToolRequest[] = [])` | `Promise<Machine>` |
+| `async listMachines()` | `Promise<Machine[]>` |
+| `async getMachine(machineId: string)` | `Promise<Machine>` |
+| `async updateMachinePing(machineId: string = '')` | `Promise<Machine>` |
+| `async unregisterMachine(machineId: string = '')` | `Promise<boolean>` |
+| `async drainMachine(machineId: string = '')` | `Promise<boolean>` |
+| `async createTask(toolName: string, input: string, idempotencyKey: string = '')` | `Promise<Task>` |
+| `async getTask(taskId: string)` | `Promise<Task>` |
+| `async listTasks()` | `Promise<Task[]>` |
+| `async cancelTask(taskId: string)` | `Promise<boolean>` |
+| `async createRequest(toolName: string, input: string, idempotencyKey: string = '')` | `Promise<RequestModel>` |
+| `async getRequest(requestId: string)` | `Promise<RequestModel>` |
+| `async getRequestChunksWindow(requestId: string)` | `Promise<{ chunks: unknown[]; startSeq: number; nextSeq: number; }>` |
+| `async listRequests(options: { status?: string; toolName?: string; limit?: number; /** Opaque cursor from a previous page; omit to start from the first page. */ pageToken?: string; } = {})` | `Promise<RequestModel[]>` |
+| `async updateRequest(requestId: string, update: RequestUpdate)` | `Promise<RequestModel>` |
+| `async claimRequest(requestId: string, machineId: string = '')` | `Promise<RequestModel>` |
+| `async appendRequestChunks(requestId: string, chunks: unknown[], resultType: string = 'streaming', lease?: LeaseContext)` | `Promise<boolean>` |
+| `async submitRequestResult(requestId: string, result: unknown, resultType: string = 'resolution', meta: Record<string, string> = {}, lease?: LeaseContext)` | `Promise<boolean>` |
+| `async renewRequestLease(requestId: string, machineId: string, leaseEpoch: number)` | `Promise<RequestModel>` |
+| `async cancelRequest(requestId: string)` | `Promise<boolean>` |
+| `providerRuntime(options: ProviderRuntimeOptions = {})` | `ProviderRuntime` |
+| `forkSession(sessionId: string)` | `ToolplaneClient` |
+| `static createGRPCClient(serverHost: string, serverPort: number, sessionId: string, userId: string, apiKey?: string, tls?: GRPCTLSConfig)` | `ToolplaneClient` |
+| `async resumeStream(requestId: string, lastSeq: number = 0, onChunk?: (chunk: ExecuteToolChunkModel) => void)` | `Promise<ExecuteToolChunkModel[]>` |
+
+#### `ProviderRuntime`
+
+Public methods parsed from `src/provider_runtime.ts`:
+
+| Method | Returns |
+| --- | --- |
+| `get running()` | `boolean` |
+| `managedSessionIds()` | `string[]` |
+| `async attachSession(sessionId: string, options: ProviderSessionAttachOptions = {})` | `Promise<Session>` |
+| `async createSession(options: ProviderSessionCreateOptions)` | `Promise<Session>` |
+| `async registerTool(definition: ProviderToolRegistration)` | `Promise<ProviderToolHandler>` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler: ProviderToolHandler)` | `Promise<ProviderToolHandler>` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>)` | `(handler: ProviderToolHandler) => Promise<ProviderToolHandler>` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler)` | `Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
+| `async pollOnce()` | `Promise<void>` |
+| `async startInBackground(sessionIds?: Iterable<string>)` | `Promise<ProviderRuntime>` |
+| `async runForever(sessionIds?: Iterable<string>)` | `Promise<void>` |
+| `async stop()` | `Promise<void>` |
+| `async drain()` | `Promise<void>` |
+| `async close()` | `Promise<void>` |
+<!-- END GENERATED: api-surface -->
+
 ## Error Handling
 
 The client exposes a small public error hierarchy:
@@ -210,7 +282,7 @@ import {
   ConnectionError,
   TimeoutError,
   ProtocolError,
-} from './src';
+} from 'toolplane-typescript-client';
 
 try {
   await client.listTools();
