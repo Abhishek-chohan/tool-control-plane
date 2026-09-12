@@ -237,7 +237,7 @@ Public methods parsed from `src/core/toolplane_client.ts`:
 | `async cancelTask(taskId: string)` | `Promise<boolean>` |
 | `async createRequest(toolName: string, input: string, idempotencyKey: string = '')` | `Promise<RequestModel>` |
 | `async getRequest(requestId: string)` | `Promise<RequestModel>` |
-| `async getRequestChunksWindow(requestId: string)` | `Promise<` |
+| `async getRequestChunksWindow(requestId: string)` | `Promise<{ chunks: unknown[]; startSeq: number; nextSeq: number; }>` |
 | `async listRequests(options: { status?: string; toolName?: string; limit?: number; /** Opaque cursor from a previous page; omit to start from the first page. */ pageToken?: string; } = {})` | `Promise<RequestModel[]>` |
 | `async updateRequest(requestId: string, update: RequestUpdate)` | `Promise<RequestModel>` |
 | `async claimRequest(requestId: string, machineId: string = '')` | `Promise<RequestModel>` |
@@ -261,9 +261,9 @@ Public methods parsed from `src/provider_runtime.ts`:
 | `async attachSession(sessionId: string, options: ProviderSessionAttachOptions = {})` | `Promise<Session>` |
 | `async createSession(options: ProviderSessionCreateOptions)` | `Promise<Session>` |
 | `async registerTool(definition: ProviderToolRegistration)` | `Promise<ProviderToolHandler>` |
-| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler: ProviderToolHandler)` | `Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, ): (handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> | ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
-| `tool(definition: Omit<ProviderToolRegistration, 'handler'>)` | `(handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> | ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
-| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler)` | `Promise<ProviderToolHandler> | ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler: ProviderToolHandler)` | `Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, ): (handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>)` | `(handler: ProviderToolHandler) => Promise<ProviderToolHandler>; tool( definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler, ): Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
+| `tool(definition: Omit<ProviderToolRegistration, 'handler'>, handler?: ProviderToolHandler)` | `Promise<ProviderToolHandler> \| ((handler: ProviderToolHandler) => Promise<ProviderToolHandler>)` |
 | `async pollOnce()` | `Promise<void>` |
 | `async startInBackground(sessionIds?: Iterable<string>)` | `Promise<ProviderRuntime>` |
 | `async runForever(sessionIds?: Iterable<string>)` | `Promise<void>` |

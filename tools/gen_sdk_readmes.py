@@ -15,6 +15,7 @@ Usage:
   python tools/gen_sdk_readmes.py --check    # exit 1 if a block is stale
 
 The script is stdlib-only so CI can run it without installing anything.
+It requires Python 3.9+ (it uses ast.unparse); CI runs 3.12.
 """
 
 from __future__ import annotations
@@ -28,6 +29,11 @@ from pathlib import Path
 from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def md(value: str) -> str:
+    """Escape a source-derived value for use inside a Markdown table cell."""
+    return value.replace("|", "\\|")
 
 BEGIN = (
     "<!-- BEGIN GENERATED: api-surface -- tooling: tools/gen_sdk_readmes.py;"
@@ -47,6 +53,17 @@ class Target:
 # Python client: parse the public classes with ast.
 # --------------------------------------------------------------------------
 
+def _decorator_names(item: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    names = set()
+    for dec in item.decorator_list:
+        target = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(target, ast.Name):
+            names.add(target.id)
+        elif isinstance(target, ast.Attribute):
+            names.add(target.attr)
+    return names
+
+
 def python_class_rows(path: Path, class_name: str) -> list[tuple[str, str]]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in tree.body:
@@ -58,17 +75,28 @@ def python_class_rows(path: Path, class_name: str) -> list[tuple[str, str]]:
                 continue
             if item.name.startswith("_"):
                 continue
+            decorators = _decorator_names(item)
+            is_property = "property" in decorators
+            # Render properties without call parens: usage is provider.running,
+            # not provider.running().
+            bound = "cls" if "classmethod" in decorators else "self"
             args = ast.unparse(item.args)
-            if args == "self":
+            if args == bound:
                 args = ""
-            elif args.startswith("self,"):
-                args = args[len("self,"):].strip()
+            elif args.startswith(bound + ","):
+                args = args[len(bound) + 1:].strip()
             prefix = "async " if isinstance(item, ast.AsyncFunctionDef) else ""
-            signature = f"{prefix}{item.name}({args})"
+            if is_property:
+                signature = item.name
+            else:
+                signature = f"{prefix}{item.name}({args})"
             if item.returns is not None:
                 signature += f" -> {ast.unparse(item.returns)}"
             doc = (ast.get_docstring(item) or "").strip().splitlines()
-            rows.append((signature, doc[0] if doc else ""))
+            first = doc[0] if doc else ""
+            if is_property:
+                first = f"Property. {first}" if first else "Property."
+            rows.append((signature, first))
         return rows
     raise SystemExit(f"class {class_name} not found in {path}")
 
@@ -77,7 +105,7 @@ def python_table(title: str, source: str, rows: list[tuple[str, str]]) -> str:
     out = [f"#### `{title}`", "", f"Public methods parsed from `{source}`:", ""]
     out += ["| Method | Description |", "| --- | --- |"]
     for signature, description in rows:
-        out.append(f"| `{signature}` | {description} |")
+        out.append(f"| `{md(signature)}` | {md(description)} |")
     out.append("")
     return "\n".join(out)
 
@@ -141,7 +169,7 @@ def render_go() -> str:
         "| --- | --- |",
     ]
     for signature, returns in rows:
-        out.append(f"| `{signature}` | `{returns}` |")
+        out.append(f"| `{md(signature)}` | `{md(returns)}` |")
     out.append("")
     return "\n".join(out)
 
@@ -174,10 +202,29 @@ def ts_class_rows(path: Path, class_name: str) -> list[tuple[str, str]]:
                 depth -= 1
             i += 1
         params = " ".join(body[m.end():i - 1].split()).replace(", )", ")").rstrip(",")
-        tail = " ".join(body[i:].split())
+        # Return annotation: scan from ':' to the balanced start of the body so
+        # object-literal types like Promise<{ chunks: unknown[] }> survive.
         ret = ""
-        if tail.startswith(":"):
-            ret = tail[1:].split("{")[0].strip()
+        j = i
+        while j < len(body) and body[j].isspace():
+            j += 1
+        if j < len(body) and body[j] == ":":
+            j += 1
+            depth, k = 0, j
+            while k < len(body):
+                ch = body[k]
+                # A whitespace-prefixed '{' at depth 0 opens the method body;
+                # one attached to type characters opens an object-literal type.
+                if ch == "{" and depth == 0 and body[k - 1] in " \t\r\n":
+                    break
+                if ch in "([{":
+                    depth += 1
+                elif ch in ")]}":
+                    if depth == 0:
+                        break
+                    depth -= 1
+                k += 1
+            ret = " ".join(body[j:k].split())
         rows.append((f"{modifiers.strip()} {name}({params})".strip(), ret))
     if not rows:
         raise SystemExit(f"no public methods found for {class_name} in {path}")
@@ -188,7 +235,7 @@ def ts_table(title: str, source: str, rows: list[tuple[str, str]]) -> str:
     out = [f"#### `{title}`", "", f"Public methods parsed from `{source}`:", ""]
     out += ["| Method | Returns |", "| --- | --- |"]
     for signature, returns in rows:
-        out.append(f"| `{signature}` | `{returns}` |")
+        out.append(f"| `{md(signature)}` | `{md(returns)}` |")
     out.append("")
     return "\n".join(out)
 
@@ -256,6 +303,8 @@ def marked_block(block: str) -> str:
 
 
 def main() -> int:
+    if sys.version_info < (3, 9):
+        raise SystemExit("tools/gen_sdk_readmes.py requires Python 3.9+ (it uses ast.unparse)")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail instead of writing when stale")
     args = parser.parse_args()

@@ -456,7 +456,7 @@ Public methods parsed from `toolplane/provider_runtime.py`:
 
 | Method | Description |
 | --- | --- |
-| `running() -> bool` |  |
+| `running -> bool` | Property. |
 | `add_sessions(session_ids: Optional[Iterable[str]]) -> None` |  |
 | `managed_session_ids() -> List[str]` |  |
 | `attach_session(session_id: str, register_machine: bool=True)` |  |
