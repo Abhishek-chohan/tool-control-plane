@@ -6,6 +6,36 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **v1 contract**: the protobuf package is now `api.v1` with every RPC
+  under `/api.v1.*`. Request/task statuses are enums
+  (`REQUEST_STATUS_DONE`, `TASK_STATUS_COMPLETED`, …), every entity time
+  is a `google.protobuf.Timestamp`, and `ListRequests` /
+  `ListUserSessions` share one opaque-token pagination contract
+  (`page_size` + `page_token`, responses carry a `ListPage` trailer).
+  `GetTool` resolves a tool by ID or name in one RPC and `InvokeTool` is
+  the v1 invocation name; `ExecuteTool` and the by-ID/by-name lookups
+  remain as deprecated aliases. `Session.api_key` is gone — session
+  credentials are minted explicitly via `CreateApiKey`. The Python, Go,
+  and TypeScript SDKs are migrated and keep their friendly surfaces
+  (lowercase status names, text timestamps); SDK pagination parameters
+  changed from `offset` to an opaque `page_token`. See
+  `server/docs/release-notes/2026-09-12-contract-v1.md`.
+- HTTP gateway: resource reads bind to templated POST routes
+  (`/api.v1/sessions/{session_id}`, `/api.v1/sessions/{session_id}/requests/{request_id}`,
+  `/api.v1/users/{user_id}/sessions`, …) instead of per-method paths;
+  status filters on the wire are enum names or numbers.
+
+### Fixed
+
+- `UpdateRequest` cast the v1 status enum's numeric value into the
+  model's string status, storing `"3"` instead of `"running"`: requests
+  read back as `UNSPECIFIED` from claim until result submission and were
+  invisible to status-filtered listings.
+- `GetTool` and `InvokeTool` were missing from the fixed-auth policy
+  table and failed closed before the capability check.
+
 ### Removed
 
 - Dead Python SDK layers: `toolplane/factories/` (an alternative

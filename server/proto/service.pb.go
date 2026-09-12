@@ -10,6 +10,7 @@ import (
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -22,6 +23,184 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// RequestStatus is the lifecycle state of a Request.
+type RequestStatus int32
+
+const (
+	RequestStatus_REQUEST_STATUS_UNSPECIFIED RequestStatus = 0
+	RequestStatus_REQUEST_STATUS_PENDING     RequestStatus = 1
+	RequestStatus_REQUEST_STATUS_CLAIMED     RequestStatus = 2
+	RequestStatus_REQUEST_STATUS_RUNNING     RequestStatus = 3
+	RequestStatus_REQUEST_STATUS_DONE        RequestStatus = 4
+	RequestStatus_REQUEST_STATUS_FAILED      RequestStatus = 5
+)
+
+// Enum value maps for RequestStatus.
+var (
+	RequestStatus_name = map[int32]string{
+		0: "REQUEST_STATUS_UNSPECIFIED",
+		1: "REQUEST_STATUS_PENDING",
+		2: "REQUEST_STATUS_CLAIMED",
+		3: "REQUEST_STATUS_RUNNING",
+		4: "REQUEST_STATUS_DONE",
+		5: "REQUEST_STATUS_FAILED",
+	}
+	RequestStatus_value = map[string]int32{
+		"REQUEST_STATUS_UNSPECIFIED": 0,
+		"REQUEST_STATUS_PENDING":     1,
+		"REQUEST_STATUS_CLAIMED":     2,
+		"REQUEST_STATUS_RUNNING":     3,
+		"REQUEST_STATUS_DONE":        4,
+		"REQUEST_STATUS_FAILED":      5,
+	}
+)
+
+func (x RequestStatus) Enum() *RequestStatus {
+	p := new(RequestStatus)
+	*p = x
+	return p
+}
+
+func (x RequestStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RequestStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_service_proto_enumTypes[0].Descriptor()
+}
+
+func (RequestStatus) Type() protoreflect.EnumType {
+	return &file_proto_service_proto_enumTypes[0]
+}
+
+func (x RequestStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RequestStatus.Descriptor instead.
+func (RequestStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{0}
+}
+
+// TaskStatus is the lifecycle state of a Task.
+type TaskStatus int32
+
+const (
+	TaskStatus_TASK_STATUS_UNSPECIFIED TaskStatus = 0
+	TaskStatus_TASK_STATUS_PENDING     TaskStatus = 1
+	TaskStatus_TASK_STATUS_RUNNING     TaskStatus = 2
+	TaskStatus_TASK_STATUS_COMPLETED   TaskStatus = 3
+	TaskStatus_TASK_STATUS_FAILED      TaskStatus = 4
+	TaskStatus_TASK_STATUS_CANCELLED   TaskStatus = 5
+	TaskStatus_TASK_STATUS_DEAD_LETTER TaskStatus = 6
+)
+
+// Enum value maps for TaskStatus.
+var (
+	TaskStatus_name = map[int32]string{
+		0: "TASK_STATUS_UNSPECIFIED",
+		1: "TASK_STATUS_PENDING",
+		2: "TASK_STATUS_RUNNING",
+		3: "TASK_STATUS_COMPLETED",
+		4: "TASK_STATUS_FAILED",
+		5: "TASK_STATUS_CANCELLED",
+		6: "TASK_STATUS_DEAD_LETTER",
+	}
+	TaskStatus_value = map[string]int32{
+		"TASK_STATUS_UNSPECIFIED": 0,
+		"TASK_STATUS_PENDING":     1,
+		"TASK_STATUS_RUNNING":     2,
+		"TASK_STATUS_COMPLETED":   3,
+		"TASK_STATUS_FAILED":      4,
+		"TASK_STATUS_CANCELLED":   5,
+		"TASK_STATUS_DEAD_LETTER": 6,
+	}
+)
+
+func (x TaskStatus) Enum() *TaskStatus {
+	p := new(TaskStatus)
+	*p = x
+	return p
+}
+
+func (x TaskStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TaskStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_service_proto_enumTypes[1].Descriptor()
+}
+
+func (TaskStatus) Type() protoreflect.EnumType {
+	return &file_proto_service_proto_enumTypes[1]
+}
+
+func (x TaskStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TaskStatus.Descriptor instead.
+func (TaskStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{1}
+}
+
+// ListPage is the unified pagination trailer for list responses.
+// next_page_token is opaque: pass it back verbatim as page_token on the
+// next call. Empty string means no further pages. total_size is the total
+// number of items across all pages when the server can compute it cheaply,
+// otherwise 0.
+type ListPage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NextPageToken string                 `protobuf:"bytes,1,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	TotalSize     int32                  `protobuf:"varint,2,opt,name=total_size,json=totalSize,proto3" json:"total_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPage) Reset() {
+	*x = ListPage{}
+	mi := &file_proto_service_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPage) ProtoMessage() {}
+
+func (x *ListPage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPage.ProtoReflect.Descriptor instead.
+func (*ListPage) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ListPage) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *ListPage) GetTotalSize() int32 {
+	if x != nil {
+		return x.TotalSize
+	}
+	return 0
+}
+
 // ResumeStreamRequest resumes a chunk stream after the provided absolute sequence number.
 type ResumeStreamRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -33,7 +212,7 @@ type ResumeStreamRequest struct {
 
 func (x *ResumeStreamRequest) Reset() {
 	*x = ResumeStreamRequest{}
-	mi := &file_proto_service_proto_msgTypes[0]
+	mi := &file_proto_service_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +224,7 @@ func (x *ResumeStreamRequest) String() string {
 func (*ResumeStreamRequest) ProtoMessage() {}
 
 func (x *ResumeStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[0]
+	mi := &file_proto_service_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +237,7 @@ func (x *ResumeStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeStreamRequest.ProtoReflect.Descriptor instead.
 func (*ResumeStreamRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{0}
+	return file_proto_service_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ResumeStreamRequest) GetRequestId() string {
@@ -86,7 +265,7 @@ type DrainMachineRequest struct {
 
 func (x *DrainMachineRequest) Reset() {
 	*x = DrainMachineRequest{}
-	mi := &file_proto_service_proto_msgTypes[1]
+	mi := &file_proto_service_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +277,7 @@ func (x *DrainMachineRequest) String() string {
 func (*DrainMachineRequest) ProtoMessage() {}
 
 func (x *DrainMachineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[1]
+	mi := &file_proto_service_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +290,7 @@ func (x *DrainMachineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainMachineRequest.ProtoReflect.Descriptor instead.
 func (*DrainMachineRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{1}
+	return file_proto_service_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *DrainMachineRequest) GetSessionId() string {
@@ -137,7 +316,7 @@ type DrainMachineResponse struct {
 
 func (x *DrainMachineResponse) Reset() {
 	*x = DrainMachineResponse{}
-	mi := &file_proto_service_proto_msgTypes[2]
+	mi := &file_proto_service_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +328,7 @@ func (x *DrainMachineResponse) String() string {
 func (*DrainMachineResponse) ProtoMessage() {}
 
 func (x *DrainMachineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[2]
+	mi := &file_proto_service_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +341,7 @@ func (x *DrainMachineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainMachineResponse.ProtoReflect.Descriptor instead.
 func (*DrainMachineResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{2}
+	return file_proto_service_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *DrainMachineResponse) GetDrained() bool {
@@ -180,8 +359,8 @@ type Tool struct {
 	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 	Schema        string                 `protobuf:"bytes,4,opt,name=schema,proto3" json:"schema,omitempty"` // JSON schema as string
 	Config        map[string]string      `protobuf:"bytes,5,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CreatedAt     string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	LastPingAt    string                 `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	LastPingAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
 	SessionId     string                 `protobuf:"bytes,8,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	MachineId     string                 `protobuf:"bytes,9,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
 	Tags          []string               `protobuf:"bytes,10,rep,name=tags,proto3" json:"tags,omitempty"` // Optional tags for categorization
@@ -191,7 +370,7 @@ type Tool struct {
 
 func (x *Tool) Reset() {
 	*x = Tool{}
-	mi := &file_proto_service_proto_msgTypes[3]
+	mi := &file_proto_service_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -203,7 +382,7 @@ func (x *Tool) String() string {
 func (*Tool) ProtoMessage() {}
 
 func (x *Tool) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[3]
+	mi := &file_proto_service_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -216,7 +395,7 @@ func (x *Tool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tool.ProtoReflect.Descriptor instead.
 func (*Tool) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{3}
+	return file_proto_service_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Tool) GetId() string {
@@ -254,18 +433,18 @@ func (x *Tool) GetConfig() map[string]string {
 	return nil
 }
 
-func (x *Tool) GetCreatedAt() string {
+func (x *Tool) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
-func (x *Tool) GetLastPingAt() string {
+func (x *Tool) GetLastPingAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastPingAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Tool) GetSessionId() string {
@@ -291,23 +470,20 @@ func (x *Tool) GetTags() []string {
 
 // Session definition
 type Session struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	CreatedAt   string                 `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	CreatedBy   string                 `protobuf:"bytes,5,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
-	// Legacy transitional field. New auth enforcement is owned by api_keys records.
-	// The server no longer uses this as the maintained auth boundary.
-	ApiKey        string `protobuf:"bytes,6,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	Namespace     string `protobuf:"bytes,7,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedBy     string                 `protobuf:"bytes,5,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	Namespace     string                 `protobuf:"bytes,6,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
 	*x = Session{}
-	mi := &file_proto_service_proto_msgTypes[4]
+	mi := &file_proto_service_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -319,7 +495,7 @@ func (x *Session) String() string {
 func (*Session) ProtoMessage() {}
 
 func (x *Session) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[4]
+	mi := &file_proto_service_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -332,7 +508,7 @@ func (x *Session) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Session.ProtoReflect.Descriptor instead.
 func (*Session) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{4}
+	return file_proto_service_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Session) GetId() string {
@@ -356,23 +532,16 @@ func (x *Session) GetDescription() string {
 	return ""
 }
 
-func (x *Session) GetCreatedAt() string {
+func (x *Session) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Session) GetCreatedBy() string {
 	if x != nil {
 		return x.CreatedBy
-	}
-	return ""
-}
-
-func (x *Session) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
 	}
 	return ""
 }
@@ -391,20 +560,20 @@ type ApiKey struct {
 	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// Secret material is only returned from CreateApiKey.
 	// ListApiKeys returns metadata with this field empty.
-	Key           string   `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
-	SessionId     string   `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	CreatedAt     string   `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	CreatedBy     string   `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
-	RevokedAt     string   `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
-	Capabilities  []string `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	KeyPreview    string   `protobuf:"bytes,9,opt,name=key_preview,json=keyPreview,proto3" json:"key_preview,omitempty"`
+	Key           string                 `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	SessionId     string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedBy     string                 `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	RevokedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	Capabilities  []string               `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	KeyPreview    string                 `protobuf:"bytes,9,opt,name=key_preview,json=keyPreview,proto3" json:"key_preview,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ApiKey) Reset() {
 	*x = ApiKey{}
-	mi := &file_proto_service_proto_msgTypes[5]
+	mi := &file_proto_service_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +585,7 @@ func (x *ApiKey) String() string {
 func (*ApiKey) ProtoMessage() {}
 
 func (x *ApiKey) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[5]
+	mi := &file_proto_service_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +598,7 @@ func (x *ApiKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApiKey.ProtoReflect.Descriptor instead.
 func (*ApiKey) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{5}
+	return file_proto_service_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ApiKey) GetId() string {
@@ -460,11 +629,11 @@ func (x *ApiKey) GetSessionId() string {
 	return ""
 }
 
-func (x *ApiKey) GetCreatedAt() string {
+func (x *ApiKey) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
 func (x *ApiKey) GetCreatedBy() string {
@@ -474,11 +643,11 @@ func (x *ApiKey) GetCreatedBy() string {
 	return ""
 }
 
-func (x *ApiKey) GetRevokedAt() string {
+func (x *ApiKey) GetRevokedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.RevokedAt
 	}
-	return ""
+	return nil
 }
 
 func (x *ApiKey) GetCapabilities() []string {
@@ -503,8 +672,8 @@ type Machine struct {
 	SdkVersion  string                 `protobuf:"bytes,3,opt,name=sdk_version,json=sdkVersion,proto3" json:"sdk_version,omitempty"`
 	SdkLanguage string                 `protobuf:"bytes,4,opt,name=sdk_language,json=sdkLanguage,proto3" json:"sdk_language,omitempty"`
 	Ip          string                 `protobuf:"bytes,5,opt,name=ip,proto3" json:"ip,omitempty"`
-	CreatedAt   string                 `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	LastPingAt  string                 `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
+	CreatedAt   *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	LastPingAt  *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
 	// Per-machine credential, returned exactly once by RegisterMachine on the
 	// registration that minted it (empty otherwise). Provide-scoped RPCs must
 	// present it via the x-toolplane-machine-token metadata/header when the
@@ -516,7 +685,7 @@ type Machine struct {
 
 func (x *Machine) Reset() {
 	*x = Machine{}
-	mi := &file_proto_service_proto_msgTypes[6]
+	mi := &file_proto_service_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -528,7 +697,7 @@ func (x *Machine) String() string {
 func (*Machine) ProtoMessage() {}
 
 func (x *Machine) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[6]
+	mi := &file_proto_service_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -541,7 +710,7 @@ func (x *Machine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Machine.ProtoReflect.Descriptor instead.
 func (*Machine) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{6}
+	return file_proto_service_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Machine) GetId() string {
@@ -579,18 +748,18 @@ func (x *Machine) GetIp() string {
 	return ""
 }
 
-func (x *Machine) GetCreatedAt() string {
+func (x *Machine) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
-func (x *Machine) GetLastPingAt() string {
+func (x *Machine) GetLastPingAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LastPingAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Machine) GetMachineToken() string {
@@ -606,31 +775,30 @@ type Request struct {
 	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	SessionId          string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	ToolName           string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Status             string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Status             RequestStatus          `protobuf:"varint,4,opt,name=status,proto3,enum=api.v1.RequestStatus" json:"status,omitempty"`
 	Input              string                 `protobuf:"bytes,5,opt,name=input,proto3" json:"input,omitempty"`   // JSON input as string
 	Result             string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"` // JSON result as string
 	ResultType         string                 `protobuf:"bytes,7,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
 	Error              string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	CreatedAt          string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt          string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt          *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	ExecutingMachineId string                 `protobuf:"bytes,11,opt,name=executing_machine_id,json=executingMachineId,proto3" json:"executing_machine_id,omitempty"`
-	StreamResults      []string               `protobuf:"bytes,12,rep,name=stream_results,json=streamResults,proto3" json:"stream_results,omitempty"`
 	// Lease metadata for the current execution attempt. lease_epoch identifies
 	// the claim grant and must be echoed by the lease holder on fenced provider
 	// writes (UpdateRequest, SubmitRequestResult, AppendRequestChunks,
-	// RenewRequestLease). lease_expires_at is RFC3339 and empty when the request
-	// has no active lease.
-	LeasedBy       string `protobuf:"bytes,13,opt,name=leased_by,json=leasedBy,proto3" json:"leased_by,omitempty"`
-	LeaseEpoch     int64  `protobuf:"varint,14,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
-	LeaseExpiresAt string `protobuf:"bytes,15,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
-	TimeoutSeconds int32  `protobuf:"varint,16,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	// RenewRequestLease). lease_expires_at is unset when the request has no
+	// active lease.
+	LeasedBy       string                 `protobuf:"bytes,13,opt,name=leased_by,json=leasedBy,proto3" json:"leased_by,omitempty"`
+	LeaseEpoch     int64                  `protobuf:"varint,14,opt,name=lease_epoch,json=leaseEpoch,proto3" json:"lease_epoch,omitempty"`
+	LeaseExpiresAt *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=lease_expires_at,json=leaseExpiresAt,proto3" json:"lease_expires_at,omitempty"`
+	TimeoutSeconds int32                  `protobuf:"varint,16,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
 	*x = Request{}
-	mi := &file_proto_service_proto_msgTypes[7]
+	mi := &file_proto_service_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -642,7 +810,7 @@ func (x *Request) String() string {
 func (*Request) ProtoMessage() {}
 
 func (x *Request) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[7]
+	mi := &file_proto_service_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -655,7 +823,7 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Request.ProtoReflect.Descriptor instead.
 func (*Request) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{7}
+	return file_proto_service_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Request) GetId() string {
@@ -679,11 +847,11 @@ func (x *Request) GetToolName() string {
 	return ""
 }
 
-func (x *Request) GetStatus() string {
+func (x *Request) GetStatus() RequestStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return RequestStatus_REQUEST_STATUS_UNSPECIFIED
 }
 
 func (x *Request) GetInput() string {
@@ -714,18 +882,18 @@ func (x *Request) GetError() string {
 	return ""
 }
 
-func (x *Request) GetCreatedAt() string {
+func (x *Request) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
-func (x *Request) GetUpdatedAt() string {
+func (x *Request) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Request) GetExecutingMachineId() string {
@@ -733,13 +901,6 @@ func (x *Request) GetExecutingMachineId() string {
 		return x.ExecutingMachineId
 	}
 	return ""
-}
-
-func (x *Request) GetStreamResults() []string {
-	if x != nil {
-		return x.StreamResults
-	}
-	return nil
 }
 
 func (x *Request) GetLeasedBy() string {
@@ -756,11 +917,11 @@ func (x *Request) GetLeaseEpoch() int64 {
 	return 0
 }
 
-func (x *Request) GetLeaseExpiresAt() string {
+func (x *Request) GetLeaseExpiresAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.LeaseExpiresAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Request) GetTimeoutSeconds() int32 {
@@ -786,7 +947,7 @@ type RegisterToolRequest struct {
 
 func (x *RegisterToolRequest) Reset() {
 	*x = RegisterToolRequest{}
-	mi := &file_proto_service_proto_msgTypes[8]
+	mi := &file_proto_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -798,7 +959,7 @@ func (x *RegisterToolRequest) String() string {
 func (*RegisterToolRequest) ProtoMessage() {}
 
 func (x *RegisterToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[8]
+	mi := &file_proto_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -811,7 +972,7 @@ func (x *RegisterToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterToolRequest.ProtoReflect.Descriptor instead.
 func (*RegisterToolRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{8}
+	return file_proto_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RegisterToolRequest) GetSessionId() string {
@@ -873,7 +1034,7 @@ type RegisterToolResponse struct {
 
 func (x *RegisterToolResponse) Reset() {
 	*x = RegisterToolResponse{}
-	mi := &file_proto_service_proto_msgTypes[9]
+	mi := &file_proto_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -885,7 +1046,7 @@ func (x *RegisterToolResponse) String() string {
 func (*RegisterToolResponse) ProtoMessage() {}
 
 func (x *RegisterToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[9]
+	mi := &file_proto_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -898,7 +1059,7 @@ func (x *RegisterToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterToolResponse.ProtoReflect.Descriptor instead.
 func (*RegisterToolResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{9}
+	return file_proto_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RegisterToolResponse) GetTool() *Tool {
@@ -918,7 +1079,7 @@ type ListToolsRequest struct {
 
 func (x *ListToolsRequest) Reset() {
 	*x = ListToolsRequest{}
-	mi := &file_proto_service_proto_msgTypes[10]
+	mi := &file_proto_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -930,7 +1091,7 @@ func (x *ListToolsRequest) String() string {
 func (*ListToolsRequest) ProtoMessage() {}
 
 func (x *ListToolsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[10]
+	mi := &file_proto_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -943,7 +1104,7 @@ func (x *ListToolsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListToolsRequest.ProtoReflect.Descriptor instead.
 func (*ListToolsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{10}
+	return file_proto_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ListToolsRequest) GetSessionId() string {
@@ -963,7 +1124,7 @@ type ListToolsResponse struct {
 
 func (x *ListToolsResponse) Reset() {
 	*x = ListToolsResponse{}
-	mi := &file_proto_service_proto_msgTypes[11]
+	mi := &file_proto_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -975,7 +1136,7 @@ func (x *ListToolsResponse) String() string {
 func (*ListToolsResponse) ProtoMessage() {}
 
 func (x *ListToolsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[11]
+	mi := &file_proto_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -988,7 +1149,7 @@ func (x *ListToolsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListToolsResponse.ProtoReflect.Descriptor instead.
 func (*ListToolsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{11}
+	return file_proto_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListToolsResponse) GetTools() []*Tool {
@@ -998,7 +1159,69 @@ func (x *ListToolsResponse) GetTools() []*Tool {
 	return nil
 }
 
-// GetToolByIdRequest
+// GetToolRequest resolves a tool by ID or by name: exactly one of the two
+// references should be set; the ID wins when both are provided.
+type GetToolRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolId        string                 `protobuf:"bytes,2,opt,name=tool_id,json=toolId,proto3" json:"tool_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetToolRequest) Reset() {
+	*x = GetToolRequest{}
+	mi := &file_proto_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetToolRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetToolRequest) ProtoMessage() {}
+
+func (x *GetToolRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetToolRequest.ProtoReflect.Descriptor instead.
+func (*GetToolRequest) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetToolRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *GetToolRequest) GetToolId() string {
+	if x != nil {
+		return x.ToolId
+	}
+	return ""
+}
+
+func (x *GetToolRequest) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+// Deprecated: use GetToolRequest.
 type GetToolByIdRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -1009,7 +1232,7 @@ type GetToolByIdRequest struct {
 
 func (x *GetToolByIdRequest) Reset() {
 	*x = GetToolByIdRequest{}
-	mi := &file_proto_service_proto_msgTypes[12]
+	mi := &file_proto_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1021,7 +1244,7 @@ func (x *GetToolByIdRequest) String() string {
 func (*GetToolByIdRequest) ProtoMessage() {}
 
 func (x *GetToolByIdRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[12]
+	mi := &file_proto_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1034,7 +1257,7 @@ func (x *GetToolByIdRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetToolByIdRequest.ProtoReflect.Descriptor instead.
 func (*GetToolByIdRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{12}
+	return file_proto_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *GetToolByIdRequest) GetSessionId() string {
@@ -1051,7 +1274,7 @@ func (x *GetToolByIdRequest) GetToolId() string {
 	return ""
 }
 
-// GetToolByNameRequest
+// Deprecated: use GetToolRequest.
 type GetToolByNameRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -1062,7 +1285,7 @@ type GetToolByNameRequest struct {
 
 func (x *GetToolByNameRequest) Reset() {
 	*x = GetToolByNameRequest{}
-	mi := &file_proto_service_proto_msgTypes[13]
+	mi := &file_proto_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1074,7 +1297,7 @@ func (x *GetToolByNameRequest) String() string {
 func (*GetToolByNameRequest) ProtoMessage() {}
 
 func (x *GetToolByNameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[13]
+	mi := &file_proto_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1087,7 +1310,7 @@ func (x *GetToolByNameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetToolByNameRequest.ProtoReflect.Descriptor instead.
 func (*GetToolByNameRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{13}
+	return file_proto_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *GetToolByNameRequest) GetSessionId() string {
@@ -1114,7 +1337,7 @@ type GetToolResponse struct {
 
 func (x *GetToolResponse) Reset() {
 	*x = GetToolResponse{}
-	mi := &file_proto_service_proto_msgTypes[14]
+	mi := &file_proto_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1126,7 +1349,7 @@ func (x *GetToolResponse) String() string {
 func (*GetToolResponse) ProtoMessage() {}
 
 func (x *GetToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[14]
+	mi := &file_proto_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1139,7 +1362,7 @@ func (x *GetToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetToolResponse.ProtoReflect.Descriptor instead.
 func (*GetToolResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{14}
+	return file_proto_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetToolResponse) GetTool() *Tool {
@@ -1163,7 +1386,7 @@ type DeleteToolRequest struct {
 
 func (x *DeleteToolRequest) Reset() {
 	*x = DeleteToolRequest{}
-	mi := &file_proto_service_proto_msgTypes[15]
+	mi := &file_proto_service_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1175,7 +1398,7 @@ func (x *DeleteToolRequest) String() string {
 func (*DeleteToolRequest) ProtoMessage() {}
 
 func (x *DeleteToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[15]
+	mi := &file_proto_service_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1188,7 +1411,7 @@ func (x *DeleteToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteToolRequest.ProtoReflect.Descriptor instead.
 func (*DeleteToolRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{15}
+	return file_proto_service_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *DeleteToolRequest) GetSessionId() string {
@@ -1222,7 +1445,7 @@ type DeleteToolResponse struct {
 
 func (x *DeleteToolResponse) Reset() {
 	*x = DeleteToolResponse{}
-	mi := &file_proto_service_proto_msgTypes[16]
+	mi := &file_proto_service_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1457,7 @@ func (x *DeleteToolResponse) String() string {
 func (*DeleteToolResponse) ProtoMessage() {}
 
 func (x *DeleteToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[16]
+	mi := &file_proto_service_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1470,7 @@ func (x *DeleteToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteToolResponse.ProtoReflect.Descriptor instead.
 func (*DeleteToolResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{16}
+	return file_proto_service_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *DeleteToolResponse) GetSuccess() bool {
@@ -1271,7 +1494,7 @@ type UpdateToolPingRequest struct {
 
 func (x *UpdateToolPingRequest) Reset() {
 	*x = UpdateToolPingRequest{}
-	mi := &file_proto_service_proto_msgTypes[17]
+	mi := &file_proto_service_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1283,7 +1506,7 @@ func (x *UpdateToolPingRequest) String() string {
 func (*UpdateToolPingRequest) ProtoMessage() {}
 
 func (x *UpdateToolPingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[17]
+	mi := &file_proto_service_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1296,7 +1519,7 @@ func (x *UpdateToolPingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateToolPingRequest.ProtoReflect.Descriptor instead.
 func (*UpdateToolPingRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{17}
+	return file_proto_service_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *UpdateToolPingRequest) GetSessionId() string {
@@ -1326,19 +1549,16 @@ type CreateSessionRequest struct {
 	UserId      string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
 	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	// Legacy transitional field retained for compatibility only.
-	// New callers should leave this empty.
-	ApiKey string `protobuf:"bytes,4,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
 	// Optional client-specified session ID
-	SessionId     string `protobuf:"bytes,5,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Namespace     string `protobuf:"bytes,6,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
+	SessionId     string `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Namespace     string `protobuf:"bytes,5,opt,name=namespace,proto3" json:"namespace,omitempty"` // Optional namespace for organization
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateSessionRequest) Reset() {
 	*x = CreateSessionRequest{}
-	mi := &file_proto_service_proto_msgTypes[18]
+	mi := &file_proto_service_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1350,7 +1570,7 @@ func (x *CreateSessionRequest) String() string {
 func (*CreateSessionRequest) ProtoMessage() {}
 
 func (x *CreateSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[18]
+	mi := &file_proto_service_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1363,7 +1583,7 @@ func (x *CreateSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSessionRequest.ProtoReflect.Descriptor instead.
 func (*CreateSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{18}
+	return file_proto_service_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CreateSessionRequest) GetUserId() string {
@@ -1383,13 +1603,6 @@ func (x *CreateSessionRequest) GetName() string {
 func (x *CreateSessionRequest) GetDescription() string {
 	if x != nil {
 		return x.Description
-	}
-	return ""
-}
-
-func (x *CreateSessionRequest) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
 	}
 	return ""
 }
@@ -1418,7 +1631,7 @@ type CreateSessionResponse struct {
 
 func (x *CreateSessionResponse) Reset() {
 	*x = CreateSessionResponse{}
-	mi := &file_proto_service_proto_msgTypes[19]
+	mi := &file_proto_service_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1430,7 +1643,7 @@ func (x *CreateSessionResponse) String() string {
 func (*CreateSessionResponse) ProtoMessage() {}
 
 func (x *CreateSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[19]
+	mi := &file_proto_service_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1443,7 +1656,7 @@ func (x *CreateSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSessionResponse.ProtoReflect.Descriptor instead.
 func (*CreateSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{19}
+	return file_proto_service_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CreateSessionResponse) GetSession() *Session {
@@ -1463,7 +1676,7 @@ type GetSessionRequest struct {
 
 func (x *GetSessionRequest) Reset() {
 	*x = GetSessionRequest{}
-	mi := &file_proto_service_proto_msgTypes[20]
+	mi := &file_proto_service_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1475,7 +1688,7 @@ func (x *GetSessionRequest) String() string {
 func (*GetSessionRequest) ProtoMessage() {}
 
 func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[20]
+	mi := &file_proto_service_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1488,7 +1701,7 @@ func (x *GetSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{20}
+	return file_proto_service_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetSessionRequest) GetSessionId() string {
@@ -1508,7 +1721,7 @@ type ListSessionsRequest struct {
 
 func (x *ListSessionsRequest) Reset() {
 	*x = ListSessionsRequest{}
-	mi := &file_proto_service_proto_msgTypes[21]
+	mi := &file_proto_service_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1520,7 +1733,7 @@ func (x *ListSessionsRequest) String() string {
 func (*ListSessionsRequest) ProtoMessage() {}
 
 func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[21]
+	mi := &file_proto_service_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1533,7 +1746,7 @@ func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{21}
+	return file_proto_service_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ListSessionsRequest) GetUserId() string {
@@ -1553,7 +1766,7 @@ type ListSessionsResponse struct {
 
 func (x *ListSessionsResponse) Reset() {
 	*x = ListSessionsResponse{}
-	mi := &file_proto_service_proto_msgTypes[22]
+	mi := &file_proto_service_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1565,7 +1778,7 @@ func (x *ListSessionsResponse) String() string {
 func (*ListSessionsResponse) ProtoMessage() {}
 
 func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[22]
+	mi := &file_proto_service_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1578,7 +1791,7 @@ func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{22}
+	return file_proto_service_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ListSessionsResponse) GetSessions() []*Session {
@@ -1590,18 +1803,19 @@ func (x *ListSessionsResponse) GetSessions() []*Session {
 
 // ListUserSessionsRequest
 type ListUserSessionsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	PageSize      int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
-	PageToken     int32                  `protobuf:"varint,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
-	Filter        string                 `protobuf:"bytes,4,opt,name=filter,proto3" json:"filter,omitempty"` // Optional filter (e.g., by namespace or status)
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	UserId   string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	PageSize int32                  `protobuf:"varint,2,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// Opaque pagination cursor: pass back page.next_page_token verbatim.
+	PageToken     string `protobuf:"bytes,3,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	Filter        string `protobuf:"bytes,4,opt,name=filter,proto3" json:"filter,omitempty"` // Optional filter (e.g., by namespace or status)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListUserSessionsRequest) Reset() {
 	*x = ListUserSessionsRequest{}
-	mi := &file_proto_service_proto_msgTypes[23]
+	mi := &file_proto_service_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1613,7 +1827,7 @@ func (x *ListUserSessionsRequest) String() string {
 func (*ListUserSessionsRequest) ProtoMessage() {}
 
 func (x *ListUserSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[23]
+	mi := &file_proto_service_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1626,7 +1840,7 @@ func (x *ListUserSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListUserSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{23}
+	return file_proto_service_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListUserSessionsRequest) GetUserId() string {
@@ -1643,11 +1857,11 @@ func (x *ListUserSessionsRequest) GetPageSize() int32 {
 	return 0
 }
 
-func (x *ListUserSessionsRequest) GetPageToken() int32 {
+func (x *ListUserSessionsRequest) GetPageToken() string {
 	if x != nil {
 		return x.PageToken
 	}
-	return 0
+	return ""
 }
 
 func (x *ListUserSessionsRequest) GetFilter() string {
@@ -1661,15 +1875,14 @@ func (x *ListUserSessionsRequest) GetFilter() string {
 type ListUserSessionsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sessions      []*Session             `protobuf:"bytes,1,rep,name=sessions,proto3" json:"sessions,omitempty"`
-	NextPageToken int32                  `protobuf:"varint,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
-	TotalCount    int32                  `protobuf:"varint,3,opt,name=total_count,json=totalCount,proto3" json:"total_count,omitempty"`
+	Page          *ListPage              `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListUserSessionsResponse) Reset() {
 	*x = ListUserSessionsResponse{}
-	mi := &file_proto_service_proto_msgTypes[24]
+	mi := &file_proto_service_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1681,7 +1894,7 @@ func (x *ListUserSessionsResponse) String() string {
 func (*ListUserSessionsResponse) ProtoMessage() {}
 
 func (x *ListUserSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[24]
+	mi := &file_proto_service_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1694,7 +1907,7 @@ func (x *ListUserSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListUserSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{24}
+	return file_proto_service_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ListUserSessionsResponse) GetSessions() []*Session {
@@ -1704,18 +1917,11 @@ func (x *ListUserSessionsResponse) GetSessions() []*Session {
 	return nil
 }
 
-func (x *ListUserSessionsResponse) GetNextPageToken() int32 {
+func (x *ListUserSessionsResponse) GetPage() *ListPage {
 	if x != nil {
-		return x.NextPageToken
+		return x.Page
 	}
-	return 0
-}
-
-func (x *ListUserSessionsResponse) GetTotalCount() int32 {
-	if x != nil {
-		return x.TotalCount
-	}
-	return 0
+	return nil
 }
 
 // BulkDeleteSessionsRequest
@@ -1730,7 +1936,7 @@ type BulkDeleteSessionsRequest struct {
 
 func (x *BulkDeleteSessionsRequest) Reset() {
 	*x = BulkDeleteSessionsRequest{}
-	mi := &file_proto_service_proto_msgTypes[25]
+	mi := &file_proto_service_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1948,7 @@ func (x *BulkDeleteSessionsRequest) String() string {
 func (*BulkDeleteSessionsRequest) ProtoMessage() {}
 
 func (x *BulkDeleteSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[25]
+	mi := &file_proto_service_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1961,7 @@ func (x *BulkDeleteSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BulkDeleteSessionsRequest.ProtoReflect.Descriptor instead.
 func (*BulkDeleteSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{25}
+	return file_proto_service_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *BulkDeleteSessionsRequest) GetUserId() string {
@@ -1790,7 +1996,7 @@ type BulkDeleteSessionsResponse struct {
 
 func (x *BulkDeleteSessionsResponse) Reset() {
 	*x = BulkDeleteSessionsResponse{}
-	mi := &file_proto_service_proto_msgTypes[26]
+	mi := &file_proto_service_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1802,7 +2008,7 @@ func (x *BulkDeleteSessionsResponse) String() string {
 func (*BulkDeleteSessionsResponse) ProtoMessage() {}
 
 func (x *BulkDeleteSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[26]
+	mi := &file_proto_service_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1815,7 +2021,7 @@ func (x *BulkDeleteSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BulkDeleteSessionsResponse.ProtoReflect.Descriptor instead.
 func (*BulkDeleteSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{26}
+	return file_proto_service_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *BulkDeleteSessionsResponse) GetDeletedCount() int32 {
@@ -1842,7 +2048,7 @@ type GetSessionStatsRequest struct {
 
 func (x *GetSessionStatsRequest) Reset() {
 	*x = GetSessionStatsRequest{}
-	mi := &file_proto_service_proto_msgTypes[27]
+	mi := &file_proto_service_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1854,7 +2060,7 @@ func (x *GetSessionStatsRequest) String() string {
 func (*GetSessionStatsRequest) ProtoMessage() {}
 
 func (x *GetSessionStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[27]
+	mi := &file_proto_service_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1867,7 +2073,7 @@ func (x *GetSessionStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionStatsRequest.ProtoReflect.Descriptor instead.
 func (*GetSessionStatsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{27}
+	return file_proto_service_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetSessionStatsRequest) GetUserId() string {
@@ -1889,7 +2095,7 @@ type GetSessionStatsResponse struct {
 
 func (x *GetSessionStatsResponse) Reset() {
 	*x = GetSessionStatsResponse{}
-	mi := &file_proto_service_proto_msgTypes[28]
+	mi := &file_proto_service_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1901,7 +2107,7 @@ func (x *GetSessionStatsResponse) String() string {
 func (*GetSessionStatsResponse) ProtoMessage() {}
 
 func (x *GetSessionStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[28]
+	mi := &file_proto_service_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1914,7 +2120,7 @@ func (x *GetSessionStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSessionStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetSessionStatsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{28}
+	return file_proto_service_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *GetSessionStatsResponse) GetTotalSessions() int32 {
@@ -1949,7 +2155,7 @@ type InvalidateSessionRequest struct {
 
 func (x *InvalidateSessionRequest) Reset() {
 	*x = InvalidateSessionRequest{}
-	mi := &file_proto_service_proto_msgTypes[29]
+	mi := &file_proto_service_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1961,7 +2167,7 @@ func (x *InvalidateSessionRequest) String() string {
 func (*InvalidateSessionRequest) ProtoMessage() {}
 
 func (x *InvalidateSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[29]
+	mi := &file_proto_service_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1974,7 +2180,7 @@ func (x *InvalidateSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateSessionRequest.ProtoReflect.Descriptor instead.
 func (*InvalidateSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{29}
+	return file_proto_service_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *InvalidateSessionRequest) GetSessionId() string {
@@ -2002,7 +2208,7 @@ type InvalidateSessionResponse struct {
 
 func (x *InvalidateSessionResponse) Reset() {
 	*x = InvalidateSessionResponse{}
-	mi := &file_proto_service_proto_msgTypes[30]
+	mi := &file_proto_service_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2014,7 +2220,7 @@ func (x *InvalidateSessionResponse) String() string {
 func (*InvalidateSessionResponse) ProtoMessage() {}
 
 func (x *InvalidateSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[30]
+	mi := &file_proto_service_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2027,7 +2233,7 @@ func (x *InvalidateSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvalidateSessionResponse.ProtoReflect.Descriptor instead.
 func (*InvalidateSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{30}
+	return file_proto_service_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *InvalidateSessionResponse) GetSuccess() bool {
@@ -2057,7 +2263,7 @@ type UpdateSessionRequest struct {
 
 func (x *UpdateSessionRequest) Reset() {
 	*x = UpdateSessionRequest{}
-	mi := &file_proto_service_proto_msgTypes[31]
+	mi := &file_proto_service_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2069,7 +2275,7 @@ func (x *UpdateSessionRequest) String() string {
 func (*UpdateSessionRequest) ProtoMessage() {}
 
 func (x *UpdateSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[31]
+	mi := &file_proto_service_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2082,7 +2288,7 @@ func (x *UpdateSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSessionRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{31}
+	return file_proto_service_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *UpdateSessionRequest) GetSessionId() string {
@@ -2123,7 +2329,7 @@ type DeleteSessionRequest struct {
 
 func (x *DeleteSessionRequest) Reset() {
 	*x = DeleteSessionRequest{}
-	mi := &file_proto_service_proto_msgTypes[32]
+	mi := &file_proto_service_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2135,7 +2341,7 @@ func (x *DeleteSessionRequest) String() string {
 func (*DeleteSessionRequest) ProtoMessage() {}
 
 func (x *DeleteSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[32]
+	mi := &file_proto_service_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2148,7 +2354,7 @@ func (x *DeleteSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSessionRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSessionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{32}
+	return file_proto_service_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *DeleteSessionRequest) GetSessionId() string {
@@ -2168,7 +2374,7 @@ type DeleteSessionResponse struct {
 
 func (x *DeleteSessionResponse) Reset() {
 	*x = DeleteSessionResponse{}
-	mi := &file_proto_service_proto_msgTypes[33]
+	mi := &file_proto_service_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2180,7 +2386,7 @@ func (x *DeleteSessionResponse) String() string {
 func (*DeleteSessionResponse) ProtoMessage() {}
 
 func (x *DeleteSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[33]
+	mi := &file_proto_service_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2193,7 +2399,7 @@ func (x *DeleteSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSessionResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSessionResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{33}
+	return file_proto_service_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *DeleteSessionResponse) GetSuccess() bool {
@@ -2218,7 +2424,7 @@ type CreateApiKeyRequest struct {
 
 func (x *CreateApiKeyRequest) Reset() {
 	*x = CreateApiKeyRequest{}
-	mi := &file_proto_service_proto_msgTypes[34]
+	mi := &file_proto_service_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2230,7 +2436,7 @@ func (x *CreateApiKeyRequest) String() string {
 func (*CreateApiKeyRequest) ProtoMessage() {}
 
 func (x *CreateApiKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[34]
+	mi := &file_proto_service_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2243,7 +2449,7 @@ func (x *CreateApiKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApiKeyRequest.ProtoReflect.Descriptor instead.
 func (*CreateApiKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{34}
+	return file_proto_service_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *CreateApiKeyRequest) GetSessionId() string {
@@ -2277,7 +2483,7 @@ type ListApiKeysRequest struct {
 
 func (x *ListApiKeysRequest) Reset() {
 	*x = ListApiKeysRequest{}
-	mi := &file_proto_service_proto_msgTypes[35]
+	mi := &file_proto_service_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2289,7 +2495,7 @@ func (x *ListApiKeysRequest) String() string {
 func (*ListApiKeysRequest) ProtoMessage() {}
 
 func (x *ListApiKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[35]
+	mi := &file_proto_service_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2302,7 +2508,7 @@ func (x *ListApiKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApiKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListApiKeysRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{35}
+	return file_proto_service_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListApiKeysRequest) GetSessionId() string {
@@ -2322,7 +2528,7 @@ type ListApiKeysResponse struct {
 
 func (x *ListApiKeysResponse) Reset() {
 	*x = ListApiKeysResponse{}
-	mi := &file_proto_service_proto_msgTypes[36]
+	mi := &file_proto_service_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2334,7 +2540,7 @@ func (x *ListApiKeysResponse) String() string {
 func (*ListApiKeysResponse) ProtoMessage() {}
 
 func (x *ListApiKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[36]
+	mi := &file_proto_service_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2347,7 +2553,7 @@ func (x *ListApiKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApiKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListApiKeysResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{36}
+	return file_proto_service_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *ListApiKeysResponse) GetApiKeys() []*ApiKey {
@@ -2368,7 +2574,7 @@ type RevokeApiKeyRequest struct {
 
 func (x *RevokeApiKeyRequest) Reset() {
 	*x = RevokeApiKeyRequest{}
-	mi := &file_proto_service_proto_msgTypes[37]
+	mi := &file_proto_service_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2380,7 +2586,7 @@ func (x *RevokeApiKeyRequest) String() string {
 func (*RevokeApiKeyRequest) ProtoMessage() {}
 
 func (x *RevokeApiKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[37]
+	mi := &file_proto_service_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2393,7 +2599,7 @@ func (x *RevokeApiKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApiKeyRequest.ProtoReflect.Descriptor instead.
 func (*RevokeApiKeyRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{37}
+	return file_proto_service_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RevokeApiKeyRequest) GetSessionId() string {
@@ -2420,7 +2626,7 @@ type RevokeApiKeyResponse struct {
 
 func (x *RevokeApiKeyResponse) Reset() {
 	*x = RevokeApiKeyResponse{}
-	mi := &file_proto_service_proto_msgTypes[38]
+	mi := &file_proto_service_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2432,7 +2638,7 @@ func (x *RevokeApiKeyResponse) String() string {
 func (*RevokeApiKeyResponse) ProtoMessage() {}
 
 func (x *RevokeApiKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[38]
+	mi := &file_proto_service_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2445,7 +2651,7 @@ func (x *RevokeApiKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApiKeyResponse.ProtoReflect.Descriptor instead.
 func (*RevokeApiKeyResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{38}
+	return file_proto_service_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RevokeApiKeyResponse) GetSuccess() bool {
@@ -2469,7 +2675,7 @@ type RegisterMachineRequest struct {
 
 func (x *RegisterMachineRequest) Reset() {
 	*x = RegisterMachineRequest{}
-	mi := &file_proto_service_proto_msgTypes[39]
+	mi := &file_proto_service_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2481,7 +2687,7 @@ func (x *RegisterMachineRequest) String() string {
 func (*RegisterMachineRequest) ProtoMessage() {}
 
 func (x *RegisterMachineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[39]
+	mi := &file_proto_service_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2494,7 +2700,7 @@ func (x *RegisterMachineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterMachineRequest.ProtoReflect.Descriptor instead.
 func (*RegisterMachineRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{39}
+	return file_proto_service_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *RegisterMachineRequest) GetSessionId() string {
@@ -2542,7 +2748,7 @@ type ListMachinesRequest struct {
 
 func (x *ListMachinesRequest) Reset() {
 	*x = ListMachinesRequest{}
-	mi := &file_proto_service_proto_msgTypes[40]
+	mi := &file_proto_service_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2554,7 +2760,7 @@ func (x *ListMachinesRequest) String() string {
 func (*ListMachinesRequest) ProtoMessage() {}
 
 func (x *ListMachinesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[40]
+	mi := &file_proto_service_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2567,7 +2773,7 @@ func (x *ListMachinesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMachinesRequest.ProtoReflect.Descriptor instead.
 func (*ListMachinesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{40}
+	return file_proto_service_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListMachinesRequest) GetSessionId() string {
@@ -2587,7 +2793,7 @@ type ListMachinesResponse struct {
 
 func (x *ListMachinesResponse) Reset() {
 	*x = ListMachinesResponse{}
-	mi := &file_proto_service_proto_msgTypes[41]
+	mi := &file_proto_service_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2599,7 +2805,7 @@ func (x *ListMachinesResponse) String() string {
 func (*ListMachinesResponse) ProtoMessage() {}
 
 func (x *ListMachinesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[41]
+	mi := &file_proto_service_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2612,7 +2818,7 @@ func (x *ListMachinesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMachinesResponse.ProtoReflect.Descriptor instead.
 func (*ListMachinesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{41}
+	return file_proto_service_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ListMachinesResponse) GetMachines() []*Machine {
@@ -2633,7 +2839,7 @@ type GetMachineRequest struct {
 
 func (x *GetMachineRequest) Reset() {
 	*x = GetMachineRequest{}
-	mi := &file_proto_service_proto_msgTypes[42]
+	mi := &file_proto_service_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2645,7 +2851,7 @@ func (x *GetMachineRequest) String() string {
 func (*GetMachineRequest) ProtoMessage() {}
 
 func (x *GetMachineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[42]
+	mi := &file_proto_service_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2658,7 +2864,7 @@ func (x *GetMachineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMachineRequest.ProtoReflect.Descriptor instead.
 func (*GetMachineRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{42}
+	return file_proto_service_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetMachineRequest) GetSessionId() string {
@@ -2686,7 +2892,7 @@ type UpdateMachinePingRequest struct {
 
 func (x *UpdateMachinePingRequest) Reset() {
 	*x = UpdateMachinePingRequest{}
-	mi := &file_proto_service_proto_msgTypes[43]
+	mi := &file_proto_service_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2698,7 +2904,7 @@ func (x *UpdateMachinePingRequest) String() string {
 func (*UpdateMachinePingRequest) ProtoMessage() {}
 
 func (x *UpdateMachinePingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[43]
+	mi := &file_proto_service_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2711,7 +2917,7 @@ func (x *UpdateMachinePingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateMachinePingRequest.ProtoReflect.Descriptor instead.
 func (*UpdateMachinePingRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{43}
+	return file_proto_service_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *UpdateMachinePingRequest) GetSessionId() string {
@@ -2739,7 +2945,7 @@ type UnregisterMachineRequest struct {
 
 func (x *UnregisterMachineRequest) Reset() {
 	*x = UnregisterMachineRequest{}
-	mi := &file_proto_service_proto_msgTypes[44]
+	mi := &file_proto_service_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2751,7 +2957,7 @@ func (x *UnregisterMachineRequest) String() string {
 func (*UnregisterMachineRequest) ProtoMessage() {}
 
 func (x *UnregisterMachineRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[44]
+	mi := &file_proto_service_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2764,7 +2970,7 @@ func (x *UnregisterMachineRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterMachineRequest.ProtoReflect.Descriptor instead.
 func (*UnregisterMachineRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{44}
+	return file_proto_service_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *UnregisterMachineRequest) GetSessionId() string {
@@ -2791,7 +2997,7 @@ type UnregisterMachineResponse struct {
 
 func (x *UnregisterMachineResponse) Reset() {
 	*x = UnregisterMachineResponse{}
-	mi := &file_proto_service_proto_msgTypes[45]
+	mi := &file_proto_service_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2803,7 +3009,7 @@ func (x *UnregisterMachineResponse) String() string {
 func (*UnregisterMachineResponse) ProtoMessage() {}
 
 func (x *UnregisterMachineResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[45]
+	mi := &file_proto_service_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2816,7 +3022,7 @@ func (x *UnregisterMachineResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnregisterMachineResponse.ProtoReflect.Descriptor instead.
 func (*UnregisterMachineResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{45}
+	return file_proto_service_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *UnregisterMachineResponse) GetSuccess() bool {
@@ -2845,7 +3051,7 @@ type ExecuteToolRequest struct {
 
 func (x *ExecuteToolRequest) Reset() {
 	*x = ExecuteToolRequest{}
-	mi := &file_proto_service_proto_msgTypes[46]
+	mi := &file_proto_service_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2857,7 +3063,7 @@ func (x *ExecuteToolRequest) String() string {
 func (*ExecuteToolRequest) ProtoMessage() {}
 
 func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[46]
+	mi := &file_proto_service_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2870,7 +3076,7 @@ func (x *ExecuteToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolRequest.ProtoReflect.Descriptor instead.
 func (*ExecuteToolRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{46}
+	return file_proto_service_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *ExecuteToolRequest) GetSessionId() string {
@@ -2912,7 +3118,7 @@ func (x *ExecuteToolRequest) GetIdempotencyKey() string {
 type ExecuteToolResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Status        RequestStatus          `protobuf:"varint,2,opt,name=status,proto3,enum=api.v1.RequestStatus" json:"status,omitempty"`
 	Result        string                 `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"` // JSON result as string
 	ResultType    string                 `protobuf:"bytes,4,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
 	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
@@ -2922,7 +3128,7 @@ type ExecuteToolResponse struct {
 
 func (x *ExecuteToolResponse) Reset() {
 	*x = ExecuteToolResponse{}
-	mi := &file_proto_service_proto_msgTypes[47]
+	mi := &file_proto_service_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2934,7 +3140,7 @@ func (x *ExecuteToolResponse) String() string {
 func (*ExecuteToolResponse) ProtoMessage() {}
 
 func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[47]
+	mi := &file_proto_service_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2947,7 +3153,7 @@ func (x *ExecuteToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolResponse.ProtoReflect.Descriptor instead.
 func (*ExecuteToolResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{47}
+	return file_proto_service_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ExecuteToolResponse) GetRequestId() string {
@@ -2957,11 +3163,11 @@ func (x *ExecuteToolResponse) GetRequestId() string {
 	return ""
 }
 
-func (x *ExecuteToolResponse) GetStatus() string {
+func (x *ExecuteToolResponse) GetStatus() RequestStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return RequestStatus_REQUEST_STATUS_UNSPECIFIED
 }
 
 func (x *ExecuteToolResponse) GetResult() string {
@@ -3001,7 +3207,7 @@ type ExecuteToolChunk struct {
 
 func (x *ExecuteToolChunk) Reset() {
 	*x = ExecuteToolChunk{}
-	mi := &file_proto_service_proto_msgTypes[48]
+	mi := &file_proto_service_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3013,7 +3219,7 @@ func (x *ExecuteToolChunk) String() string {
 func (*ExecuteToolChunk) ProtoMessage() {}
 
 func (x *ExecuteToolChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[48]
+	mi := &file_proto_service_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3026,7 +3232,7 @@ func (x *ExecuteToolChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExecuteToolChunk.ProtoReflect.Descriptor instead.
 func (*ExecuteToolChunk) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{48}
+	return file_proto_service_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ExecuteToolChunk) GetSeq() int32 {
@@ -3084,7 +3290,7 @@ type CreateRequestRequest struct {
 
 func (x *CreateRequestRequest) Reset() {
 	*x = CreateRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[49]
+	mi := &file_proto_service_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3096,7 +3302,7 @@ func (x *CreateRequestRequest) String() string {
 func (*CreateRequestRequest) ProtoMessage() {}
 
 func (x *CreateRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[49]
+	mi := &file_proto_service_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3109,7 +3315,7 @@ func (x *CreateRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRequestRequest.ProtoReflect.Descriptor instead.
 func (*CreateRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{49}
+	return file_proto_service_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CreateRequestRequest) GetSessionId() string {
@@ -3158,7 +3364,7 @@ type GetRequestRequest struct {
 
 func (x *GetRequestRequest) Reset() {
 	*x = GetRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[50]
+	mi := &file_proto_service_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3170,7 +3376,7 @@ func (x *GetRequestRequest) String() string {
 func (*GetRequestRequest) ProtoMessage() {}
 
 func (x *GetRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[50]
+	mi := &file_proto_service_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3183,7 +3389,7 @@ func (x *GetRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequestRequest.ProtoReflect.Descriptor instead.
 func (*GetRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{50}
+	return file_proto_service_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GetRequestRequest) GetSessionId() string {
@@ -3202,19 +3408,21 @@ func (x *GetRequestRequest) GetRequestId() string {
 
 // ListRequestsRequest
 type ListRequestsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Limit         int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
-	Offset        int32                  `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// Filter by lifecycle state; REQUEST_STATUS_UNSPECIFIED means all.
+	Status   RequestStatus `protobuf:"varint,2,opt,name=status,proto3,enum=api.v1.RequestStatus" json:"status,omitempty"`
+	ToolName string        `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	PageSize int32         `protobuf:"varint,4,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// Opaque pagination cursor: pass back page.next_page_token verbatim.
+	PageToken     string `protobuf:"bytes,5,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListRequestsRequest) Reset() {
 	*x = ListRequestsRequest{}
-	mi := &file_proto_service_proto_msgTypes[51]
+	mi := &file_proto_service_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3226,7 +3434,7 @@ func (x *ListRequestsRequest) String() string {
 func (*ListRequestsRequest) ProtoMessage() {}
 
 func (x *ListRequestsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[51]
+	mi := &file_proto_service_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3239,7 +3447,7 @@ func (x *ListRequestsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRequestsRequest.ProtoReflect.Descriptor instead.
 func (*ListRequestsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{51}
+	return file_proto_service_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListRequestsRequest) GetSessionId() string {
@@ -3249,11 +3457,11 @@ func (x *ListRequestsRequest) GetSessionId() string {
 	return ""
 }
 
-func (x *ListRequestsRequest) GetStatus() string {
+func (x *ListRequestsRequest) GetStatus() RequestStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return RequestStatus_REQUEST_STATUS_UNSPECIFIED
 }
 
 func (x *ListRequestsRequest) GetToolName() string {
@@ -3263,31 +3471,32 @@ func (x *ListRequestsRequest) GetToolName() string {
 	return ""
 }
 
-func (x *ListRequestsRequest) GetLimit() int32 {
+func (x *ListRequestsRequest) GetPageSize() int32 {
 	if x != nil {
-		return x.Limit
+		return x.PageSize
 	}
 	return 0
 }
 
-func (x *ListRequestsRequest) GetOffset() int32 {
+func (x *ListRequestsRequest) GetPageToken() string {
 	if x != nil {
-		return x.Offset
+		return x.PageToken
 	}
-	return 0
+	return ""
 }
 
 // ListRequestsResponse
 type ListRequestsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Requests      []*Request             `protobuf:"bytes,1,rep,name=requests,proto3" json:"requests,omitempty"`
+	Page          *ListPage              `protobuf:"bytes,2,opt,name=page,proto3" json:"page,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListRequestsResponse) Reset() {
 	*x = ListRequestsResponse{}
-	mi := &file_proto_service_proto_msgTypes[52]
+	mi := &file_proto_service_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3299,7 +3508,7 @@ func (x *ListRequestsResponse) String() string {
 func (*ListRequestsResponse) ProtoMessage() {}
 
 func (x *ListRequestsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[52]
+	mi := &file_proto_service_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3312,12 +3521,19 @@ func (x *ListRequestsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRequestsResponse.ProtoReflect.Descriptor instead.
 func (*ListRequestsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{52}
+	return file_proto_service_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ListRequestsResponse) GetRequests() []*Request {
 	if x != nil {
 		return x.Requests
+	}
+	return nil
+}
+
+func (x *ListRequestsResponse) GetPage() *ListPage {
+	if x != nil {
+		return x.Page
 	}
 	return nil
 }
@@ -3329,7 +3545,7 @@ type UpdateRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Status        RequestStatus          `protobuf:"varint,3,opt,name=status,proto3,enum=api.v1.RequestStatus" json:"status,omitempty"`
 	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
 	ResultType    string                 `protobuf:"bytes,5,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
 	MachineId     string                 `protobuf:"bytes,6,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
@@ -3340,7 +3556,7 @@ type UpdateRequestRequest struct {
 
 func (x *UpdateRequestRequest) Reset() {
 	*x = UpdateRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[53]
+	mi := &file_proto_service_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3352,7 +3568,7 @@ func (x *UpdateRequestRequest) String() string {
 func (*UpdateRequestRequest) ProtoMessage() {}
 
 func (x *UpdateRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[53]
+	mi := &file_proto_service_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3365,7 +3581,7 @@ func (x *UpdateRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRequestRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{53}
+	return file_proto_service_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *UpdateRequestRequest) GetSessionId() string {
@@ -3382,11 +3598,11 @@ func (x *UpdateRequestRequest) GetRequestId() string {
 	return ""
 }
 
-func (x *UpdateRequestRequest) GetStatus() string {
+func (x *UpdateRequestRequest) GetStatus() RequestStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return RequestStatus_REQUEST_STATUS_UNSPECIFIED
 }
 
 func (x *UpdateRequestRequest) GetResult() string {
@@ -3429,7 +3645,7 @@ type ClaimRequestRequest struct {
 
 func (x *ClaimRequestRequest) Reset() {
 	*x = ClaimRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[54]
+	mi := &file_proto_service_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3441,7 +3657,7 @@ func (x *ClaimRequestRequest) String() string {
 func (*ClaimRequestRequest) ProtoMessage() {}
 
 func (x *ClaimRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[54]
+	mi := &file_proto_service_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3454,7 +3670,7 @@ func (x *ClaimRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimRequestRequest.ProtoReflect.Descriptor instead.
 func (*ClaimRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{54}
+	return file_proto_service_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ClaimRequestRequest) GetSessionId() string {
@@ -3489,7 +3705,7 @@ type CancelRequestRequest struct {
 
 func (x *CancelRequestRequest) Reset() {
 	*x = CancelRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[55]
+	mi := &file_proto_service_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3501,7 +3717,7 @@ func (x *CancelRequestRequest) String() string {
 func (*CancelRequestRequest) ProtoMessage() {}
 
 func (x *CancelRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[55]
+	mi := &file_proto_service_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3514,7 +3730,7 @@ func (x *CancelRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRequestRequest.ProtoReflect.Descriptor instead.
 func (*CancelRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{55}
+	return file_proto_service_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *CancelRequestRequest) GetSessionId() string {
@@ -3541,7 +3757,7 @@ type CancelRequestResponse struct {
 
 func (x *CancelRequestResponse) Reset() {
 	*x = CancelRequestResponse{}
-	mi := &file_proto_service_proto_msgTypes[56]
+	mi := &file_proto_service_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3553,7 +3769,7 @@ func (x *CancelRequestResponse) String() string {
 func (*CancelRequestResponse) ProtoMessage() {}
 
 func (x *CancelRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[56]
+	mi := &file_proto_service_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3566,7 +3782,7 @@ func (x *CancelRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRequestResponse.ProtoReflect.Descriptor instead.
 func (*CancelRequestResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{56}
+	return file_proto_service_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *CancelRequestResponse) GetSuccess() bool {
@@ -3595,7 +3811,7 @@ type SubmitRequestResultRequest struct {
 
 func (x *SubmitRequestResultRequest) Reset() {
 	*x = SubmitRequestResultRequest{}
-	mi := &file_proto_service_proto_msgTypes[57]
+	mi := &file_proto_service_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3607,7 +3823,7 @@ func (x *SubmitRequestResultRequest) String() string {
 func (*SubmitRequestResultRequest) ProtoMessage() {}
 
 func (x *SubmitRequestResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[57]
+	mi := &file_proto_service_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3620,7 +3836,7 @@ func (x *SubmitRequestResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRequestResultRequest.ProtoReflect.Descriptor instead.
 func (*SubmitRequestResultRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{57}
+	return file_proto_service_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *SubmitRequestResultRequest) GetSessionId() string {
@@ -3682,7 +3898,7 @@ type SubmitRequestResultResponse struct {
 
 func (x *SubmitRequestResultResponse) Reset() {
 	*x = SubmitRequestResultResponse{}
-	mi := &file_proto_service_proto_msgTypes[58]
+	mi := &file_proto_service_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3694,7 +3910,7 @@ func (x *SubmitRequestResultResponse) String() string {
 func (*SubmitRequestResultResponse) ProtoMessage() {}
 
 func (x *SubmitRequestResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[58]
+	mi := &file_proto_service_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3707,7 +3923,7 @@ func (x *SubmitRequestResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRequestResultResponse.ProtoReflect.Descriptor instead.
 func (*SubmitRequestResultResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{58}
+	return file_proto_service_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *SubmitRequestResultResponse) GetSuccess() bool {
@@ -3734,7 +3950,7 @@ type AppendRequestChunksRequest struct {
 
 func (x *AppendRequestChunksRequest) Reset() {
 	*x = AppendRequestChunksRequest{}
-	mi := &file_proto_service_proto_msgTypes[59]
+	mi := &file_proto_service_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3746,7 +3962,7 @@ func (x *AppendRequestChunksRequest) String() string {
 func (*AppendRequestChunksRequest) ProtoMessage() {}
 
 func (x *AppendRequestChunksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[59]
+	mi := &file_proto_service_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3759,7 +3975,7 @@ func (x *AppendRequestChunksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendRequestChunksRequest.ProtoReflect.Descriptor instead.
 func (*AppendRequestChunksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{59}
+	return file_proto_service_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *AppendRequestChunksRequest) GetSessionId() string {
@@ -3814,7 +4030,7 @@ type AppendRequestChunksResponse struct {
 
 func (x *AppendRequestChunksResponse) Reset() {
 	*x = AppendRequestChunksResponse{}
-	mi := &file_proto_service_proto_msgTypes[60]
+	mi := &file_proto_service_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3826,7 +4042,7 @@ func (x *AppendRequestChunksResponse) String() string {
 func (*AppendRequestChunksResponse) ProtoMessage() {}
 
 func (x *AppendRequestChunksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[60]
+	mi := &file_proto_service_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3839,7 +4055,7 @@ func (x *AppendRequestChunksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendRequestChunksResponse.ProtoReflect.Descriptor instead.
 func (*AppendRequestChunksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{60}
+	return file_proto_service_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *AppendRequestChunksResponse) GetSuccess() bool {
@@ -3860,7 +4076,7 @@ type GetRequestChunksRequest struct {
 
 func (x *GetRequestChunksRequest) Reset() {
 	*x = GetRequestChunksRequest{}
-	mi := &file_proto_service_proto_msgTypes[61]
+	mi := &file_proto_service_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3872,7 +4088,7 @@ func (x *GetRequestChunksRequest) String() string {
 func (*GetRequestChunksRequest) ProtoMessage() {}
 
 func (x *GetRequestChunksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[61]
+	mi := &file_proto_service_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3885,7 +4101,7 @@ func (x *GetRequestChunksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequestChunksRequest.ProtoReflect.Descriptor instead.
 func (*GetRequestChunksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{61}
+	return file_proto_service_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetRequestChunksRequest) GetSessionId() string {
@@ -3914,7 +4130,7 @@ type GetRequestChunksResponse struct {
 
 func (x *GetRequestChunksResponse) Reset() {
 	*x = GetRequestChunksResponse{}
-	mi := &file_proto_service_proto_msgTypes[62]
+	mi := &file_proto_service_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3926,7 +4142,7 @@ func (x *GetRequestChunksResponse) String() string {
 func (*GetRequestChunksResponse) ProtoMessage() {}
 
 func (x *GetRequestChunksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[62]
+	mi := &file_proto_service_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3939,7 +4155,7 @@ func (x *GetRequestChunksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequestChunksResponse.ProtoReflect.Descriptor instead.
 func (*GetRequestChunksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{62}
+	return file_proto_service_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *GetRequestChunksResponse) GetChunks() []string {
@@ -3979,7 +4195,7 @@ type RenewRequestLeaseRequest struct {
 
 func (x *RenewRequestLeaseRequest) Reset() {
 	*x = RenewRequestLeaseRequest{}
-	mi := &file_proto_service_proto_msgTypes[63]
+	mi := &file_proto_service_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3991,7 +4207,7 @@ func (x *RenewRequestLeaseRequest) String() string {
 func (*RenewRequestLeaseRequest) ProtoMessage() {}
 
 func (x *RenewRequestLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[63]
+	mi := &file_proto_service_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4004,7 +4220,7 @@ func (x *RenewRequestLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewRequestLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RenewRequestLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{63}
+	return file_proto_service_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *RenewRequestLeaseRequest) GetSessionId() string {
@@ -4044,7 +4260,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_proto_service_proto_msgTypes[64]
+	mi := &file_proto_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4056,7 +4272,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[64]
+	mi := &file_proto_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4069,7 +4285,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{64}
+	return file_proto_service_proto_rawDescGZIP(), []int{66}
 }
 
 type HealthCheckResponse struct {
@@ -4082,7 +4298,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4094,7 +4310,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4107,7 +4323,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{65}
+	return file_proto_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *HealthCheckResponse) GetStatus() string {
@@ -4130,14 +4346,14 @@ type Task struct {
 	Id               string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	ToolName         string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Status           string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	Status           TaskStatus             `protobuf:"varint,4,opt,name=status,proto3,enum=api.v1.TaskStatus" json:"status,omitempty"`
 	Input            string                 `protobuf:"bytes,5,opt,name=input,proto3" json:"input,omitempty"`   // JSON input as string
 	Result           string                 `protobuf:"bytes,6,opt,name=result,proto3" json:"result,omitempty"` // JSON result as string
 	ResultType       string                 `protobuf:"bytes,7,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
 	Error            string                 `protobuf:"bytes,8,opt,name=error,proto3" json:"error,omitempty"`
-	CreatedAt        string                 `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt        string                 `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	CompletedAt      string                 `protobuf:"bytes,11,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	CompletedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=completed_at,json=completedAt,proto3" json:"completed_at,omitempty"`
 	CurrentRequestId string                 `protobuf:"bytes,12,opt,name=current_request_id,json=currentRequestId,proto3" json:"current_request_id,omitempty"` // request executing the current attempt (empty when idle)
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
@@ -4145,7 +4361,7 @@ type Task struct {
 
 func (x *Task) Reset() {
 	*x = Task{}
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4157,7 +4373,7 @@ func (x *Task) String() string {
 func (*Task) ProtoMessage() {}
 
 func (x *Task) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4170,7 +4386,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{66}
+	return file_proto_service_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *Task) GetId() string {
@@ -4194,11 +4410,11 @@ func (x *Task) GetToolName() string {
 	return ""
 }
 
-func (x *Task) GetStatus() string {
+func (x *Task) GetStatus() TaskStatus {
 	if x != nil {
 		return x.Status
 	}
-	return ""
+	return TaskStatus_TASK_STATUS_UNSPECIFIED
 }
 
 func (x *Task) GetInput() string {
@@ -4229,25 +4445,25 @@ func (x *Task) GetError() string {
 	return ""
 }
 
-func (x *Task) GetCreatedAt() string {
+func (x *Task) GetCreatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CreatedAt
 	}
-	return ""
+	return nil
 }
 
-func (x *Task) GetUpdatedAt() string {
+func (x *Task) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
 	}
-	return ""
+	return nil
 }
 
-func (x *Task) GetCompletedAt() string {
+func (x *Task) GetCompletedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.CompletedAt
 	}
-	return ""
+	return nil
 }
 
 func (x *Task) GetCurrentRequestId() string {
@@ -4273,7 +4489,7 @@ type CreateTaskRequest struct {
 
 func (x *CreateTaskRequest) Reset() {
 	*x = CreateTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4285,7 +4501,7 @@ func (x *CreateTaskRequest) String() string {
 func (*CreateTaskRequest) ProtoMessage() {}
 
 func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4298,7 +4514,7 @@ func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
 func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{67}
+	return file_proto_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *CreateTaskRequest) GetSessionId() string {
@@ -4340,7 +4556,7 @@ type GetTaskRequest struct {
 
 func (x *GetTaskRequest) Reset() {
 	*x = GetTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4352,7 +4568,7 @@ func (x *GetTaskRequest) String() string {
 func (*GetTaskRequest) ProtoMessage() {}
 
 func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4365,7 +4581,7 @@ func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{68}
+	return file_proto_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetTaskRequest) GetSessionId() string {
@@ -4392,7 +4608,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4404,7 +4620,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4417,7 +4633,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{69}
+	return file_proto_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *ListTasksRequest) GetSessionId() string {
@@ -4437,7 +4653,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4449,7 +4665,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4462,7 +4678,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{70}
+	return file_proto_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListTasksResponse) GetTasks() []*Task {
@@ -4483,7 +4699,7 @@ type CancelTaskRequest struct {
 
 func (x *CancelTaskRequest) Reset() {
 	*x = CancelTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4495,7 +4711,7 @@ func (x *CancelTaskRequest) String() string {
 func (*CancelTaskRequest) ProtoMessage() {}
 
 func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4508,7 +4724,7 @@ func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskRequest.ProtoReflect.Descriptor instead.
 func (*CancelTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{71}
+	return file_proto_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *CancelTaskRequest) GetSessionId() string {
@@ -4535,7 +4751,7 @@ type CancelTaskResponse struct {
 
 func (x *CancelTaskResponse) Reset() {
 	*x = CancelTaskResponse{}
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4547,7 +4763,7 @@ func (x *CancelTaskResponse) String() string {
 func (*CancelTaskResponse) ProtoMessage() {}
 
 func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4560,7 +4776,7 @@ func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskResponse.ProtoReflect.Descriptor instead.
 func (*CancelTaskResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{72}
+	return file_proto_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *CancelTaskResponse) GetSuccess() bool {
@@ -4574,7 +4790,11 @@ var File_proto_service_proto protoreflect.FileDescriptor
 
 const file_proto_service_proto_rawDesc = "" +
 	"\n" +
-	"\x13proto/service.proto\x12\x03api\x1a\x1cgoogle/api/annotations.proto\"O\n" +
+	"\x13proto/service.proto\x12\x06api.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"Q\n" +
+	"\bListPage\x12&\n" +
+	"\x0fnext_page_token\x18\x01 \x01(\tR\rnextPageToken\x12\x1d\n" +
+	"\n" +
+	"total_size\x18\x02 \x01(\x05R\ttotalSize\"O\n" +
 	"\x13ResumeStreamRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x19\n" +
@@ -4585,16 +4805,16 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\"0\n" +
 	"\x14DrainMachineResponse\x12\x18\n" +
-	"\adrained\x18\x01 \x01(\bR\adrained\"\xe1\x02\n" +
+	"\adrained\x18\x01 \x01(\bR\adrained\"\x9c\x03\n" +
 	"\x04Tool\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x16\n" +
-	"\x06schema\x18\x04 \x01(\tR\x06schema\x12-\n" +
-	"\x06config\x18\x05 \x03(\v2\x15.api.Tool.ConfigEntryR\x06config\x12\x1d\n" +
+	"\x06schema\x18\x04 \x01(\tR\x06schema\x120\n" +
+	"\x06config\x18\x05 \x03(\v2\x18.api.v1.Tool.ConfigEntryR\x06config\x129\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12 \n" +
-	"\flast_ping_at\x18\a \x01(\tR\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12<\n" +
+	"\flast_ping_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastPingAt\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\b \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4604,32 +4824,31 @@ const file_proto_service_proto_rawDesc = "" +
 	" \x03(\tR\x04tags\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc4\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\x01\n" +
 	"\aSession\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1d\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x129\n" +
 	"\n" +
-	"created_at\x18\x04 \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\x05 \x01(\tR\tcreatedBy\x12\x17\n" +
-	"\aapi_key\x18\x06 \x01(\tR\x06apiKey\x12\x1c\n" +
-	"\tnamespace\x18\a \x01(\tR\tnamespace\"\xff\x01\n" +
+	"created_by\x18\x05 \x01(\tR\tcreatedBy\x12\x1c\n" +
+	"\tnamespace\x18\x06 \x01(\tR\tnamespace\"\xb7\x02\n" +
 	"\x06ApiKey\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
 	"\x03key\x18\x03 \x01(\tR\x03key\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1d\n" +
+	"session_id\x18\x04 \x01(\tR\tsessionId\x129\n" +
 	"\n" +
-	"created_at\x18\x05 \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"created_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\x06 \x01(\tR\tcreatedBy\x12\x1d\n" +
+	"created_by\x18\x06 \x01(\tR\tcreatedBy\x129\n" +
 	"\n" +
-	"revoked_at\x18\a \x01(\tR\trevokedAt\x12\"\n" +
+	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12\"\n" +
 	"\fcapabilities\x18\b \x03(\tR\fcapabilities\x12\x1f\n" +
 	"\vkey_preview\x18\t \x01(\tR\n" +
-	"keyPreview\"\xf2\x01\n" +
+	"keyPreview\"\xaa\x02\n" +
 	"\aMachine\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4637,35 +4856,34 @@ const file_proto_service_proto_rawDesc = "" +
 	"\vsdk_version\x18\x03 \x01(\tR\n" +
 	"sdkVersion\x12!\n" +
 	"\fsdk_language\x18\x04 \x01(\tR\vsdkLanguage\x12\x0e\n" +
-	"\x02ip\x18\x05 \x01(\tR\x02ip\x12\x1d\n" +
+	"\x02ip\x18\x05 \x01(\tR\x02ip\x129\n" +
 	"\n" +
-	"created_at\x18\x06 \x01(\tR\tcreatedAt\x12 \n" +
-	"\flast_ping_at\x18\a \x01(\tR\n" +
+	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12<\n" +
+	"\flast_ping_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastPingAt\x12#\n" +
-	"\rmachine_token\x18\b \x01(\tR\fmachineToken\"\xfa\x03\n" +
+	"\rmachine_token\x18\b \x01(\tR\fmachineToken\"\xbe\x04\n" +
 	"\aRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\x12\x14\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12-\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x15.api.v1.RequestStatusR\x06status\x12\x14\n" +
 	"\x05input\x18\x05 \x01(\tR\x05input\x12\x16\n" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\a \x01(\tR\n" +
 	"resultType\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\x12\x1d\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\tR\tupdatedAt\x120\n" +
-	"\x14executing_machine_id\x18\v \x01(\tR\x12executingMachineId\x12%\n" +
-	"\x0estream_results\x18\f \x03(\tR\rstreamResults\x12\x1b\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x120\n" +
+	"\x14executing_machine_id\x18\v \x01(\tR\x12executingMachineId\x12\x1b\n" +
 	"\tleased_by\x18\r \x01(\tR\bleasedBy\x12\x1f\n" +
 	"\vlease_epoch\x18\x0e \x01(\x03R\n" +
-	"leaseEpoch\x12(\n" +
-	"\x10lease_expires_at\x18\x0f \x01(\tR\x0eleaseExpiresAt\x12'\n" +
-	"\x0ftimeout_seconds\x18\x10 \x01(\x05R\x0etimeoutSeconds\"\xae\x02\n" +
+	"leaseEpoch\x12D\n" +
+	"\x10lease_expires_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\x0eleaseExpiresAt\x12'\n" +
+	"\x0ftimeout_seconds\x18\x10 \x01(\x05R\x0etimeoutSeconds\"\xb1\x02\n" +
 	"\x13RegisterToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4673,19 +4891,24 @@ const file_proto_service_proto_rawDesc = "" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x16\n" +
-	"\x06schema\x18\x05 \x01(\tR\x06schema\x12<\n" +
-	"\x06config\x18\x06 \x03(\v2$.api.RegisterToolRequest.ConfigEntryR\x06config\x12\x12\n" +
+	"\x06schema\x18\x05 \x01(\tR\x06schema\x12?\n" +
+	"\x06config\x18\x06 \x03(\v2'.api.v1.RegisterToolRequest.ConfigEntryR\x06config\x12\x12\n" +
 	"\x04tags\x18\a \x03(\tR\x04tags\x1a9\n" +
 	"\vConfigEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"5\n" +
-	"\x14RegisterToolResponse\x12\x1d\n" +
-	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"1\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"8\n" +
+	"\x14RegisterToolResponse\x12 \n" +
+	"\x04tool\x18\x01 \x01(\v2\f.api.v1.ToolR\x04tool\"1\n" +
 	"\x10ListToolsRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"4\n" +
-	"\x11ListToolsResponse\x12\x1f\n" +
-	"\x05tools\x18\x01 \x03(\v2\t.api.ToolR\x05tools\"L\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"7\n" +
+	"\x11ListToolsResponse\x12\"\n" +
+	"\x05tools\x18\x01 \x03(\v2\f.api.v1.ToolR\x05tools\"e\n" +
+	"\x0eGetToolRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
+	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\"L\n" +
 	"\x12GetToolByIdRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
@@ -4693,9 +4916,9 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x14GetToolByNameRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
-	"\ttool_name\x18\x02 \x01(\tR\btoolName\"0\n" +
-	"\x0fGetToolResponse\x12\x1d\n" +
-	"\x04tool\x18\x01 \x01(\v2\t.api.ToolR\x04tool\"j\n" +
+	"\ttool_name\x18\x02 \x01(\tR\btoolName\"3\n" +
+	"\x0fGetToolResponse\x12 \n" +
+	"\x04tool\x18\x01 \x01(\v2\f.api.v1.ToolR\x04tool\"j\n" +
 	"\x11DeleteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
@@ -4709,35 +4932,32 @@ const file_proto_service_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\atool_id\x18\x02 \x01(\tR\x06toolId\x12\x1d\n" +
 	"\n" +
-	"machine_id\x18\x03 \x01(\tR\tmachineId\"\xbb\x01\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\"\xa2\x01\n" +
 	"\x14CreateSessionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
-	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x17\n" +
-	"\aapi_key\x18\x04 \x01(\tR\x06apiKey\x12\x1d\n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x05 \x01(\tR\tsessionId\x12\x1c\n" +
-	"\tnamespace\x18\x06 \x01(\tR\tnamespace\"?\n" +
-	"\x15CreateSessionResponse\x12&\n" +
-	"\asession\x18\x01 \x01(\v2\f.api.SessionR\asession\"2\n" +
+	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1c\n" +
+	"\tnamespace\x18\x05 \x01(\tR\tnamespace\"B\n" +
+	"\x15CreateSessionResponse\x12)\n" +
+	"\asession\x18\x01 \x01(\v2\x0f.api.v1.SessionR\asession\"2\n" +
 	"\x11GetSessionRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\".\n" +
 	"\x13ListSessionsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"@\n" +
-	"\x14ListSessionsResponse\x12(\n" +
-	"\bsessions\x18\x01 \x03(\v2\f.api.SessionR\bsessions\"\x86\x01\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"C\n" +
+	"\x14ListSessionsResponse\x12+\n" +
+	"\bsessions\x18\x01 \x03(\v2\x0f.api.v1.SessionR\bsessions\"\x86\x01\n" +
 	"\x17ListUserSessionsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x03 \x01(\x05R\tpageToken\x12\x16\n" +
-	"\x06filter\x18\x04 \x01(\tR\x06filter\"\x8d\x01\n" +
-	"\x18ListUserSessionsResponse\x12(\n" +
-	"\bsessions\x18\x01 \x03(\v2\f.api.SessionR\bsessions\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\x05R\rnextPageToken\x12\x1f\n" +
-	"\vtotal_count\x18\x03 \x01(\x05R\n" +
-	"totalCount\"m\n" +
+	"page_token\x18\x03 \x01(\tR\tpageToken\x12\x16\n" +
+	"\x06filter\x18\x04 \x01(\tR\x06filter\"m\n" +
+	"\x18ListUserSessionsResponse\x12+\n" +
+	"\bsessions\x18\x01 \x03(\v2\x0f.api.v1.SessionR\bsessions\x12$\n" +
+	"\x04page\x18\x02 \x01(\v2\x10.api.v1.ListPageR\x04page\"m\n" +
 	"\x19BulkDeleteSessionsRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1f\n" +
 	"\vsession_ids\x18\x02 \x03(\tR\n" +
@@ -4777,15 +4997,15 @@ const file_proto_service_proto_rawDesc = "" +
 	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\"3\n" +
 	"\x12ListApiKeysRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"=\n" +
-	"\x13ListApiKeysResponse\x12&\n" +
-	"\bapi_keys\x18\x01 \x03(\v2\v.api.ApiKeyR\aapiKeys\"K\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"@\n" +
+	"\x13ListApiKeysResponse\x12)\n" +
+	"\bapi_keys\x18\x01 \x03(\v2\x0e.api.v1.ApiKeyR\aapiKeys\"K\n" +
 	"\x13RevokeApiKeyRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x15\n" +
 	"\x06key_id\x18\x02 \x01(\tR\x05keyId\"0\n" +
 	"\x14RevokeApiKeyResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xca\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xcd\x01\n" +
 	"\x16RegisterMachineRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4793,13 +5013,13 @@ const file_proto_service_proto_rawDesc = "" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\x12\x1f\n" +
 	"\vsdk_version\x18\x03 \x01(\tR\n" +
 	"sdkVersion\x12!\n" +
-	"\fsdk_language\x18\x04 \x01(\tR\vsdkLanguage\x12.\n" +
-	"\x05tools\x18\x05 \x03(\v2\x18.api.RegisterToolRequestR\x05tools\"4\n" +
+	"\fsdk_language\x18\x04 \x01(\tR\vsdkLanguage\x121\n" +
+	"\x05tools\x18\x05 \x03(\v2\x1b.api.v1.RegisterToolRequestR\x05tools\"4\n" +
 	"\x13ListMachinesRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"@\n" +
-	"\x14ListMachinesResponse\x12(\n" +
-	"\bmachines\x18\x01 \x03(\v2\f.api.MachineR\bmachines\"Q\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"C\n" +
+	"\x14ListMachinesResponse\x12+\n" +
+	"\bmachines\x18\x01 \x03(\v2\x0f.api.v1.MachineR\bmachines\"Q\n" +
 	"\x11GetMachineRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4823,11 +5043,11 @@ const file_proto_service_proto_rawDesc = "" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\x12'\n" +
-	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\x9b\x01\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\xb2\x01\n" +
 	"\x13ExecuteToolResponse\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12-\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x15.api.v1.RequestStatusR\x06status\x12\x16\n" +
 	"\x06result\x18\x03 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\x04 \x01(\tR\n" +
 	"resultType\x12\x14\n" +
@@ -4850,22 +5070,24 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"\x97\x01\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\"\xbc\x01\n" +
 	"\x13ListRequestsRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x05 \x01(\x05R\x06offset\"@\n" +
-	"\x14ListRequestsResponse\x12(\n" +
-	"\brequests\x18\x01 \x03(\v2\f.api.RequestR\brequests\"\xe5\x01\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12-\n" +
+	"\x06status\x18\x02 \x01(\x0e2\x15.api.v1.RequestStatusR\x06status\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x1b\n" +
+	"\tpage_size\x18\x04 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x05 \x01(\tR\tpageToken\"i\n" +
+	"\x14ListRequestsResponse\x12+\n" +
+	"\brequests\x18\x01 \x03(\v2\x0f.api.v1.RequestR\brequests\x12$\n" +
+	"\x04page\x18\x02 \x01(\v2\x10.api.v1.ListPageR\x04page\"\xfc\x01\n" +
 	"\x14UpdateRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12-\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x15.api.v1.RequestStatusR\x06status\x12\x16\n" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\x05 \x01(\tR\n" +
 	"resultType\x12\x1d\n" +
@@ -4886,7 +5108,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\"1\n" +
 	"\x15CancelRequestResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xcb\x02\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xce\x02\n" +
 	"\x1aSubmitRequestResultRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -4894,8 +5116,8 @@ const file_proto_service_proto_rawDesc = "" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x16\n" +
 	"\x06result\x18\x03 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\x04 \x01(\tR\n" +
-	"resultType\x12=\n" +
-	"\x04meta\x18\x05 \x03(\v2).api.SubmitRequestResultRequest.MetaEntryR\x04meta\x12\x1d\n" +
+	"resultType\x12@\n" +
+	"\x04meta\x18\x05 \x03(\v2,.api.v1.SubmitRequestResultRequest.MetaEntryR\x04meta\x12\x1d\n" +
 	"\n" +
 	"machine_id\x18\x06 \x01(\tR\tmachineId\x12\x1f\n" +
 	"\vlease_epoch\x18\a \x01(\x03R\n" +
@@ -4940,24 +5162,24 @@ const file_proto_service_proto_rawDesc = "" +
 	"\x12HealthCheckRequest\"G\n" +
 	"\x13HealthCheckResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"\xde\x02\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"\xc6\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12\x16\n" +
-	"\x06status\x18\x04 \x01(\tR\x06status\x12\x14\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12*\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x12.api.v1.TaskStatusR\x06status\x12\x14\n" +
 	"\x05input\x18\x05 \x01(\tR\x05input\x12\x16\n" +
 	"\x06result\x18\x06 \x01(\tR\x06result\x12\x1f\n" +
 	"\vresult_type\x18\a \x01(\tR\n" +
 	"resultType\x12\x14\n" +
-	"\x05error\x18\b \x01(\tR\x05error\x12\x1d\n" +
+	"\x05error\x18\b \x01(\tR\x05error\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
 	"updated_at\x18\n" +
-	" \x01(\tR\tupdatedAt\x12!\n" +
-	"\fcompleted_at\x18\v \x01(\tR\vcompletedAt\x12,\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12=\n" +
+	"\fcompleted_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vcompletedAt\x12,\n" +
 	"\x12current_request_id\x18\f \x01(\tR\x10currentRequestId\"\x8e\x01\n" +
 	"\x11CreateTaskRequest\x12\x1d\n" +
 	"\n" +
@@ -4971,68 +5193,88 @@ const file_proto_service_proto_rawDesc = "" +
 	"\atask_id\x18\x02 \x01(\tR\x06taskId\"1\n" +
 	"\x10ListTasksRequest\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"4\n" +
-	"\x11ListTasksResponse\x12\x1f\n" +
-	"\x05tasks\x18\x01 \x03(\v2\t.api.TaskR\x05tasks\"K\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"7\n" +
+	"\x11ListTasksResponse\x12\"\n" +
+	"\x05tasks\x18\x01 \x03(\v2\f.api.v1.TaskR\x05tasks\"K\n" +
 	"\x11CancelTaskRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\tR\x06taskId\".\n" +
 	"\x12CancelTaskResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xc0\a\n" +
-	"\vToolService\x12a\n" +
-	"\fRegisterTool\x12\x18.api.RegisterToolRequest\x1a\x19.api.RegisterToolResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/RegisterTool\x12U\n" +
-	"\tListTools\x12\x15.api.ListToolsRequest\x1a\x16.api.ListToolsResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/ListTools\x12Y\n" +
-	"\vGetToolById\x12\x17.api.GetToolByIdRequest\x1a\x14.api.GetToolResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/GetToolById\x12_\n" +
-	"\rGetToolByName\x12\x19.api.GetToolByNameRequest\x1a\x14.api.GetToolResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/GetToolByName\x12Y\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess*\xb7\x01\n" +
+	"\rRequestStatus\x12\x1e\n" +
+	"\x1aREQUEST_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16REQUEST_STATUS_PENDING\x10\x01\x12\x1a\n" +
+	"\x16REQUEST_STATUS_CLAIMED\x10\x02\x12\x1a\n" +
+	"\x16REQUEST_STATUS_RUNNING\x10\x03\x12\x17\n" +
+	"\x13REQUEST_STATUS_DONE\x10\x04\x12\x19\n" +
+	"\x15REQUEST_STATUS_FAILED\x10\x05*\xc6\x01\n" +
 	"\n" +
-	"DeleteTool\x12\x16.api.DeleteToolRequest\x1a\x17.api.DeleteToolResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/DeleteTool\x12W\n" +
-	"\x0eUpdateToolPing\x12\x1a.api.UpdateToolPingRequest\x1a\t.api.Tool\"\x1e\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api/UpdateToolPing\x12h\n" +
-	"\x11StreamExecuteTool\x12\x17.api.ExecuteToolRequest\x1a\x15.api.ExecuteToolChunk\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/StreamExecuteTool0\x01\x12_\n" +
-	"\fResumeStream\x12\x18.api.ResumeStreamRequest\x1a\x15.api.ExecuteToolChunk\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/ResumeStream0\x01\x12]\n" +
-	"\vExecuteTool\x12\x17.api.ExecuteToolRequest\x1a\x18.api.ExecuteToolResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/ExecuteTool\x12]\n" +
-	"\vHealthCheck\x12\x17.api.HealthCheckRequest\x1a\x18.api.HealthCheckResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/HealthCheck2\xd6\t\n" +
-	"\x0fSessionsService\x12e\n" +
-	"\rCreateSession\x12\x19.api.CreateSessionRequest\x1a\x1a.api.CreateSessionResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/CreateSession\x12N\n" +
+	"TaskStatus\x12\x1b\n" +
+	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
+	"\x13TASK_STATUS_PENDING\x10\x01\x12\x17\n" +
+	"\x13TASK_STATUS_RUNNING\x10\x02\x12\x19\n" +
+	"\x15TASK_STATUS_COMPLETED\x10\x03\x12\x16\n" +
+	"\x12TASK_STATUS_FAILED\x10\x04\x12\x19\n" +
+	"\x15TASK_STATUS_CANCELLED\x10\x05\x12\x1b\n" +
+	"\x17TASK_STATUS_DEAD_LETTER\x10\x062\xf7\t\n" +
+	"\vToolService\x12j\n" +
+	"\fRegisterTool\x12\x1b.api.v1.RegisterToolRequest\x1a\x1c.api.v1.RegisterToolResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/RegisterTool\x12^\n" +
+	"\tListTools\x12\x18.api.v1.ListToolsRequest\x1a\x19.api.v1.ListToolsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api.v1/ListTools\x12V\n" +
+	"\aGetTool\x12\x16.api.v1.GetToolRequest\x1a\x17.api.v1.GetToolResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api.v1/GetTool\x12e\n" +
+	"\vGetToolById\x12\x1a.api.v1.GetToolByIdRequest\x1a\x17.api.v1.GetToolResponse\"!\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api.v1/GetToolById\x88\x02\x01\x12k\n" +
+	"\rGetToolByName\x12\x1c.api.v1.GetToolByNameRequest\x1a\x17.api.v1.GetToolResponse\"#\x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/GetToolByName\x88\x02\x01\x12b\n" +
 	"\n" +
-	"GetSession\x12\x16.api.GetSessionRequest\x1a\f.api.Session\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/GetSession\x12a\n" +
-	"\fListSessions\x12\x18.api.ListSessionsRequest\x1a\x19.api.ListSessionsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/ListSessions\x12W\n" +
-	"\rUpdateSession\x12\x19.api.UpdateSessionRequest\x1a\f.api.Session\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/UpdateSession\x12e\n" +
-	"\rDeleteSession\x12\x19.api.DeleteSessionRequest\x1a\x1a.api.DeleteSessionResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/DeleteSession\x12q\n" +
-	"\x10ListUserSessions\x12\x1c.api.ListUserSessionsRequest\x1a\x1d.api.ListUserSessionsResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/ListUserSessions\x12y\n" +
-	"\x12BulkDeleteSessions\x12\x1e.api.BulkDeleteSessionsRequest\x1a\x1f.api.BulkDeleteSessionsResponse\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api/BulkDeleteSessions\x12m\n" +
-	"\x0fGetSessionStats\x12\x1b.api.GetSessionStatsRequest\x1a\x1c.api.GetSessionStatsResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api/GetSessionStats\x12u\n" +
-	"\x11InvalidateSession\x12\x1d.api.InvalidateSessionRequest\x1a\x1e.api.InvalidateSessionResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/InvalidateSession\x12S\n" +
-	"\fCreateApiKey\x12\x18.api.CreateApiKeyRequest\x1a\v.api.ApiKey\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/CreateApiKey\x12]\n" +
-	"\vListApiKeys\x12\x17.api.ListApiKeysRequest\x1a\x18.api.ListApiKeysResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/ListApiKeys\x12a\n" +
-	"\fRevokeApiKey\x12\x18.api.RevokeApiKeyRequest\x1a\x19.api.RevokeApiKeyResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/RevokeApiKey2\xe2\x04\n" +
-	"\x0fMachinesService\x12]\n" +
-	"\x0fRegisterMachine\x12\x1b.api.RegisterMachineRequest\x1a\f.api.Machine\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api/RegisterMachine\x12a\n" +
-	"\fListMachines\x12\x18.api.ListMachinesRequest\x1a\x19.api.ListMachinesResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/ListMachines\x12N\n" +
+	"DeleteTool\x12\x19.api.v1.DeleteToolRequest\x1a\x1a.api.v1.DeleteToolResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api.v1/DeleteTool\x12`\n" +
+	"\x0eUpdateToolPing\x12\x1d.api.v1.UpdateToolPingRequest\x1a\f.api.v1.Tool\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api.v1/UpdateToolPing\x12q\n" +
+	"\x11StreamExecuteTool\x12\x1a.api.v1.ExecuteToolRequest\x1a\x18.api.v1.ExecuteToolChunk\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/StreamExecuteTool0\x01\x12h\n" +
+	"\fResumeStream\x12\x1b.api.v1.ResumeStreamRequest\x1a\x18.api.v1.ExecuteToolChunk\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/ResumeStream0\x01\x12d\n" +
 	"\n" +
-	"GetMachine\x12\x16.api.GetMachineRequest\x1a\f.api.Machine\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/GetMachine\x12c\n" +
-	"\x11UpdateMachinePing\x12\x1d.api.UpdateMachinePingRequest\x1a\f.api.Machine\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/UpdateMachinePing\x12u\n" +
-	"\x11UnregisterMachine\x12\x1d.api.UnregisterMachineRequest\x1a\x1e.api.UnregisterMachineResponse\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/UnregisterMachine\x12a\n" +
-	"\fDrainMachine\x12\x18.api.DrainMachineRequest\x1a\x19.api.DrainMachineResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/DrainMachine2\x89\b\n" +
-	"\x0fRequestsService\x12W\n" +
-	"\rCreateRequest\x12\x19.api.CreateRequestRequest\x1a\f.api.Request\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/CreateRequest\x12N\n" +
+	"InvokeTool\x12\x1a.api.v1.ExecuteToolRequest\x1a\x1b.api.v1.ExecuteToolResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api.v1/InvokeTool\x12i\n" +
+	"\vExecuteTool\x12\x1a.api.v1.ExecuteToolRequest\x1a\x1b.api.v1.ExecuteToolResponse\"!\x82\xd3\xe4\x93\x02\x18:\x01*\"\x13/api.v1/ExecuteTool\x88\x02\x01\x12|\n" +
+	"\vHealthCheck\x12\x1a.api.v1.HealthCheckRequest\x1a\x1b.api.v1.HealthCheckResponse\"4\x82\xd3\xe4\x93\x02.:\x01*Z\x18:\x01*\"\x13/api.v1/HealthCheck\"\x0f/api.v1/healthz2\xf5\n" +
 	"\n" +
-	"GetRequest\x12\x16.api.GetRequestRequest\x1a\f.api.Request\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/GetRequest\x12a\n" +
-	"\fListRequests\x12\x18.api.ListRequestsRequest\x1a\x19.api.ListRequestsResponse\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/ListRequests\x12W\n" +
-	"\rUpdateRequest\x12\x19.api.UpdateRequestRequest\x1a\f.api.Request\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/UpdateRequest\x12T\n" +
-	"\fClaimRequest\x12\x18.api.ClaimRequestRequest\x1a\f.api.Request\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/api/ClaimRequest\x12e\n" +
-	"\rCancelRequest\x12\x19.api.CancelRequestRequest\x1a\x1a.api.CancelRequestResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api/CancelRequest\x12}\n" +
-	"\x13SubmitRequestResult\x12\x1f.api.SubmitRequestResultRequest\x1a .api.SubmitRequestResultResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/SubmitRequestResult\x12}\n" +
-	"\x13AppendRequestChunks\x12\x1f.api.AppendRequestChunksRequest\x1a .api.AppendRequestChunksResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api/AppendRequestChunks\x12q\n" +
-	"\x10GetRequestChunks\x12\x1c.api.GetRequestChunksRequest\x1a\x1d.api.GetRequestChunksResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api/GetRequestChunks\x12c\n" +
-	"\x11RenewRequestLease\x12\x1d.api.RenewRequestLeaseRequest\x1a\f.api.Request\"!\x82\xd3\xe4\x93\x02\x1b:\x01*\"\x16/api/RenewRequestLease2\xd1\x02\n" +
-	"\fTasksService\x12K\n" +
+	"\x0fSessionsService\x12n\n" +
+	"\rCreateSession\x12\x1c.api.v1.CreateSessionRequest\x1a\x1d.api.v1.CreateSessionResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/CreateSession\x12b\n" +
 	"\n" +
-	"CreateTask\x12\x16.api.CreateTaskRequest\x1a\t.api.Task\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/CreateTask\x12B\n" +
-	"\aGetTask\x12\x13.api.GetTaskRequest\x1a\t.api.Task\"\x17\x82\xd3\xe4\x93\x02\x11:\x01*\"\f/api/GetTask\x12U\n" +
-	"\tListTasks\x12\x15.api.ListTasksRequest\x1a\x16.api.ListTasksResponse\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/api/ListTasks\x12Y\n" +
+	"GetSession\x12\x19.api.v1.GetSessionRequest\x1a\x0f.api.v1.Session\"(\x82\xd3\xe4\x93\x02\":\x01*\"\x1d/api.v1/sessions/{session_id}\x12f\n" +
+	"\fListSessions\x12\x1b.api.v1.ListSessionsRequest\x1a\x1c.api.v1.ListSessionsResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api.v1/sessions\x12`\n" +
+	"\rUpdateSession\x12\x1c.api.v1.UpdateSessionRequest\x1a\x0f.api.v1.Session\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/UpdateSession\x12n\n" +
+	"\rDeleteSession\x12\x1c.api.v1.DeleteSessionRequest\x1a\x1d.api.v1.DeleteSessionResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/DeleteSession\x12\x82\x01\n" +
+	"\x10ListUserSessions\x12\x1f.api.v1.ListUserSessionsRequest\x1a .api.v1.ListUserSessionsResponse\"+\x82\xd3\xe4\x93\x02%:\x01*\" /api.v1/users/{user_id}/sessions\x12\x82\x01\n" +
+	"\x12BulkDeleteSessions\x12!.api.v1.BulkDeleteSessionsRequest\x1a\".api.v1.BulkDeleteSessionsResponse\"%\x82\xd3\xe4\x93\x02\x1f:\x01*\"\x1a/api.v1/BulkDeleteSessions\x12\x84\x01\n" +
+	"\x0fGetSessionStats\x12\x1e.api.v1.GetSessionStatsRequest\x1a\x1f.api.v1.GetSessionStatsResponse\"0\x82\xd3\xe4\x93\x02*:\x01*\"%/api.v1/users/{user_id}/session-stats\x12~\n" +
+	"\x11InvalidateSession\x12 .api.v1.InvalidateSessionRequest\x1a!.api.v1.InvalidateSessionResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/InvalidateSession\x12\\\n" +
+	"\fCreateApiKey\x12\x1b.api.v1.CreateApiKeyRequest\x1a\x0e.api.v1.ApiKey\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/CreateApiKey\x12y\n" +
+	"\vListApiKeys\x12\x1a.api.v1.ListApiKeysRequest\x1a\x1b.api.v1.ListApiKeysResponse\"1\x82\xd3\xe4\x93\x02+:\x01*\"&/api.v1/sessions/{session_id}/api-keys\x12j\n" +
+	"\fRevokeApiKey\x12\x1b.api.v1.RevokeApiKeyRequest\x1a\x1c.api.v1.RevokeApiKeyResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/RevokeApiKey2\xcb\x05\n" +
+	"\x0fMachinesService\x12f\n" +
+	"\x0fRegisterMachine\x12\x1e.api.v1.RegisterMachineRequest\x1a\x0f.api.v1.Machine\"\"\x82\xd3\xe4\x93\x02\x1c:\x01*\"\x17/api.v1/RegisterMachine\x12|\n" +
+	"\fListMachines\x12\x1b.api.v1.ListMachinesRequest\x1a\x1c.api.v1.ListMachinesResponse\"1\x82\xd3\xe4\x93\x02+:\x01*\"&/api.v1/sessions/{session_id}/machines\x12x\n" +
 	"\n" +
-	"CancelTask\x12\x16.api.CancelTaskRequest\x1a\x17.api.CancelTaskResponse\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/api/CancelTaskB\x11Z\x0ftoolplane/protob\x06proto3"
+	"GetMachine\x12\x19.api.v1.GetMachineRequest\x1a\x0f.api.v1.Machine\">\x82\xd3\xe4\x93\x028:\x01*\"3/api.v1/sessions/{session_id}/machines/{machine_id}\x12l\n" +
+	"\x11UpdateMachinePing\x12 .api.v1.UpdateMachinePingRequest\x1a\x0f.api.v1.Machine\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/UpdateMachinePing\x12~\n" +
+	"\x11UnregisterMachine\x12 .api.v1.UnregisterMachineRequest\x1a!.api.v1.UnregisterMachineResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/UnregisterMachine\x12j\n" +
+	"\fDrainMachine\x12\x1b.api.v1.DrainMachineRequest\x1a\x1c.api.v1.DrainMachineResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/DrainMachine2\xbb\t\n" +
+	"\x0fRequestsService\x12`\n" +
+	"\rCreateRequest\x12\x1c.api.v1.CreateRequestRequest\x1a\x0f.api.v1.Request\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/CreateRequest\x12x\n" +
+	"\n" +
+	"GetRequest\x12\x19.api.v1.GetRequestRequest\x1a\x0f.api.v1.Request\">\x82\xd3\xe4\x93\x028:\x01*\"3/api.v1/sessions/{session_id}/requests/{request_id}\x12|\n" +
+	"\fListRequests\x12\x1b.api.v1.ListRequestsRequest\x1a\x1c.api.v1.ListRequestsResponse\"1\x82\xd3\xe4\x93\x02+:\x01*\"&/api.v1/sessions/{session_id}/requests\x12`\n" +
+	"\rUpdateRequest\x12\x1c.api.v1.UpdateRequestRequest\x1a\x0f.api.v1.Request\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/UpdateRequest\x12]\n" +
+	"\fClaimRequest\x12\x1b.api.v1.ClaimRequestRequest\x1a\x0f.api.v1.Request\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/ClaimRequest\x12n\n" +
+	"\rCancelRequest\x12\x1c.api.v1.CancelRequestRequest\x1a\x1d.api.v1.CancelRequestResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/CancelRequest\x12\x86\x01\n" +
+	"\x13SubmitRequestResult\x12\".api.v1.SubmitRequestResultRequest\x1a#.api.v1.SubmitRequestResultResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api.v1/SubmitRequestResult\x12\x86\x01\n" +
+	"\x13AppendRequestChunks\x12\".api.v1.AppendRequestChunksRequest\x1a#.api.v1.AppendRequestChunksResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api.v1/AppendRequestChunks\x12\x9c\x01\n" +
+	"\x10GetRequestChunks\x12\x1f.api.v1.GetRequestChunksRequest\x1a .api.v1.GetRequestChunksResponse\"E\x82\xd3\xe4\x93\x02?:\x01*\":/api.v1/sessions/{session_id}/requests/{request_id}/chunks\x12l\n" +
+	"\x11RenewRequestLease\x12 .api.v1.RenewRequestLeaseRequest\x1a\x0f.api.v1.Request\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/RenewRequestLease2\xa5\x03\n" +
+	"\fTasksService\x12T\n" +
+	"\n" +
+	"CreateTask\x12\x19.api.v1.CreateTaskRequest\x1a\f.api.v1.Task\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api.v1/CreateTask\x12i\n" +
+	"\aGetTask\x12\x16.api.v1.GetTaskRequest\x1a\f.api.v1.Task\"8\x82\xd3\xe4\x93\x022:\x01*\"-/api.v1/sessions/{session_id}/tasks/{task_id}\x12p\n" +
+	"\tListTasks\x12\x18.api.v1.ListTasksRequest\x1a\x19.api.v1.ListTasksResponse\".\x82\xd3\xe4\x93\x02(:\x01*\"#/api.v1/sessions/{session_id}/tasks\x12b\n" +
+	"\n" +
+	"CancelTask\x12\x19.api.v1.CancelTaskRequest\x1a\x1a.api.v1.CancelTaskResponse\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/api.v1/CancelTaskB\x11Z\x0ftoolplane/protob\x06proto3"
 
 var (
 	file_proto_service_proto_rawDescOnce sync.Once
@@ -5046,189 +5288,219 @@ func file_proto_service_proto_rawDescGZIP() []byte {
 	return file_proto_service_proto_rawDescData
 }
 
-var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 76)
+var file_proto_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
 var file_proto_service_proto_goTypes = []any{
-	(*ResumeStreamRequest)(nil),         // 0: api.ResumeStreamRequest
-	(*DrainMachineRequest)(nil),         // 1: api.DrainMachineRequest
-	(*DrainMachineResponse)(nil),        // 2: api.DrainMachineResponse
-	(*Tool)(nil),                        // 3: api.Tool
-	(*Session)(nil),                     // 4: api.Session
-	(*ApiKey)(nil),                      // 5: api.ApiKey
-	(*Machine)(nil),                     // 6: api.Machine
-	(*Request)(nil),                     // 7: api.Request
-	(*RegisterToolRequest)(nil),         // 8: api.RegisterToolRequest
-	(*RegisterToolResponse)(nil),        // 9: api.RegisterToolResponse
-	(*ListToolsRequest)(nil),            // 10: api.ListToolsRequest
-	(*ListToolsResponse)(nil),           // 11: api.ListToolsResponse
-	(*GetToolByIdRequest)(nil),          // 12: api.GetToolByIdRequest
-	(*GetToolByNameRequest)(nil),        // 13: api.GetToolByNameRequest
-	(*GetToolResponse)(nil),             // 14: api.GetToolResponse
-	(*DeleteToolRequest)(nil),           // 15: api.DeleteToolRequest
-	(*DeleteToolResponse)(nil),          // 16: api.DeleteToolResponse
-	(*UpdateToolPingRequest)(nil),       // 17: api.UpdateToolPingRequest
-	(*CreateSessionRequest)(nil),        // 18: api.CreateSessionRequest
-	(*CreateSessionResponse)(nil),       // 19: api.CreateSessionResponse
-	(*GetSessionRequest)(nil),           // 20: api.GetSessionRequest
-	(*ListSessionsRequest)(nil),         // 21: api.ListSessionsRequest
-	(*ListSessionsResponse)(nil),        // 22: api.ListSessionsResponse
-	(*ListUserSessionsRequest)(nil),     // 23: api.ListUserSessionsRequest
-	(*ListUserSessionsResponse)(nil),    // 24: api.ListUserSessionsResponse
-	(*BulkDeleteSessionsRequest)(nil),   // 25: api.BulkDeleteSessionsRequest
-	(*BulkDeleteSessionsResponse)(nil),  // 26: api.BulkDeleteSessionsResponse
-	(*GetSessionStatsRequest)(nil),      // 27: api.GetSessionStatsRequest
-	(*GetSessionStatsResponse)(nil),     // 28: api.GetSessionStatsResponse
-	(*InvalidateSessionRequest)(nil),    // 29: api.InvalidateSessionRequest
-	(*InvalidateSessionResponse)(nil),   // 30: api.InvalidateSessionResponse
-	(*UpdateSessionRequest)(nil),        // 31: api.UpdateSessionRequest
-	(*DeleteSessionRequest)(nil),        // 32: api.DeleteSessionRequest
-	(*DeleteSessionResponse)(nil),       // 33: api.DeleteSessionResponse
-	(*CreateApiKeyRequest)(nil),         // 34: api.CreateApiKeyRequest
-	(*ListApiKeysRequest)(nil),          // 35: api.ListApiKeysRequest
-	(*ListApiKeysResponse)(nil),         // 36: api.ListApiKeysResponse
-	(*RevokeApiKeyRequest)(nil),         // 37: api.RevokeApiKeyRequest
-	(*RevokeApiKeyResponse)(nil),        // 38: api.RevokeApiKeyResponse
-	(*RegisterMachineRequest)(nil),      // 39: api.RegisterMachineRequest
-	(*ListMachinesRequest)(nil),         // 40: api.ListMachinesRequest
-	(*ListMachinesResponse)(nil),        // 41: api.ListMachinesResponse
-	(*GetMachineRequest)(nil),           // 42: api.GetMachineRequest
-	(*UpdateMachinePingRequest)(nil),    // 43: api.UpdateMachinePingRequest
-	(*UnregisterMachineRequest)(nil),    // 44: api.UnregisterMachineRequest
-	(*UnregisterMachineResponse)(nil),   // 45: api.UnregisterMachineResponse
-	(*ExecuteToolRequest)(nil),          // 46: api.ExecuteToolRequest
-	(*ExecuteToolResponse)(nil),         // 47: api.ExecuteToolResponse
-	(*ExecuteToolChunk)(nil),            // 48: api.ExecuteToolChunk
-	(*CreateRequestRequest)(nil),        // 49: api.CreateRequestRequest
-	(*GetRequestRequest)(nil),           // 50: api.GetRequestRequest
-	(*ListRequestsRequest)(nil),         // 51: api.ListRequestsRequest
-	(*ListRequestsResponse)(nil),        // 52: api.ListRequestsResponse
-	(*UpdateRequestRequest)(nil),        // 53: api.UpdateRequestRequest
-	(*ClaimRequestRequest)(nil),         // 54: api.ClaimRequestRequest
-	(*CancelRequestRequest)(nil),        // 55: api.CancelRequestRequest
-	(*CancelRequestResponse)(nil),       // 56: api.CancelRequestResponse
-	(*SubmitRequestResultRequest)(nil),  // 57: api.SubmitRequestResultRequest
-	(*SubmitRequestResultResponse)(nil), // 58: api.SubmitRequestResultResponse
-	(*AppendRequestChunksRequest)(nil),  // 59: api.AppendRequestChunksRequest
-	(*AppendRequestChunksResponse)(nil), // 60: api.AppendRequestChunksResponse
-	(*GetRequestChunksRequest)(nil),     // 61: api.GetRequestChunksRequest
-	(*GetRequestChunksResponse)(nil),    // 62: api.GetRequestChunksResponse
-	(*RenewRequestLeaseRequest)(nil),    // 63: api.RenewRequestLeaseRequest
-	(*HealthCheckRequest)(nil),          // 64: api.HealthCheckRequest
-	(*HealthCheckResponse)(nil),         // 65: api.HealthCheckResponse
-	(*Task)(nil),                        // 66: api.Task
-	(*CreateTaskRequest)(nil),           // 67: api.CreateTaskRequest
-	(*GetTaskRequest)(nil),              // 68: api.GetTaskRequest
-	(*ListTasksRequest)(nil),            // 69: api.ListTasksRequest
-	(*ListTasksResponse)(nil),           // 70: api.ListTasksResponse
-	(*CancelTaskRequest)(nil),           // 71: api.CancelTaskRequest
-	(*CancelTaskResponse)(nil),          // 72: api.CancelTaskResponse
-	nil,                                 // 73: api.Tool.ConfigEntry
-	nil,                                 // 74: api.RegisterToolRequest.ConfigEntry
-	nil,                                 // 75: api.SubmitRequestResultRequest.MetaEntry
+	(RequestStatus)(0),                  // 0: api.v1.RequestStatus
+	(TaskStatus)(0),                     // 1: api.v1.TaskStatus
+	(*ListPage)(nil),                    // 2: api.v1.ListPage
+	(*ResumeStreamRequest)(nil),         // 3: api.v1.ResumeStreamRequest
+	(*DrainMachineRequest)(nil),         // 4: api.v1.DrainMachineRequest
+	(*DrainMachineResponse)(nil),        // 5: api.v1.DrainMachineResponse
+	(*Tool)(nil),                        // 6: api.v1.Tool
+	(*Session)(nil),                     // 7: api.v1.Session
+	(*ApiKey)(nil),                      // 8: api.v1.ApiKey
+	(*Machine)(nil),                     // 9: api.v1.Machine
+	(*Request)(nil),                     // 10: api.v1.Request
+	(*RegisterToolRequest)(nil),         // 11: api.v1.RegisterToolRequest
+	(*RegisterToolResponse)(nil),        // 12: api.v1.RegisterToolResponse
+	(*ListToolsRequest)(nil),            // 13: api.v1.ListToolsRequest
+	(*ListToolsResponse)(nil),           // 14: api.v1.ListToolsResponse
+	(*GetToolRequest)(nil),              // 15: api.v1.GetToolRequest
+	(*GetToolByIdRequest)(nil),          // 16: api.v1.GetToolByIdRequest
+	(*GetToolByNameRequest)(nil),        // 17: api.v1.GetToolByNameRequest
+	(*GetToolResponse)(nil),             // 18: api.v1.GetToolResponse
+	(*DeleteToolRequest)(nil),           // 19: api.v1.DeleteToolRequest
+	(*DeleteToolResponse)(nil),          // 20: api.v1.DeleteToolResponse
+	(*UpdateToolPingRequest)(nil),       // 21: api.v1.UpdateToolPingRequest
+	(*CreateSessionRequest)(nil),        // 22: api.v1.CreateSessionRequest
+	(*CreateSessionResponse)(nil),       // 23: api.v1.CreateSessionResponse
+	(*GetSessionRequest)(nil),           // 24: api.v1.GetSessionRequest
+	(*ListSessionsRequest)(nil),         // 25: api.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),        // 26: api.v1.ListSessionsResponse
+	(*ListUserSessionsRequest)(nil),     // 27: api.v1.ListUserSessionsRequest
+	(*ListUserSessionsResponse)(nil),    // 28: api.v1.ListUserSessionsResponse
+	(*BulkDeleteSessionsRequest)(nil),   // 29: api.v1.BulkDeleteSessionsRequest
+	(*BulkDeleteSessionsResponse)(nil),  // 30: api.v1.BulkDeleteSessionsResponse
+	(*GetSessionStatsRequest)(nil),      // 31: api.v1.GetSessionStatsRequest
+	(*GetSessionStatsResponse)(nil),     // 32: api.v1.GetSessionStatsResponse
+	(*InvalidateSessionRequest)(nil),    // 33: api.v1.InvalidateSessionRequest
+	(*InvalidateSessionResponse)(nil),   // 34: api.v1.InvalidateSessionResponse
+	(*UpdateSessionRequest)(nil),        // 35: api.v1.UpdateSessionRequest
+	(*DeleteSessionRequest)(nil),        // 36: api.v1.DeleteSessionRequest
+	(*DeleteSessionResponse)(nil),       // 37: api.v1.DeleteSessionResponse
+	(*CreateApiKeyRequest)(nil),         // 38: api.v1.CreateApiKeyRequest
+	(*ListApiKeysRequest)(nil),          // 39: api.v1.ListApiKeysRequest
+	(*ListApiKeysResponse)(nil),         // 40: api.v1.ListApiKeysResponse
+	(*RevokeApiKeyRequest)(nil),         // 41: api.v1.RevokeApiKeyRequest
+	(*RevokeApiKeyResponse)(nil),        // 42: api.v1.RevokeApiKeyResponse
+	(*RegisterMachineRequest)(nil),      // 43: api.v1.RegisterMachineRequest
+	(*ListMachinesRequest)(nil),         // 44: api.v1.ListMachinesRequest
+	(*ListMachinesResponse)(nil),        // 45: api.v1.ListMachinesResponse
+	(*GetMachineRequest)(nil),           // 46: api.v1.GetMachineRequest
+	(*UpdateMachinePingRequest)(nil),    // 47: api.v1.UpdateMachinePingRequest
+	(*UnregisterMachineRequest)(nil),    // 48: api.v1.UnregisterMachineRequest
+	(*UnregisterMachineResponse)(nil),   // 49: api.v1.UnregisterMachineResponse
+	(*ExecuteToolRequest)(nil),          // 50: api.v1.ExecuteToolRequest
+	(*ExecuteToolResponse)(nil),         // 51: api.v1.ExecuteToolResponse
+	(*ExecuteToolChunk)(nil),            // 52: api.v1.ExecuteToolChunk
+	(*CreateRequestRequest)(nil),        // 53: api.v1.CreateRequestRequest
+	(*GetRequestRequest)(nil),           // 54: api.v1.GetRequestRequest
+	(*ListRequestsRequest)(nil),         // 55: api.v1.ListRequestsRequest
+	(*ListRequestsResponse)(nil),        // 56: api.v1.ListRequestsResponse
+	(*UpdateRequestRequest)(nil),        // 57: api.v1.UpdateRequestRequest
+	(*ClaimRequestRequest)(nil),         // 58: api.v1.ClaimRequestRequest
+	(*CancelRequestRequest)(nil),        // 59: api.v1.CancelRequestRequest
+	(*CancelRequestResponse)(nil),       // 60: api.v1.CancelRequestResponse
+	(*SubmitRequestResultRequest)(nil),  // 61: api.v1.SubmitRequestResultRequest
+	(*SubmitRequestResultResponse)(nil), // 62: api.v1.SubmitRequestResultResponse
+	(*AppendRequestChunksRequest)(nil),  // 63: api.v1.AppendRequestChunksRequest
+	(*AppendRequestChunksResponse)(nil), // 64: api.v1.AppendRequestChunksResponse
+	(*GetRequestChunksRequest)(nil),     // 65: api.v1.GetRequestChunksRequest
+	(*GetRequestChunksResponse)(nil),    // 66: api.v1.GetRequestChunksResponse
+	(*RenewRequestLeaseRequest)(nil),    // 67: api.v1.RenewRequestLeaseRequest
+	(*HealthCheckRequest)(nil),          // 68: api.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),         // 69: api.v1.HealthCheckResponse
+	(*Task)(nil),                        // 70: api.v1.Task
+	(*CreateTaskRequest)(nil),           // 71: api.v1.CreateTaskRequest
+	(*GetTaskRequest)(nil),              // 72: api.v1.GetTaskRequest
+	(*ListTasksRequest)(nil),            // 73: api.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),           // 74: api.v1.ListTasksResponse
+	(*CancelTaskRequest)(nil),           // 75: api.v1.CancelTaskRequest
+	(*CancelTaskResponse)(nil),          // 76: api.v1.CancelTaskResponse
+	nil,                                 // 77: api.v1.Tool.ConfigEntry
+	nil,                                 // 78: api.v1.RegisterToolRequest.ConfigEntry
+	nil,                                 // 79: api.v1.SubmitRequestResultRequest.MetaEntry
+	(*timestamppb.Timestamp)(nil),       // 80: google.protobuf.Timestamp
 }
 var file_proto_service_proto_depIdxs = []int32{
-	73, // 0: api.Tool.config:type_name -> api.Tool.ConfigEntry
-	74, // 1: api.RegisterToolRequest.config:type_name -> api.RegisterToolRequest.ConfigEntry
-	3,  // 2: api.RegisterToolResponse.tool:type_name -> api.Tool
-	3,  // 3: api.ListToolsResponse.tools:type_name -> api.Tool
-	3,  // 4: api.GetToolResponse.tool:type_name -> api.Tool
-	4,  // 5: api.CreateSessionResponse.session:type_name -> api.Session
-	4,  // 6: api.ListSessionsResponse.sessions:type_name -> api.Session
-	4,  // 7: api.ListUserSessionsResponse.sessions:type_name -> api.Session
-	5,  // 8: api.ListApiKeysResponse.api_keys:type_name -> api.ApiKey
-	8,  // 9: api.RegisterMachineRequest.tools:type_name -> api.RegisterToolRequest
-	6,  // 10: api.ListMachinesResponse.machines:type_name -> api.Machine
-	7,  // 11: api.ListRequestsResponse.requests:type_name -> api.Request
-	75, // 12: api.SubmitRequestResultRequest.meta:type_name -> api.SubmitRequestResultRequest.MetaEntry
-	66, // 13: api.ListTasksResponse.tasks:type_name -> api.Task
-	8,  // 14: api.ToolService.RegisterTool:input_type -> api.RegisterToolRequest
-	10, // 15: api.ToolService.ListTools:input_type -> api.ListToolsRequest
-	12, // 16: api.ToolService.GetToolById:input_type -> api.GetToolByIdRequest
-	13, // 17: api.ToolService.GetToolByName:input_type -> api.GetToolByNameRequest
-	15, // 18: api.ToolService.DeleteTool:input_type -> api.DeleteToolRequest
-	17, // 19: api.ToolService.UpdateToolPing:input_type -> api.UpdateToolPingRequest
-	46, // 20: api.ToolService.StreamExecuteTool:input_type -> api.ExecuteToolRequest
-	0,  // 21: api.ToolService.ResumeStream:input_type -> api.ResumeStreamRequest
-	46, // 22: api.ToolService.ExecuteTool:input_type -> api.ExecuteToolRequest
-	64, // 23: api.ToolService.HealthCheck:input_type -> api.HealthCheckRequest
-	18, // 24: api.SessionsService.CreateSession:input_type -> api.CreateSessionRequest
-	20, // 25: api.SessionsService.GetSession:input_type -> api.GetSessionRequest
-	21, // 26: api.SessionsService.ListSessions:input_type -> api.ListSessionsRequest
-	31, // 27: api.SessionsService.UpdateSession:input_type -> api.UpdateSessionRequest
-	32, // 28: api.SessionsService.DeleteSession:input_type -> api.DeleteSessionRequest
-	23, // 29: api.SessionsService.ListUserSessions:input_type -> api.ListUserSessionsRequest
-	25, // 30: api.SessionsService.BulkDeleteSessions:input_type -> api.BulkDeleteSessionsRequest
-	27, // 31: api.SessionsService.GetSessionStats:input_type -> api.GetSessionStatsRequest
-	29, // 32: api.SessionsService.InvalidateSession:input_type -> api.InvalidateSessionRequest
-	34, // 33: api.SessionsService.CreateApiKey:input_type -> api.CreateApiKeyRequest
-	35, // 34: api.SessionsService.ListApiKeys:input_type -> api.ListApiKeysRequest
-	37, // 35: api.SessionsService.RevokeApiKey:input_type -> api.RevokeApiKeyRequest
-	39, // 36: api.MachinesService.RegisterMachine:input_type -> api.RegisterMachineRequest
-	40, // 37: api.MachinesService.ListMachines:input_type -> api.ListMachinesRequest
-	42, // 38: api.MachinesService.GetMachine:input_type -> api.GetMachineRequest
-	43, // 39: api.MachinesService.UpdateMachinePing:input_type -> api.UpdateMachinePingRequest
-	44, // 40: api.MachinesService.UnregisterMachine:input_type -> api.UnregisterMachineRequest
-	1,  // 41: api.MachinesService.DrainMachine:input_type -> api.DrainMachineRequest
-	49, // 42: api.RequestsService.CreateRequest:input_type -> api.CreateRequestRequest
-	50, // 43: api.RequestsService.GetRequest:input_type -> api.GetRequestRequest
-	51, // 44: api.RequestsService.ListRequests:input_type -> api.ListRequestsRequest
-	53, // 45: api.RequestsService.UpdateRequest:input_type -> api.UpdateRequestRequest
-	54, // 46: api.RequestsService.ClaimRequest:input_type -> api.ClaimRequestRequest
-	55, // 47: api.RequestsService.CancelRequest:input_type -> api.CancelRequestRequest
-	57, // 48: api.RequestsService.SubmitRequestResult:input_type -> api.SubmitRequestResultRequest
-	59, // 49: api.RequestsService.AppendRequestChunks:input_type -> api.AppendRequestChunksRequest
-	61, // 50: api.RequestsService.GetRequestChunks:input_type -> api.GetRequestChunksRequest
-	63, // 51: api.RequestsService.RenewRequestLease:input_type -> api.RenewRequestLeaseRequest
-	67, // 52: api.TasksService.CreateTask:input_type -> api.CreateTaskRequest
-	68, // 53: api.TasksService.GetTask:input_type -> api.GetTaskRequest
-	69, // 54: api.TasksService.ListTasks:input_type -> api.ListTasksRequest
-	71, // 55: api.TasksService.CancelTask:input_type -> api.CancelTaskRequest
-	9,  // 56: api.ToolService.RegisterTool:output_type -> api.RegisterToolResponse
-	11, // 57: api.ToolService.ListTools:output_type -> api.ListToolsResponse
-	14, // 58: api.ToolService.GetToolById:output_type -> api.GetToolResponse
-	14, // 59: api.ToolService.GetToolByName:output_type -> api.GetToolResponse
-	16, // 60: api.ToolService.DeleteTool:output_type -> api.DeleteToolResponse
-	3,  // 61: api.ToolService.UpdateToolPing:output_type -> api.Tool
-	48, // 62: api.ToolService.StreamExecuteTool:output_type -> api.ExecuteToolChunk
-	48, // 63: api.ToolService.ResumeStream:output_type -> api.ExecuteToolChunk
-	47, // 64: api.ToolService.ExecuteTool:output_type -> api.ExecuteToolResponse
-	65, // 65: api.ToolService.HealthCheck:output_type -> api.HealthCheckResponse
-	19, // 66: api.SessionsService.CreateSession:output_type -> api.CreateSessionResponse
-	4,  // 67: api.SessionsService.GetSession:output_type -> api.Session
-	22, // 68: api.SessionsService.ListSessions:output_type -> api.ListSessionsResponse
-	4,  // 69: api.SessionsService.UpdateSession:output_type -> api.Session
-	33, // 70: api.SessionsService.DeleteSession:output_type -> api.DeleteSessionResponse
-	24, // 71: api.SessionsService.ListUserSessions:output_type -> api.ListUserSessionsResponse
-	26, // 72: api.SessionsService.BulkDeleteSessions:output_type -> api.BulkDeleteSessionsResponse
-	28, // 73: api.SessionsService.GetSessionStats:output_type -> api.GetSessionStatsResponse
-	30, // 74: api.SessionsService.InvalidateSession:output_type -> api.InvalidateSessionResponse
-	5,  // 75: api.SessionsService.CreateApiKey:output_type -> api.ApiKey
-	36, // 76: api.SessionsService.ListApiKeys:output_type -> api.ListApiKeysResponse
-	38, // 77: api.SessionsService.RevokeApiKey:output_type -> api.RevokeApiKeyResponse
-	6,  // 78: api.MachinesService.RegisterMachine:output_type -> api.Machine
-	41, // 79: api.MachinesService.ListMachines:output_type -> api.ListMachinesResponse
-	6,  // 80: api.MachinesService.GetMachine:output_type -> api.Machine
-	6,  // 81: api.MachinesService.UpdateMachinePing:output_type -> api.Machine
-	45, // 82: api.MachinesService.UnregisterMachine:output_type -> api.UnregisterMachineResponse
-	2,  // 83: api.MachinesService.DrainMachine:output_type -> api.DrainMachineResponse
-	7,  // 84: api.RequestsService.CreateRequest:output_type -> api.Request
-	7,  // 85: api.RequestsService.GetRequest:output_type -> api.Request
-	52, // 86: api.RequestsService.ListRequests:output_type -> api.ListRequestsResponse
-	7,  // 87: api.RequestsService.UpdateRequest:output_type -> api.Request
-	7,  // 88: api.RequestsService.ClaimRequest:output_type -> api.Request
-	56, // 89: api.RequestsService.CancelRequest:output_type -> api.CancelRequestResponse
-	58, // 90: api.RequestsService.SubmitRequestResult:output_type -> api.SubmitRequestResultResponse
-	60, // 91: api.RequestsService.AppendRequestChunks:output_type -> api.AppendRequestChunksResponse
-	62, // 92: api.RequestsService.GetRequestChunks:output_type -> api.GetRequestChunksResponse
-	7,  // 93: api.RequestsService.RenewRequestLease:output_type -> api.Request
-	66, // 94: api.TasksService.CreateTask:output_type -> api.Task
-	66, // 95: api.TasksService.GetTask:output_type -> api.Task
-	70, // 96: api.TasksService.ListTasks:output_type -> api.ListTasksResponse
-	72, // 97: api.TasksService.CancelTask:output_type -> api.CancelTaskResponse
-	56, // [56:98] is the sub-list for method output_type
-	14, // [14:56] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	77, // 0: api.v1.Tool.config:type_name -> api.v1.Tool.ConfigEntry
+	80, // 1: api.v1.Tool.created_at:type_name -> google.protobuf.Timestamp
+	80, // 2: api.v1.Tool.last_ping_at:type_name -> google.protobuf.Timestamp
+	80, // 3: api.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	80, // 4: api.v1.ApiKey.created_at:type_name -> google.protobuf.Timestamp
+	80, // 5: api.v1.ApiKey.revoked_at:type_name -> google.protobuf.Timestamp
+	80, // 6: api.v1.Machine.created_at:type_name -> google.protobuf.Timestamp
+	80, // 7: api.v1.Machine.last_ping_at:type_name -> google.protobuf.Timestamp
+	0,  // 8: api.v1.Request.status:type_name -> api.v1.RequestStatus
+	80, // 9: api.v1.Request.created_at:type_name -> google.protobuf.Timestamp
+	80, // 10: api.v1.Request.updated_at:type_name -> google.protobuf.Timestamp
+	80, // 11: api.v1.Request.lease_expires_at:type_name -> google.protobuf.Timestamp
+	78, // 12: api.v1.RegisterToolRequest.config:type_name -> api.v1.RegisterToolRequest.ConfigEntry
+	6,  // 13: api.v1.RegisterToolResponse.tool:type_name -> api.v1.Tool
+	6,  // 14: api.v1.ListToolsResponse.tools:type_name -> api.v1.Tool
+	6,  // 15: api.v1.GetToolResponse.tool:type_name -> api.v1.Tool
+	7,  // 16: api.v1.CreateSessionResponse.session:type_name -> api.v1.Session
+	7,  // 17: api.v1.ListSessionsResponse.sessions:type_name -> api.v1.Session
+	7,  // 18: api.v1.ListUserSessionsResponse.sessions:type_name -> api.v1.Session
+	2,  // 19: api.v1.ListUserSessionsResponse.page:type_name -> api.v1.ListPage
+	8,  // 20: api.v1.ListApiKeysResponse.api_keys:type_name -> api.v1.ApiKey
+	11, // 21: api.v1.RegisterMachineRequest.tools:type_name -> api.v1.RegisterToolRequest
+	9,  // 22: api.v1.ListMachinesResponse.machines:type_name -> api.v1.Machine
+	0,  // 23: api.v1.ExecuteToolResponse.status:type_name -> api.v1.RequestStatus
+	0,  // 24: api.v1.ListRequestsRequest.status:type_name -> api.v1.RequestStatus
+	10, // 25: api.v1.ListRequestsResponse.requests:type_name -> api.v1.Request
+	2,  // 26: api.v1.ListRequestsResponse.page:type_name -> api.v1.ListPage
+	0,  // 27: api.v1.UpdateRequestRequest.status:type_name -> api.v1.RequestStatus
+	79, // 28: api.v1.SubmitRequestResultRequest.meta:type_name -> api.v1.SubmitRequestResultRequest.MetaEntry
+	1,  // 29: api.v1.Task.status:type_name -> api.v1.TaskStatus
+	80, // 30: api.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	80, // 31: api.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	80, // 32: api.v1.Task.completed_at:type_name -> google.protobuf.Timestamp
+	70, // 33: api.v1.ListTasksResponse.tasks:type_name -> api.v1.Task
+	11, // 34: api.v1.ToolService.RegisterTool:input_type -> api.v1.RegisterToolRequest
+	13, // 35: api.v1.ToolService.ListTools:input_type -> api.v1.ListToolsRequest
+	15, // 36: api.v1.ToolService.GetTool:input_type -> api.v1.GetToolRequest
+	16, // 37: api.v1.ToolService.GetToolById:input_type -> api.v1.GetToolByIdRequest
+	17, // 38: api.v1.ToolService.GetToolByName:input_type -> api.v1.GetToolByNameRequest
+	19, // 39: api.v1.ToolService.DeleteTool:input_type -> api.v1.DeleteToolRequest
+	21, // 40: api.v1.ToolService.UpdateToolPing:input_type -> api.v1.UpdateToolPingRequest
+	50, // 41: api.v1.ToolService.StreamExecuteTool:input_type -> api.v1.ExecuteToolRequest
+	3,  // 42: api.v1.ToolService.ResumeStream:input_type -> api.v1.ResumeStreamRequest
+	50, // 43: api.v1.ToolService.InvokeTool:input_type -> api.v1.ExecuteToolRequest
+	50, // 44: api.v1.ToolService.ExecuteTool:input_type -> api.v1.ExecuteToolRequest
+	68, // 45: api.v1.ToolService.HealthCheck:input_type -> api.v1.HealthCheckRequest
+	22, // 46: api.v1.SessionsService.CreateSession:input_type -> api.v1.CreateSessionRequest
+	24, // 47: api.v1.SessionsService.GetSession:input_type -> api.v1.GetSessionRequest
+	25, // 48: api.v1.SessionsService.ListSessions:input_type -> api.v1.ListSessionsRequest
+	35, // 49: api.v1.SessionsService.UpdateSession:input_type -> api.v1.UpdateSessionRequest
+	36, // 50: api.v1.SessionsService.DeleteSession:input_type -> api.v1.DeleteSessionRequest
+	27, // 51: api.v1.SessionsService.ListUserSessions:input_type -> api.v1.ListUserSessionsRequest
+	29, // 52: api.v1.SessionsService.BulkDeleteSessions:input_type -> api.v1.BulkDeleteSessionsRequest
+	31, // 53: api.v1.SessionsService.GetSessionStats:input_type -> api.v1.GetSessionStatsRequest
+	33, // 54: api.v1.SessionsService.InvalidateSession:input_type -> api.v1.InvalidateSessionRequest
+	38, // 55: api.v1.SessionsService.CreateApiKey:input_type -> api.v1.CreateApiKeyRequest
+	39, // 56: api.v1.SessionsService.ListApiKeys:input_type -> api.v1.ListApiKeysRequest
+	41, // 57: api.v1.SessionsService.RevokeApiKey:input_type -> api.v1.RevokeApiKeyRequest
+	43, // 58: api.v1.MachinesService.RegisterMachine:input_type -> api.v1.RegisterMachineRequest
+	44, // 59: api.v1.MachinesService.ListMachines:input_type -> api.v1.ListMachinesRequest
+	46, // 60: api.v1.MachinesService.GetMachine:input_type -> api.v1.GetMachineRequest
+	47, // 61: api.v1.MachinesService.UpdateMachinePing:input_type -> api.v1.UpdateMachinePingRequest
+	48, // 62: api.v1.MachinesService.UnregisterMachine:input_type -> api.v1.UnregisterMachineRequest
+	4,  // 63: api.v1.MachinesService.DrainMachine:input_type -> api.v1.DrainMachineRequest
+	53, // 64: api.v1.RequestsService.CreateRequest:input_type -> api.v1.CreateRequestRequest
+	54, // 65: api.v1.RequestsService.GetRequest:input_type -> api.v1.GetRequestRequest
+	55, // 66: api.v1.RequestsService.ListRequests:input_type -> api.v1.ListRequestsRequest
+	57, // 67: api.v1.RequestsService.UpdateRequest:input_type -> api.v1.UpdateRequestRequest
+	58, // 68: api.v1.RequestsService.ClaimRequest:input_type -> api.v1.ClaimRequestRequest
+	59, // 69: api.v1.RequestsService.CancelRequest:input_type -> api.v1.CancelRequestRequest
+	61, // 70: api.v1.RequestsService.SubmitRequestResult:input_type -> api.v1.SubmitRequestResultRequest
+	63, // 71: api.v1.RequestsService.AppendRequestChunks:input_type -> api.v1.AppendRequestChunksRequest
+	65, // 72: api.v1.RequestsService.GetRequestChunks:input_type -> api.v1.GetRequestChunksRequest
+	67, // 73: api.v1.RequestsService.RenewRequestLease:input_type -> api.v1.RenewRequestLeaseRequest
+	71, // 74: api.v1.TasksService.CreateTask:input_type -> api.v1.CreateTaskRequest
+	72, // 75: api.v1.TasksService.GetTask:input_type -> api.v1.GetTaskRequest
+	73, // 76: api.v1.TasksService.ListTasks:input_type -> api.v1.ListTasksRequest
+	75, // 77: api.v1.TasksService.CancelTask:input_type -> api.v1.CancelTaskRequest
+	12, // 78: api.v1.ToolService.RegisterTool:output_type -> api.v1.RegisterToolResponse
+	14, // 79: api.v1.ToolService.ListTools:output_type -> api.v1.ListToolsResponse
+	18, // 80: api.v1.ToolService.GetTool:output_type -> api.v1.GetToolResponse
+	18, // 81: api.v1.ToolService.GetToolById:output_type -> api.v1.GetToolResponse
+	18, // 82: api.v1.ToolService.GetToolByName:output_type -> api.v1.GetToolResponse
+	20, // 83: api.v1.ToolService.DeleteTool:output_type -> api.v1.DeleteToolResponse
+	6,  // 84: api.v1.ToolService.UpdateToolPing:output_type -> api.v1.Tool
+	52, // 85: api.v1.ToolService.StreamExecuteTool:output_type -> api.v1.ExecuteToolChunk
+	52, // 86: api.v1.ToolService.ResumeStream:output_type -> api.v1.ExecuteToolChunk
+	51, // 87: api.v1.ToolService.InvokeTool:output_type -> api.v1.ExecuteToolResponse
+	51, // 88: api.v1.ToolService.ExecuteTool:output_type -> api.v1.ExecuteToolResponse
+	69, // 89: api.v1.ToolService.HealthCheck:output_type -> api.v1.HealthCheckResponse
+	23, // 90: api.v1.SessionsService.CreateSession:output_type -> api.v1.CreateSessionResponse
+	7,  // 91: api.v1.SessionsService.GetSession:output_type -> api.v1.Session
+	26, // 92: api.v1.SessionsService.ListSessions:output_type -> api.v1.ListSessionsResponse
+	7,  // 93: api.v1.SessionsService.UpdateSession:output_type -> api.v1.Session
+	37, // 94: api.v1.SessionsService.DeleteSession:output_type -> api.v1.DeleteSessionResponse
+	28, // 95: api.v1.SessionsService.ListUserSessions:output_type -> api.v1.ListUserSessionsResponse
+	30, // 96: api.v1.SessionsService.BulkDeleteSessions:output_type -> api.v1.BulkDeleteSessionsResponse
+	32, // 97: api.v1.SessionsService.GetSessionStats:output_type -> api.v1.GetSessionStatsResponse
+	34, // 98: api.v1.SessionsService.InvalidateSession:output_type -> api.v1.InvalidateSessionResponse
+	8,  // 99: api.v1.SessionsService.CreateApiKey:output_type -> api.v1.ApiKey
+	40, // 100: api.v1.SessionsService.ListApiKeys:output_type -> api.v1.ListApiKeysResponse
+	42, // 101: api.v1.SessionsService.RevokeApiKey:output_type -> api.v1.RevokeApiKeyResponse
+	9,  // 102: api.v1.MachinesService.RegisterMachine:output_type -> api.v1.Machine
+	45, // 103: api.v1.MachinesService.ListMachines:output_type -> api.v1.ListMachinesResponse
+	9,  // 104: api.v1.MachinesService.GetMachine:output_type -> api.v1.Machine
+	9,  // 105: api.v1.MachinesService.UpdateMachinePing:output_type -> api.v1.Machine
+	49, // 106: api.v1.MachinesService.UnregisterMachine:output_type -> api.v1.UnregisterMachineResponse
+	5,  // 107: api.v1.MachinesService.DrainMachine:output_type -> api.v1.DrainMachineResponse
+	10, // 108: api.v1.RequestsService.CreateRequest:output_type -> api.v1.Request
+	10, // 109: api.v1.RequestsService.GetRequest:output_type -> api.v1.Request
+	56, // 110: api.v1.RequestsService.ListRequests:output_type -> api.v1.ListRequestsResponse
+	10, // 111: api.v1.RequestsService.UpdateRequest:output_type -> api.v1.Request
+	10, // 112: api.v1.RequestsService.ClaimRequest:output_type -> api.v1.Request
+	60, // 113: api.v1.RequestsService.CancelRequest:output_type -> api.v1.CancelRequestResponse
+	62, // 114: api.v1.RequestsService.SubmitRequestResult:output_type -> api.v1.SubmitRequestResultResponse
+	64, // 115: api.v1.RequestsService.AppendRequestChunks:output_type -> api.v1.AppendRequestChunksResponse
+	66, // 116: api.v1.RequestsService.GetRequestChunks:output_type -> api.v1.GetRequestChunksResponse
+	10, // 117: api.v1.RequestsService.RenewRequestLease:output_type -> api.v1.Request
+	70, // 118: api.v1.TasksService.CreateTask:output_type -> api.v1.Task
+	70, // 119: api.v1.TasksService.GetTask:output_type -> api.v1.Task
+	74, // 120: api.v1.TasksService.ListTasks:output_type -> api.v1.ListTasksResponse
+	76, // 121: api.v1.TasksService.CancelTask:output_type -> api.v1.CancelTaskResponse
+	78, // [78:122] is the sub-list for method output_type
+	34, // [34:78] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_proto_service_proto_init() }
@@ -5241,13 +5513,14 @@ func file_proto_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_service_proto_rawDesc), len(file_proto_service_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   76,
+			NumEnums:      2,
+			NumMessages:   78,
 			NumExtensions: 0,
 			NumServices:   5,
 		},
 		GoTypes:           file_proto_service_proto_goTypes,
 		DependencyIndexes: file_proto_service_proto_depIdxs,
+		EnumInfos:         file_proto_service_proto_enumTypes,
 		MessageInfos:      file_proto_service_proto_msgTypes,
 	}.Build()
 	File_proto_service_proto = out.File

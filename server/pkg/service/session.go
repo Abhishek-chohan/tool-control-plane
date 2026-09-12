@@ -140,8 +140,7 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 }
 
 // CreateSession creates a new session with an optional api key and an initial API key
-func (s *SessionsService) CreateSession(userID, name, description, apiKey, requestedID, namespace string) (*model.Session, error) {
-	_ = apiKey
+func (s *SessionsService) CreateSession(userID, name, description, requestedID, namespace string) (*model.Session, error) {
 	userLock := s.userLock(userID)
 	userLock.Lock()
 	defer userLock.Unlock()

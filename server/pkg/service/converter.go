@@ -12,12 +12,7 @@ import (
 // in Tier 2 Item 9 because they had zero call sites outside this package.
 
 func convertPublicSessionToProto(in *model.Session) *proto.Session {
-	out := convertModelSessionToProto(in)
-	if out == nil {
-		return nil
-	}
-	out.ApiKey = ""
-	return out
+	return convertModelSessionToProto(in)
 }
 
 func convertPublicAPIKeyToProto(in *model.ApiKey, includeSecret bool) *proto.ApiKey {

@@ -83,6 +83,30 @@ func local_request_ToolService_ListTools_0(ctx context.Context, marshaler runtim
 	return msg, metadata, err
 }
 
+func request_ToolService_GetTool_0(ctx context.Context, marshaler runtime.Marshaler, client ToolServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetToolRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.GetTool(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ToolService_GetTool_0(ctx context.Context, marshaler runtime.Marshaler, server ToolServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetToolRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.GetTool(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_ToolService_GetToolById_0(ctx context.Context, marshaler runtime.Marshaler, client ToolServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetToolByIdRequest
@@ -219,6 +243,30 @@ func request_ToolService_ResumeStream_0(ctx context.Context, marshaler runtime.M
 	return stream, metadata, nil
 }
 
+func request_ToolService_InvokeTool_0(ctx context.Context, marshaler runtime.Marshaler, client ToolServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ExecuteToolRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.InvokeTool(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ToolService_InvokeTool_0(ctx context.Context, marshaler runtime.Marshaler, server ToolServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ExecuteToolRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.InvokeTool(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_ToolService_ExecuteTool_0(ctx context.Context, marshaler runtime.Marshaler, client ToolServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq ExecuteToolRequest
@@ -267,6 +315,30 @@ func local_request_ToolService_HealthCheck_0(ctx context.Context, marshaler runt
 	return msg, metadata, err
 }
 
+func request_ToolService_HealthCheck_1(ctx context.Context, marshaler runtime.Marshaler, client ToolServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq HealthCheckRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.HealthCheck(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ToolService_HealthCheck_1(ctx context.Context, marshaler runtime.Marshaler, server ToolServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq HealthCheckRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.HealthCheck(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_SessionsService_CreateSession_0(ctx context.Context, marshaler runtime.Marshaler, client SessionsServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq CreateSessionRequest
@@ -295,9 +367,18 @@ func request_SessionsService_GetSession_0(ctx context.Context, marshaler runtime
 	var (
 		protoReq GetSessionRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := client.GetSession(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -307,9 +388,18 @@ func local_request_SessionsService_GetSession_0(ctx context.Context, marshaler r
 	var (
 		protoReq GetSessionRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := server.GetSession(ctx, &protoReq)
 	return msg, metadata, err
@@ -391,9 +481,18 @@ func request_SessionsService_ListUserSessions_0(ctx context.Context, marshaler r
 	var (
 		protoReq ListUserSessionsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+	protoReq.UserId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 	msg, err := client.ListUserSessions(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -403,9 +502,18 @@ func local_request_SessionsService_ListUserSessions_0(ctx context.Context, marsh
 	var (
 		protoReq ListUserSessionsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+	protoReq.UserId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 	msg, err := server.ListUserSessions(ctx, &protoReq)
 	return msg, metadata, err
@@ -439,9 +547,18 @@ func request_SessionsService_GetSessionStats_0(ctx context.Context, marshaler ru
 	var (
 		protoReq GetSessionStatsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+	protoReq.UserId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 	msg, err := client.GetSessionStats(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -451,9 +568,18 @@ func local_request_SessionsService_GetSessionStats_0(ctx context.Context, marsha
 	var (
 		protoReq GetSessionStatsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["user_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "user_id")
+	}
+	protoReq.UserId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "user_id", err)
 	}
 	msg, err := server.GetSessionStats(ctx, &protoReq)
 	return msg, metadata, err
@@ -511,9 +637,18 @@ func request_SessionsService_ListApiKeys_0(ctx context.Context, marshaler runtim
 	var (
 		protoReq ListApiKeysRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := client.ListApiKeys(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -523,9 +658,18 @@ func local_request_SessionsService_ListApiKeys_0(ctx context.Context, marshaler 
 	var (
 		protoReq ListApiKeysRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := server.ListApiKeys(ctx, &protoReq)
 	return msg, metadata, err
@@ -583,9 +727,18 @@ func request_MachinesService_ListMachines_0(ctx context.Context, marshaler runti
 	var (
 		protoReq ListMachinesRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := client.ListMachines(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -595,9 +748,18 @@ func local_request_MachinesService_ListMachines_0(ctx context.Context, marshaler
 	var (
 		protoReq ListMachinesRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := server.ListMachines(ctx, &protoReq)
 	return msg, metadata, err
@@ -607,9 +769,26 @@ func request_MachinesService_GetMachine_0(ctx context.Context, marshaler runtime
 	var (
 		protoReq GetMachineRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["machine_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "machine_id")
+	}
+	protoReq.MachineId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "machine_id", err)
 	}
 	msg, err := client.GetMachine(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -619,9 +798,26 @@ func local_request_MachinesService_GetMachine_0(ctx context.Context, marshaler r
 	var (
 		protoReq GetMachineRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["machine_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "machine_id")
+	}
+	protoReq.MachineId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "machine_id", err)
 	}
 	msg, err := server.GetMachine(ctx, &protoReq)
 	return msg, metadata, err
@@ -727,9 +923,26 @@ func request_RequestsService_GetRequest_0(ctx context.Context, marshaler runtime
 	var (
 		protoReq GetRequestRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
 	}
 	msg, err := client.GetRequest(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -739,9 +952,26 @@ func local_request_RequestsService_GetRequest_0(ctx context.Context, marshaler r
 	var (
 		protoReq GetRequestRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
 	}
 	msg, err := server.GetRequest(ctx, &protoReq)
 	return msg, metadata, err
@@ -751,9 +981,18 @@ func request_RequestsService_ListRequests_0(ctx context.Context, marshaler runti
 	var (
 		protoReq ListRequestsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := client.ListRequests(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -763,9 +1002,18 @@ func local_request_RequestsService_ListRequests_0(ctx context.Context, marshaler
 	var (
 		protoReq ListRequestsRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := server.ListRequests(ctx, &protoReq)
 	return msg, metadata, err
@@ -895,9 +1143,26 @@ func request_RequestsService_GetRequestChunks_0(ctx context.Context, marshaler r
 	var (
 		protoReq GetRequestChunksRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
 	}
 	msg, err := client.GetRequestChunks(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -907,9 +1172,26 @@ func local_request_RequestsService_GetRequestChunks_0(ctx context.Context, marsh
 	var (
 		protoReq GetRequestChunksRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["request_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "request_id")
+	}
+	protoReq.RequestId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "request_id", err)
 	}
 	msg, err := server.GetRequestChunks(ctx, &protoReq)
 	return msg, metadata, err
@@ -967,9 +1249,26 @@ func request_TasksService_GetTask_0(ctx context.Context, marshaler runtime.Marsh
 	var (
 		protoReq GetTaskRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["task_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "task_id")
+	}
+	protoReq.TaskId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "task_id", err)
 	}
 	msg, err := client.GetTask(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -979,9 +1278,26 @@ func local_request_TasksService_GetTask_0(ctx context.Context, marshaler runtime
 	var (
 		protoReq GetTaskRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
+	}
+	val, ok = pathParams["task_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "task_id")
+	}
+	protoReq.TaskId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "task_id", err)
 	}
 	msg, err := server.GetTask(ctx, &protoReq)
 	return msg, metadata, err
@@ -991,9 +1307,18 @@ func request_TasksService_ListTasks_0(ctx context.Context, marshaler runtime.Mar
 	var (
 		protoReq ListTasksRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := client.ListTasks(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
@@ -1003,9 +1328,18 @@ func local_request_TasksService_ListTasks_0(ctx context.Context, marshaler runti
 	var (
 		protoReq ListTasksRequest
 		metadata runtime.ServerMetadata
+		err      error
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	val, ok := pathParams["session_id"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "session_id")
+	}
+	protoReq.SessionId, err = runtime.String(val)
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "session_id", err)
 	}
 	msg, err := server.ListTasks(ctx, &protoReq)
 	return msg, metadata, err
@@ -1047,7 +1381,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/RegisterTool", runtime.WithHTTPPathPattern("/api/RegisterTool"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/RegisterTool", runtime.WithHTTPPathPattern("/api.v1/RegisterTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1067,7 +1401,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/ListTools", runtime.WithHTTPPathPattern("/api/ListTools"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/ListTools", runtime.WithHTTPPathPattern("/api.v1/ListTools"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1081,13 +1415,33 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_ToolService_ListTools_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_ToolService_GetTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/GetTool", runtime.WithHTTPPathPattern("/api.v1/GetTool"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ToolService_GetTool_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_GetTool_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_ToolService_GetToolById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/GetToolById", runtime.WithHTTPPathPattern("/api/GetToolById"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/GetToolById", runtime.WithHTTPPathPattern("/api.v1/GetToolById"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1107,7 +1461,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/GetToolByName", runtime.WithHTTPPathPattern("/api/GetToolByName"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/GetToolByName", runtime.WithHTTPPathPattern("/api.v1/GetToolByName"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1127,7 +1481,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/DeleteTool", runtime.WithHTTPPathPattern("/api/DeleteTool"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/DeleteTool", runtime.WithHTTPPathPattern("/api.v1/DeleteTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1147,7 +1501,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/UpdateToolPing", runtime.WithHTTPPathPattern("/api/UpdateToolPing"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/UpdateToolPing", runtime.WithHTTPPathPattern("/api.v1/UpdateToolPing"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1175,13 +1529,33 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 		return
 	})
+	mux.Handle(http.MethodPost, pattern_ToolService_InvokeTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/InvokeTool", runtime.WithHTTPPathPattern("/api.v1/InvokeTool"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ToolService_InvokeTool_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_InvokeTool_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_ToolService_ExecuteTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/ExecuteTool", runtime.WithHTTPPathPattern("/api/ExecuteTool"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/ExecuteTool", runtime.WithHTTPPathPattern("/api.v1/ExecuteTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1201,7 +1575,7 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api/HealthCheck"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api.v1/healthz"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1214,6 +1588,26 @@ func RegisterToolServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux
 			return
 		}
 		forward_ToolService_HealthCheck_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ToolService_HealthCheck_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api.v1/HealthCheck"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ToolService_HealthCheck_1(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_HealthCheck_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -1231,7 +1625,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/CreateSession", runtime.WithHTTPPathPattern("/api/CreateSession"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/CreateSession", runtime.WithHTTPPathPattern("/api.v1/CreateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1251,7 +1645,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/GetSession", runtime.WithHTTPPathPattern("/api/GetSession"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/GetSession", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1271,7 +1665,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/ListSessions", runtime.WithHTTPPathPattern("/api/ListSessions"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/ListSessions", runtime.WithHTTPPathPattern("/api.v1/sessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1291,7 +1685,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/UpdateSession", runtime.WithHTTPPathPattern("/api/UpdateSession"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/UpdateSession", runtime.WithHTTPPathPattern("/api.v1/UpdateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1311,7 +1705,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/DeleteSession", runtime.WithHTTPPathPattern("/api/DeleteSession"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/DeleteSession", runtime.WithHTTPPathPattern("/api.v1/DeleteSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1331,7 +1725,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/ListUserSessions", runtime.WithHTTPPathPattern("/api/ListUserSessions"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/ListUserSessions", runtime.WithHTTPPathPattern("/api.v1/users/{user_id}/sessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1351,7 +1745,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/BulkDeleteSessions", runtime.WithHTTPPathPattern("/api/BulkDeleteSessions"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/BulkDeleteSessions", runtime.WithHTTPPathPattern("/api.v1/BulkDeleteSessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1371,7 +1765,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/GetSessionStats", runtime.WithHTTPPathPattern("/api/GetSessionStats"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/GetSessionStats", runtime.WithHTTPPathPattern("/api.v1/users/{user_id}/session-stats"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1391,7 +1785,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/InvalidateSession", runtime.WithHTTPPathPattern("/api/InvalidateSession"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/InvalidateSession", runtime.WithHTTPPathPattern("/api.v1/InvalidateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1411,7 +1805,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/CreateApiKey", runtime.WithHTTPPathPattern("/api/CreateApiKey"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/CreateApiKey", runtime.WithHTTPPathPattern("/api.v1/CreateApiKey"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1431,7 +1825,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/ListApiKeys", runtime.WithHTTPPathPattern("/api/ListApiKeys"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/ListApiKeys", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/api-keys"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1451,7 +1845,7 @@ func RegisterSessionsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.SessionsService/RevokeApiKey", runtime.WithHTTPPathPattern("/api/RevokeApiKey"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.SessionsService/RevokeApiKey", runtime.WithHTTPPathPattern("/api.v1/RevokeApiKey"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1481,7 +1875,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/RegisterMachine", runtime.WithHTTPPathPattern("/api/RegisterMachine"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/RegisterMachine", runtime.WithHTTPPathPattern("/api.v1/RegisterMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1501,7 +1895,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/ListMachines", runtime.WithHTTPPathPattern("/api/ListMachines"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/ListMachines", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/machines"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1521,7 +1915,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/GetMachine", runtime.WithHTTPPathPattern("/api/GetMachine"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/GetMachine", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/machines/{machine_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1541,7 +1935,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/UpdateMachinePing", runtime.WithHTTPPathPattern("/api/UpdateMachinePing"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/UpdateMachinePing", runtime.WithHTTPPathPattern("/api.v1/UpdateMachinePing"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1561,7 +1955,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/UnregisterMachine", runtime.WithHTTPPathPattern("/api/UnregisterMachine"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/UnregisterMachine", runtime.WithHTTPPathPattern("/api.v1/UnregisterMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1581,7 +1975,7 @@ func RegisterMachinesServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.MachinesService/DrainMachine", runtime.WithHTTPPathPattern("/api/DrainMachine"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.MachinesService/DrainMachine", runtime.WithHTTPPathPattern("/api.v1/DrainMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1611,7 +2005,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/CreateRequest", runtime.WithHTTPPathPattern("/api/CreateRequest"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/CreateRequest", runtime.WithHTTPPathPattern("/api.v1/CreateRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1631,7 +2025,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/GetRequest", runtime.WithHTTPPathPattern("/api/GetRequest"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/GetRequest", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests/{request_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1651,7 +2045,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/ListRequests", runtime.WithHTTPPathPattern("/api/ListRequests"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/ListRequests", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1671,7 +2065,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/UpdateRequest", runtime.WithHTTPPathPattern("/api/UpdateRequest"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/UpdateRequest", runtime.WithHTTPPathPattern("/api.v1/UpdateRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1691,7 +2085,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/ClaimRequest", runtime.WithHTTPPathPattern("/api/ClaimRequest"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/ClaimRequest", runtime.WithHTTPPathPattern("/api.v1/ClaimRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1711,7 +2105,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/CancelRequest", runtime.WithHTTPPathPattern("/api/CancelRequest"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/CancelRequest", runtime.WithHTTPPathPattern("/api.v1/CancelRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1731,7 +2125,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/SubmitRequestResult", runtime.WithHTTPPathPattern("/api/SubmitRequestResult"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/SubmitRequestResult", runtime.WithHTTPPathPattern("/api.v1/SubmitRequestResult"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1751,7 +2145,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/AppendRequestChunks", runtime.WithHTTPPathPattern("/api/AppendRequestChunks"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/AppendRequestChunks", runtime.WithHTTPPathPattern("/api.v1/AppendRequestChunks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1771,7 +2165,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/GetRequestChunks", runtime.WithHTTPPathPattern("/api/GetRequestChunks"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/GetRequestChunks", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests/{request_id}/chunks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1791,7 +2185,7 @@ func RegisterRequestsServiceHandlerServer(ctx context.Context, mux *runtime.Serv
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.RequestsService/RenewRequestLease", runtime.WithHTTPPathPattern("/api/RenewRequestLease"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.RequestsService/RenewRequestLease", runtime.WithHTTPPathPattern("/api.v1/RenewRequestLease"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1821,7 +2215,7 @@ func RegisterTasksServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.TasksService/CreateTask", runtime.WithHTTPPathPattern("/api/CreateTask"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.TasksService/CreateTask", runtime.WithHTTPPathPattern("/api.v1/CreateTask"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1841,7 +2235,7 @@ func RegisterTasksServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.TasksService/GetTask", runtime.WithHTTPPathPattern("/api/GetTask"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.TasksService/GetTask", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/tasks/{task_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1861,7 +2255,7 @@ func RegisterTasksServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.TasksService/ListTasks", runtime.WithHTTPPathPattern("/api/ListTasks"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.TasksService/ListTasks", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/tasks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1881,7 +2275,7 @@ func RegisterTasksServiceHandlerServer(ctx context.Context, mux *runtime.ServeMu
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.TasksService/CancelTask", runtime.WithHTTPPathPattern("/api/CancelTask"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/api.v1.TasksService/CancelTask", runtime.WithHTTPPathPattern("/api.v1/CancelTask"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1939,7 +2333,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/RegisterTool", runtime.WithHTTPPathPattern("/api/RegisterTool"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/RegisterTool", runtime.WithHTTPPathPattern("/api.v1/RegisterTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1956,7 +2350,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/ListTools", runtime.WithHTTPPathPattern("/api/ListTools"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/ListTools", runtime.WithHTTPPathPattern("/api.v1/ListTools"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1969,11 +2363,28 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_ToolService_ListTools_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_ToolService_GetTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/GetTool", runtime.WithHTTPPathPattern("/api.v1/GetTool"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ToolService_GetTool_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_GetTool_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_ToolService_GetToolById_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/GetToolById", runtime.WithHTTPPathPattern("/api/GetToolById"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/GetToolById", runtime.WithHTTPPathPattern("/api.v1/GetToolById"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1990,7 +2401,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/GetToolByName", runtime.WithHTTPPathPattern("/api/GetToolByName"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/GetToolByName", runtime.WithHTTPPathPattern("/api.v1/GetToolByName"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2007,7 +2418,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/DeleteTool", runtime.WithHTTPPathPattern("/api/DeleteTool"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/DeleteTool", runtime.WithHTTPPathPattern("/api.v1/DeleteTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2024,7 +2435,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/UpdateToolPing", runtime.WithHTTPPathPattern("/api/UpdateToolPing"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/UpdateToolPing", runtime.WithHTTPPathPattern("/api.v1/UpdateToolPing"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2041,7 +2452,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/StreamExecuteTool", runtime.WithHTTPPathPattern("/api/StreamExecuteTool"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/StreamExecuteTool", runtime.WithHTTPPathPattern("/api.v1/StreamExecuteTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2058,7 +2469,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/ResumeStream", runtime.WithHTTPPathPattern("/api/ResumeStream"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/ResumeStream", runtime.WithHTTPPathPattern("/api.v1/ResumeStream"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2071,11 +2482,28 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_ToolService_ResumeStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_ToolService_InvokeTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/InvokeTool", runtime.WithHTTPPathPattern("/api.v1/InvokeTool"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ToolService_InvokeTool_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_InvokeTool_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodPost, pattern_ToolService_ExecuteTool_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/ExecuteTool", runtime.WithHTTPPathPattern("/api/ExecuteTool"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/ExecuteTool", runtime.WithHTTPPathPattern("/api.v1/ExecuteTool"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2092,7 +2520,7 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api/HealthCheck"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api.v1/healthz"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2105,33 +2533,56 @@ func RegisterToolServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux
 		}
 		forward_ToolService_HealthCheck_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_ToolService_HealthCheck_1, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.ToolService/HealthCheck", runtime.WithHTTPPathPattern("/api.v1/HealthCheck"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ToolService_HealthCheck_1(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ToolService_HealthCheck_1(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
 var (
-	pattern_ToolService_RegisterTool_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RegisterTool"}, ""))
-	pattern_ToolService_ListTools_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListTools"}, ""))
-	pattern_ToolService_GetToolById_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetToolById"}, ""))
-	pattern_ToolService_GetToolByName_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetToolByName"}, ""))
-	pattern_ToolService_DeleteTool_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "DeleteTool"}, ""))
-	pattern_ToolService_UpdateToolPing_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateToolPing"}, ""))
-	pattern_ToolService_StreamExecuteTool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "StreamExecuteTool"}, ""))
-	pattern_ToolService_ResumeStream_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ResumeStream"}, ""))
-	pattern_ToolService_ExecuteTool_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ExecuteTool"}, ""))
-	pattern_ToolService_HealthCheck_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "HealthCheck"}, ""))
+	pattern_ToolService_RegisterTool_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "RegisterTool"}, ""))
+	pattern_ToolService_ListTools_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "ListTools"}, ""))
+	pattern_ToolService_GetTool_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "GetTool"}, ""))
+	pattern_ToolService_GetToolById_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "GetToolById"}, ""))
+	pattern_ToolService_GetToolByName_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "GetToolByName"}, ""))
+	pattern_ToolService_DeleteTool_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "DeleteTool"}, ""))
+	pattern_ToolService_UpdateToolPing_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "UpdateToolPing"}, ""))
+	pattern_ToolService_StreamExecuteTool_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "StreamExecuteTool"}, ""))
+	pattern_ToolService_ResumeStream_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "ResumeStream"}, ""))
+	pattern_ToolService_InvokeTool_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "InvokeTool"}, ""))
+	pattern_ToolService_ExecuteTool_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "ExecuteTool"}, ""))
+	pattern_ToolService_HealthCheck_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "healthz"}, ""))
+	pattern_ToolService_HealthCheck_1       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "HealthCheck"}, ""))
 )
 
 var (
 	forward_ToolService_RegisterTool_0      = runtime.ForwardResponseMessage
 	forward_ToolService_ListTools_0         = runtime.ForwardResponseMessage
+	forward_ToolService_GetTool_0           = runtime.ForwardResponseMessage
 	forward_ToolService_GetToolById_0       = runtime.ForwardResponseMessage
 	forward_ToolService_GetToolByName_0     = runtime.ForwardResponseMessage
 	forward_ToolService_DeleteTool_0        = runtime.ForwardResponseMessage
 	forward_ToolService_UpdateToolPing_0    = runtime.ForwardResponseMessage
 	forward_ToolService_StreamExecuteTool_0 = runtime.ForwardResponseStream
 	forward_ToolService_ResumeStream_0      = runtime.ForwardResponseStream
+	forward_ToolService_InvokeTool_0        = runtime.ForwardResponseMessage
 	forward_ToolService_ExecuteTool_0       = runtime.ForwardResponseMessage
 	forward_ToolService_HealthCheck_0       = runtime.ForwardResponseMessage
+	forward_ToolService_HealthCheck_1       = runtime.ForwardResponseMessage
 )
 
 // RegisterSessionsServiceHandlerFromEndpoint is same as RegisterSessionsServiceHandler but
@@ -2174,7 +2625,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/CreateSession", runtime.WithHTTPPathPattern("/api/CreateSession"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/CreateSession", runtime.WithHTTPPathPattern("/api.v1/CreateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2191,7 +2642,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/GetSession", runtime.WithHTTPPathPattern("/api/GetSession"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/GetSession", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2208,7 +2659,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/ListSessions", runtime.WithHTTPPathPattern("/api/ListSessions"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/ListSessions", runtime.WithHTTPPathPattern("/api.v1/sessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2225,7 +2676,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/UpdateSession", runtime.WithHTTPPathPattern("/api/UpdateSession"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/UpdateSession", runtime.WithHTTPPathPattern("/api.v1/UpdateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2242,7 +2693,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/DeleteSession", runtime.WithHTTPPathPattern("/api/DeleteSession"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/DeleteSession", runtime.WithHTTPPathPattern("/api.v1/DeleteSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2259,7 +2710,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/ListUserSessions", runtime.WithHTTPPathPattern("/api/ListUserSessions"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/ListUserSessions", runtime.WithHTTPPathPattern("/api.v1/users/{user_id}/sessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2276,7 +2727,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/BulkDeleteSessions", runtime.WithHTTPPathPattern("/api/BulkDeleteSessions"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/BulkDeleteSessions", runtime.WithHTTPPathPattern("/api.v1/BulkDeleteSessions"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2293,7 +2744,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/GetSessionStats", runtime.WithHTTPPathPattern("/api/GetSessionStats"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/GetSessionStats", runtime.WithHTTPPathPattern("/api.v1/users/{user_id}/session-stats"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2310,7 +2761,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/InvalidateSession", runtime.WithHTTPPathPattern("/api/InvalidateSession"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/InvalidateSession", runtime.WithHTTPPathPattern("/api.v1/InvalidateSession"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2327,7 +2778,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/CreateApiKey", runtime.WithHTTPPathPattern("/api/CreateApiKey"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/CreateApiKey", runtime.WithHTTPPathPattern("/api.v1/CreateApiKey"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2344,7 +2795,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/ListApiKeys", runtime.WithHTTPPathPattern("/api/ListApiKeys"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/ListApiKeys", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/api-keys"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2361,7 +2812,7 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.SessionsService/RevokeApiKey", runtime.WithHTTPPathPattern("/api/RevokeApiKey"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.SessionsService/RevokeApiKey", runtime.WithHTTPPathPattern("/api.v1/RevokeApiKey"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2378,18 +2829,18 @@ func RegisterSessionsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_SessionsService_CreateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateSession"}, ""))
-	pattern_SessionsService_GetSession_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSession"}, ""))
-	pattern_SessionsService_ListSessions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListSessions"}, ""))
-	pattern_SessionsService_UpdateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateSession"}, ""))
-	pattern_SessionsService_DeleteSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "DeleteSession"}, ""))
-	pattern_SessionsService_ListUserSessions_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListUserSessions"}, ""))
-	pattern_SessionsService_BulkDeleteSessions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "BulkDeleteSessions"}, ""))
-	pattern_SessionsService_GetSessionStats_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetSessionStats"}, ""))
-	pattern_SessionsService_InvalidateSession_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "InvalidateSession"}, ""))
-	pattern_SessionsService_CreateApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateApiKey"}, ""))
-	pattern_SessionsService_ListApiKeys_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListApiKeys"}, ""))
-	pattern_SessionsService_RevokeApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RevokeApiKey"}, ""))
+	pattern_SessionsService_CreateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CreateSession"}, ""))
+	pattern_SessionsService_GetSession_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"api.v1", "sessions", "session_id"}, ""))
+	pattern_SessionsService_ListSessions_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "sessions"}, ""))
+	pattern_SessionsService_UpdateSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "UpdateSession"}, ""))
+	pattern_SessionsService_DeleteSession_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "DeleteSession"}, ""))
+	pattern_SessionsService_ListUserSessions_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "users", "user_id", "sessions"}, ""))
+	pattern_SessionsService_BulkDeleteSessions_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "BulkDeleteSessions"}, ""))
+	pattern_SessionsService_GetSessionStats_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "users", "user_id", "session-stats"}, ""))
+	pattern_SessionsService_InvalidateSession_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "InvalidateSession"}, ""))
+	pattern_SessionsService_CreateApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CreateApiKey"}, ""))
+	pattern_SessionsService_ListApiKeys_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "sessions", "session_id", "api-keys"}, ""))
+	pattern_SessionsService_RevokeApiKey_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "RevokeApiKey"}, ""))
 )
 
 var (
@@ -2447,7 +2898,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/RegisterMachine", runtime.WithHTTPPathPattern("/api/RegisterMachine"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/RegisterMachine", runtime.WithHTTPPathPattern("/api.v1/RegisterMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2464,7 +2915,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/ListMachines", runtime.WithHTTPPathPattern("/api/ListMachines"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/ListMachines", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/machines"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2481,7 +2932,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/GetMachine", runtime.WithHTTPPathPattern("/api/GetMachine"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/GetMachine", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/machines/{machine_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2498,7 +2949,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/UpdateMachinePing", runtime.WithHTTPPathPattern("/api/UpdateMachinePing"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/UpdateMachinePing", runtime.WithHTTPPathPattern("/api.v1/UpdateMachinePing"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2515,7 +2966,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/UnregisterMachine", runtime.WithHTTPPathPattern("/api/UnregisterMachine"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/UnregisterMachine", runtime.WithHTTPPathPattern("/api.v1/UnregisterMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2532,7 +2983,7 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.MachinesService/DrainMachine", runtime.WithHTTPPathPattern("/api/DrainMachine"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.MachinesService/DrainMachine", runtime.WithHTTPPathPattern("/api.v1/DrainMachine"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2549,12 +3000,12 @@ func RegisterMachinesServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_MachinesService_RegisterMachine_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RegisterMachine"}, ""))
-	pattern_MachinesService_ListMachines_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListMachines"}, ""))
-	pattern_MachinesService_GetMachine_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetMachine"}, ""))
-	pattern_MachinesService_UpdateMachinePing_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateMachinePing"}, ""))
-	pattern_MachinesService_UnregisterMachine_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UnregisterMachine"}, ""))
-	pattern_MachinesService_DrainMachine_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "DrainMachine"}, ""))
+	pattern_MachinesService_RegisterMachine_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "RegisterMachine"}, ""))
+	pattern_MachinesService_ListMachines_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "sessions", "session_id", "machines"}, ""))
+	pattern_MachinesService_GetMachine_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api.v1", "sessions", "session_id", "machines", "machine_id"}, ""))
+	pattern_MachinesService_UpdateMachinePing_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "UpdateMachinePing"}, ""))
+	pattern_MachinesService_UnregisterMachine_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "UnregisterMachine"}, ""))
+	pattern_MachinesService_DrainMachine_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "DrainMachine"}, ""))
 )
 
 var (
@@ -2606,7 +3057,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/CreateRequest", runtime.WithHTTPPathPattern("/api/CreateRequest"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/CreateRequest", runtime.WithHTTPPathPattern("/api.v1/CreateRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2623,7 +3074,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/GetRequest", runtime.WithHTTPPathPattern("/api/GetRequest"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/GetRequest", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests/{request_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2640,7 +3091,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/ListRequests", runtime.WithHTTPPathPattern("/api/ListRequests"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/ListRequests", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2657,7 +3108,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/UpdateRequest", runtime.WithHTTPPathPattern("/api/UpdateRequest"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/UpdateRequest", runtime.WithHTTPPathPattern("/api.v1/UpdateRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2674,7 +3125,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/ClaimRequest", runtime.WithHTTPPathPattern("/api/ClaimRequest"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/ClaimRequest", runtime.WithHTTPPathPattern("/api.v1/ClaimRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2691,7 +3142,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/CancelRequest", runtime.WithHTTPPathPattern("/api/CancelRequest"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/CancelRequest", runtime.WithHTTPPathPattern("/api.v1/CancelRequest"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2708,7 +3159,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/SubmitRequestResult", runtime.WithHTTPPathPattern("/api/SubmitRequestResult"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/SubmitRequestResult", runtime.WithHTTPPathPattern("/api.v1/SubmitRequestResult"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2725,7 +3176,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/AppendRequestChunks", runtime.WithHTTPPathPattern("/api/AppendRequestChunks"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/AppendRequestChunks", runtime.WithHTTPPathPattern("/api.v1/AppendRequestChunks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2742,7 +3193,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/GetRequestChunks", runtime.WithHTTPPathPattern("/api/GetRequestChunks"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/GetRequestChunks", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/requests/{request_id}/chunks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2759,7 +3210,7 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.RequestsService/RenewRequestLease", runtime.WithHTTPPathPattern("/api/RenewRequestLease"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.RequestsService/RenewRequestLease", runtime.WithHTTPPathPattern("/api.v1/RenewRequestLease"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2776,16 +3227,16 @@ func RegisterRequestsServiceHandlerClient(ctx context.Context, mux *runtime.Serv
 }
 
 var (
-	pattern_RequestsService_CreateRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateRequest"}, ""))
-	pattern_RequestsService_GetRequest_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetRequest"}, ""))
-	pattern_RequestsService_ListRequests_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListRequests"}, ""))
-	pattern_RequestsService_UpdateRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "UpdateRequest"}, ""))
-	pattern_RequestsService_ClaimRequest_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ClaimRequest"}, ""))
-	pattern_RequestsService_CancelRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CancelRequest"}, ""))
-	pattern_RequestsService_SubmitRequestResult_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "SubmitRequestResult"}, ""))
-	pattern_RequestsService_AppendRequestChunks_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "AppendRequestChunks"}, ""))
-	pattern_RequestsService_GetRequestChunks_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetRequestChunks"}, ""))
-	pattern_RequestsService_RenewRequestLease_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "RenewRequestLease"}, ""))
+	pattern_RequestsService_CreateRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CreateRequest"}, ""))
+	pattern_RequestsService_GetRequest_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api.v1", "sessions", "session_id", "requests", "request_id"}, ""))
+	pattern_RequestsService_ListRequests_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "sessions", "session_id", "requests"}, ""))
+	pattern_RequestsService_UpdateRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "UpdateRequest"}, ""))
+	pattern_RequestsService_ClaimRequest_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "ClaimRequest"}, ""))
+	pattern_RequestsService_CancelRequest_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CancelRequest"}, ""))
+	pattern_RequestsService_SubmitRequestResult_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "SubmitRequestResult"}, ""))
+	pattern_RequestsService_AppendRequestChunks_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "AppendRequestChunks"}, ""))
+	pattern_RequestsService_GetRequestChunks_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"api.v1", "sessions", "session_id", "requests", "request_id", "chunks"}, ""))
+	pattern_RequestsService_RenewRequestLease_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "RenewRequestLease"}, ""))
 )
 
 var (
@@ -2841,7 +3292,7 @@ func RegisterTasksServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.TasksService/CreateTask", runtime.WithHTTPPathPattern("/api/CreateTask"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.TasksService/CreateTask", runtime.WithHTTPPathPattern("/api.v1/CreateTask"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2858,7 +3309,7 @@ func RegisterTasksServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.TasksService/GetTask", runtime.WithHTTPPathPattern("/api/GetTask"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.TasksService/GetTask", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/tasks/{task_id}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2875,7 +3326,7 @@ func RegisterTasksServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.TasksService/ListTasks", runtime.WithHTTPPathPattern("/api/ListTasks"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.TasksService/ListTasks", runtime.WithHTTPPathPattern("/api.v1/sessions/{session_id}/tasks"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2892,7 +3343,7 @@ func RegisterTasksServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.TasksService/CancelTask", runtime.WithHTTPPathPattern("/api/CancelTask"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/api.v1.TasksService/CancelTask", runtime.WithHTTPPathPattern("/api.v1/CancelTask"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -2909,10 +3360,10 @@ func RegisterTasksServiceHandlerClient(ctx context.Context, mux *runtime.ServeMu
 }
 
 var (
-	pattern_TasksService_CreateTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CreateTask"}, ""))
-	pattern_TasksService_GetTask_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "GetTask"}, ""))
-	pattern_TasksService_ListTasks_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "ListTasks"}, ""))
-	pattern_TasksService_CancelTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api", "CancelTask"}, ""))
+	pattern_TasksService_CreateTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CreateTask"}, ""))
+	pattern_TasksService_GetTask_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"api.v1", "sessions", "session_id", "tasks", "task_id"}, ""))
+	pattern_TasksService_ListTasks_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"api.v1", "sessions", "session_id", "tasks"}, ""))
+	pattern_TasksService_CancelTask_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"api.v1", "CancelTask"}, ""))
 )
 
 var (

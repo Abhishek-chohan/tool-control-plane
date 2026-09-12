@@ -3,9 +3,21 @@ package mcp
 import (
 	"encoding/json"
 	"strings"
+	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	gw "toolplane/proto"
 )
+
+// rfc3339 renders a proto timestamp for the Tasks wire shape; nil renders
+// empty.
+func rfc3339(ts *timestamppb.Timestamp) string {
+	if ts == nil {
+		return ""
+	}
+	return ts.AsTime().UTC().Format(time.RFC3339)
+}
 
 // taskPollIntervalMs is the polling interval suggested to MCP clients in every
 // task payload.
@@ -43,9 +55,9 @@ type metaMap map[string]any
 // every other failure maps to failed.
 func requestTaskStatus(request *gw.Request) string {
 	switch request.Status {
-	case "done":
+	case gw.RequestStatus_REQUEST_STATUS_DONE:
 		return TaskStatusCompleted
-	case "failure":
+	case gw.RequestStatus_REQUEST_STATUS_FAILED:
 		if request.Error == requestCancelledError {
 			return TaskStatusCancelled
 		}
@@ -72,8 +84,8 @@ func baseTaskPayload(request *gw.Request) taskPayload {
 		TaskID:         request.Id,
 		Status:         requestTaskStatus(request),
 		StatusMessage:  statusMessageForRequest(request),
-		CreatedAt:      request.CreatedAt,
-		LastUpdatedAt:  request.UpdatedAt,
+		CreatedAt:      rfc3339(request.CreatedAt),
+		LastUpdatedAt:  rfc3339(request.UpdatedAt),
 		TTLMs:          nil,
 		PollIntervalMs: taskPollIntervalMs,
 	}
@@ -81,16 +93,14 @@ func baseTaskPayload(request *gw.Request) taskPayload {
 
 func statusMessageForRequest(request *gw.Request) string {
 	switch request.Status {
-	case "pending":
+	case gw.RequestStatus_REQUEST_STATUS_PENDING:
 		return "queued for execution"
-	case "claimed", "running":
+	case gw.RequestStatus_REQUEST_STATUS_CLAIMED, gw.RequestStatus_REQUEST_STATUS_RUNNING:
 		return "executing"
-	case "stalled":
-		return "stalled, awaiting lease reclaim"
-	case "failure":
+	case gw.RequestStatus_REQUEST_STATUS_FAILED:
 		return firstNonEmpty(request.Error, request.ResultType)
-	case "cancelled":
-		return requestCancelledError
+	case gw.RequestStatus_REQUEST_STATUS_DONE:
+		return ""
 	default:
 		return ""
 	}
@@ -144,7 +154,7 @@ func callToolResultFromRequest(request *gw.Request) map[string]any {
 	}
 
 	content := []any{}
-	if request.Status == "done" {
+	if request.Status == gw.RequestStatus_REQUEST_STATUS_DONE {
 		if text := strings.TrimSpace(request.Result); text != "" {
 			content = append(content, textBlock(text))
 		}
@@ -152,7 +162,7 @@ func callToolResultFromRequest(request *gw.Request) map[string]any {
 			result["structuredContent"] = structured
 		}
 	} else {
-		message := firstNonEmpty(request.Error, "tool call "+request.Status)
+		message := firstNonEmpty(request.Error, "tool call "+request.Status.String())
 		content = append(content, textBlock("tool call failed: "+message))
 		result["isError"] = true
 	}

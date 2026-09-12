@@ -15,6 +15,8 @@ from ..core.errors import (
     RequestError,
     ToolplaneFailedPreconditionError,
     api_error_from_http_response,
+    normalize_status_name,
+    status_for_wire,
 )
 from .http_connection import HTTPConnectionManager
 
@@ -52,7 +54,7 @@ class HTTPRequestManager:
             "id": response.get("id"),
             "sessionId": response.get("sessionId", response.get("session_id")),
             "toolName": response.get("toolName", response.get("tool_name")),
-            "status": response.get("status"),
+            "status": normalize_status_name(response.get("status")),
             "input": response.get("input"),
             "createdAt": response.get("createdAt", response.get("created_at")),
             "updatedAt": response.get("updatedAt", response.get("updated_at")),
@@ -206,7 +208,11 @@ class HTTPRequestManager:
             self.connection_manager.ensure_connected()
 
             # Get pending requests
-            payload = {"sessionId": session_id, "status": "pending", "limit": limit}
+            payload = {
+                "sessionId": session_id,
+                "status": status_for_wire("pending"),
+                "pageSize": limit,
+            }
 
             response = self.connection_manager.list_requests(payload)
             requests = response.get("requests", [])
@@ -430,7 +436,7 @@ class HTTPRequestManager:
         payload = {
             "sessionId": session_id,
             "requestId": request_id,
-            "status": status,
+            "status": status_for_wire(status),
             "machineId": machine_id,
             "leaseEpoch": lease_epoch,
         }
@@ -565,7 +571,7 @@ class HTTPRequestManager:
         try:
             self.connection_manager.ensure_connected()
             response = self.connection_manager.stream_post(
-                "api/ResumeStream",
+                "api.v1/ResumeStream",
                 {"sessionId": session_id, "requestId": request_id, "lastSeq": last_seq},
             )
 
@@ -628,19 +634,26 @@ class HTTPRequestManager:
         status: str = "",
         tool_name: str = "",
         limit: int = 10,
-        offset: int = 0,
+        page_token: str = "",
     ) -> List[Dict[str, Any]]:
-        """List requests in a session."""
+        """List requests in a session.
+
+        page_token is the opaque cursor from a previous page's response;
+        an empty string starts from the first page.
+        """
         try:
             self.connection_manager.ensure_connected()
 
             payload = {
                 "sessionId": session_id,
-                "status": status,
                 "toolName": tool_name,
-                "limit": limit,
-                "offset": offset,
+                "pageSize": limit,
+                "pageToken": page_token or "",
             }
+            if status:
+                # protojson rejects an empty string for an enum field, so the
+                # filter key is only sent when there is a filter to apply.
+                payload["status"] = status_for_wire(status)
             response = self.connection_manager.list_requests(payload)
             requests = response.get("requests", [])
             return [self._normalize_request(entry) for entry in requests]

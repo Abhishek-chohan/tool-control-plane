@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Timestamp } from 'google-protobuf/google/protobuf/timestamp_pb';
+
 import { ToolplaneClient } from '../../src/core/toolplane_client';
 import { ClientProtocol } from '../../src/interfaces';
 import {
@@ -9,6 +11,7 @@ import {
   ExecuteToolResponse,
   ListRequestsResponse,
   Request as ProtoRequest,
+  RequestStatus,
   SubmitRequestResultResponse,
 } from '../../src/proto/proto/service_pb';
 
@@ -22,11 +25,17 @@ type MutableClientState = {
   machineId: string;
 };
 
+function timestamp(date: string): Timestamp {
+  const value = new Timestamp();
+  value.fromDate(new Date(date));
+  return value;
+}
+
 function createRequest(overrides: Partial<{
   id: string;
   sessionId: string;
   toolName: string;
-  status: string;
+  status: RequestStatus;
   input: string;
   result: string;
   resultType: string;
@@ -34,21 +43,19 @@ function createRequest(overrides: Partial<{
   createdAt: string;
   updatedAt: string;
   executingMachineId: string;
-  streamResults: string[];
 }> = {}): ProtoRequest {
   const request = new ProtoRequest();
   request.setId(overrides.id ?? 'request-1');
   request.setSessionId(overrides.sessionId ?? 'session-1');
   request.setToolName(overrides.toolName ?? 'demo_tool');
-  request.setStatus(overrides.status ?? 'pending');
+  request.setStatus(overrides.status ?? RequestStatus.REQUEST_STATUS_PENDING);
   request.setInput(overrides.input ?? '{"message":"hello"}');
   request.setResult(overrides.result ?? '');
   request.setResultType(overrides.resultType ?? '');
   request.setError(overrides.error ?? '');
-  request.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
-  request.setUpdatedAt(overrides.updatedAt ?? '2025-01-01T00:01:00Z');
+  request.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
+  request.setUpdatedAt(timestamp(overrides.updatedAt ?? '2025-01-01T00:01:00Z'));
   request.setExecutingMachineId(overrides.executingMachineId ?? 'machine-1');
-  request.setStreamResultsList(overrides.streamResults ?? []);
   return request;
 }
 
@@ -97,14 +104,16 @@ test('executeTool submits the request and normalizes the final payload', async (
         getRequestCalls += 1;
         return createRequest({
           id: 'request-99',
-          status: getRequestCalls === 1 ? 'running' : 'done',
+          status: getRequestCalls === 1
+            ? RequestStatus.REQUEST_STATUS_RUNNING
+            : RequestStatus.REQUEST_STATUS_DONE,
           result: '{"echo":"hello"}',
           resultType: 'resolution',
         });
       }),
     },
     {
-      executeTool: unaryResponse((request) => {
+      invokeTool: unaryResponse((request) => {
         assert.equal((request as { getToolName(): string }).getToolName(), 'demo_tool');
         assert.equal((request as { getInput(): string }).getInput(), '{"message":"hello"}');
         return response;
@@ -122,7 +131,11 @@ test('executeTool submits the request and normalizes the final payload', async (
 
 test('createRequest returns a normalized request payload', async () => {
   const client = createConnectedClient({
-    createRequest: unaryResponse(createRequest({ status: 'running', result: '{"ok":true}', resultType: 'json' })),
+    createRequest: unaryResponse(createRequest({
+      status: RequestStatus.REQUEST_STATUS_RUNNING,
+      result: '{"ok":true}',
+      resultType: 'json',
+    })),
   });
 
   const result = await client.createRequest('demo_tool', '{"message":"hello"}');
@@ -136,34 +149,45 @@ test('createRequest returns a normalized request payload', async () => {
 
 test('getRequest returns a normalized request payload', async () => {
   const client = createConnectedClient({
-    getRequest: unaryResponse(createRequest({ id: 'request-42', status: 'done', streamResults: ['"a"', '"b"'] })),
+    getRequest: unaryResponse(createRequest({
+      id: 'request-42',
+      status: RequestStatus.REQUEST_STATUS_DONE,
+      result: '{"ok":true}',
+    })),
   });
 
   const result = await client.getRequest('request-42');
 
   assert.equal(result.id, 'request-42');
   assert.equal(result.status, 'done');
-  assert.deepEqual(result.streamResults, ['a', 'b']);
+  assert.deepEqual(result.result, { ok: true });
 });
 
 test('listRequests passes filters and normalizes responses', async () => {
   const response = new ListRequestsResponse();
   response.setRequestsList([
-    createRequest({ id: 'request-1', status: 'pending' }),
-    createRequest({ id: 'request-2', status: 'done', result: '{"ok":true}' }),
+    createRequest({ id: 'request-1', status: RequestStatus.REQUEST_STATUS_PENDING }),
+    createRequest({ id: 'request-2', status: RequestStatus.REQUEST_STATUS_DONE, result: '{"ok":true}' }),
   ]);
 
+  // Opaque cursor: the client must pass it through verbatim.
+  const pageToken = Buffer.from('offset:2').toString('base64url');
   const client = createConnectedClient({
     listRequests: unaryResponse((request) => {
-      assert.equal((request as { getStatus(): string }).getStatus(), 'running');
+      assert.equal((request as { getStatus(): RequestStatus }).getStatus(), RequestStatus.REQUEST_STATUS_RUNNING);
       assert.equal((request as { getToolName(): string }).getToolName(), 'demo_tool');
-      assert.equal((request as { getLimit(): number }).getLimit(), 5);
-      assert.equal((request as { getOffset(): number }).getOffset(), 2);
+      assert.equal((request as { getPageSize(): number }).getPageSize(), 5);
+      assert.equal((request as { getPageToken(): string }).getPageToken(), pageToken);
       return response;
     }),
   });
 
-  const requests = await client.listRequests({ status: 'running', toolName: 'demo_tool', limit: 5, offset: 2 });
+  const requests = await client.listRequests({
+    status: 'running',
+    toolName: 'demo_tool',
+    limit: 5,
+    pageToken,
+  });
 
   assert.deepEqual(requests.map((request) => request.id), ['request-1', 'request-2']);
   assert.deepEqual(requests[1].result, { ok: true });
@@ -176,7 +200,7 @@ test('claimRequest uses the registered machine by default and returns a normaliz
       assert.equal(request.getMachineId(), 'machine-9');
       return createRequest({
         id: 'request-claim',
-        status: 'claimed',
+        status: RequestStatus.REQUEST_STATUS_CLAIMED,
         executingMachineId: 'machine-9',
       });
     }),
@@ -187,6 +211,7 @@ test('claimRequest uses the registered machine by default and returns a normaliz
   const result = await client.claimRequest('request-claim');
 
   assert.equal(result.id, 'request-claim');
+  assert.equal(result.status, 'claimed');
   assert.equal(result.executingMachineId, 'machine-9');
 });
 
@@ -194,17 +219,21 @@ test('updateRequest forwards running status, result type, and lease grant', asyn
   const client = createConnectedClient({
     updateRequest: unaryResponse((request: {
       getRequestId(): string;
-      getStatus(): string;
+      getStatus(): RequestStatus;
       getResultType(): string;
       getMachineId(): string;
       getLeaseEpoch(): number;
     }) => {
       assert.equal(request.getRequestId(), 'request-1');
-      assert.equal(request.getStatus(), 'running');
+      assert.equal(request.getStatus(), RequestStatus.REQUEST_STATUS_RUNNING);
       assert.equal(request.getResultType(), 'streaming');
       assert.equal(request.getMachineId(), 'machine-9');
       assert.equal(request.getLeaseEpoch(), 3);
-      return createRequest({ id: 'request-1', status: 'running', resultType: 'streaming' });
+      return createRequest({
+        id: 'request-1',
+        status: RequestStatus.REQUEST_STATUS_RUNNING,
+        resultType: 'streaming',
+      });
     }),
   });
 

@@ -12,6 +12,7 @@ from toolplane.utils.schema import generate_schema_from_function
 from ..core.errors import (
     ToolplaneError,
     ToolplaneInvalidArgumentError,
+    normalize_status_name,
 )
 from .http_connection import HTTPConnectionManager
 from .http_machine import HTTPMachineManager
@@ -275,11 +276,11 @@ class HTTPSessionContext:
 
                 last_chunk_count = len(chunks)
 
-            if status["status"] == "done":
+            if normalize_status_name(status["status"]) == "done":
                 callback("", True)
                 break
 
-            if status["status"] == "failure":
+            if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Streaming failed: {status.get('error', 'Unknown error')}"
                 )
@@ -343,13 +344,13 @@ class HTTPSessionContext:
         while time.time() - start_time < timeout:
             status = self.get_request_status(request_id)
 
-            if status["status"] == "done":
+            if normalize_status_name(status["status"]) == "done":
                 try:
                     return json.loads(status["result"])
                 except (TypeError, ValueError, json.JSONDecodeError):
                     return status["result"]
 
-            if status["status"] == "failure":
+            if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Tool execution failed: {status.get('error', 'Unknown error')}"
                 )

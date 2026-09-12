@@ -15,7 +15,7 @@ from toolplane.proto.service_pb2 import (
 )
 
 from ..common.base_tool_manager import BaseToolManager
-from ..common.utils import parse_json_safe
+from ..common.utils import parse_json_safe, timestamp_to_iso
 from .connection import ConnectionManager
 from .errors import ToolError, api_error_from_rpc_error
 
@@ -42,9 +42,10 @@ class ToolManager(BaseToolManager):
             "description": tool.description,
             "schema": schema,
             "config": dict(tool.config),
-            "created_at": tool.created_at,
-            "last_ping_at": tool.last_ping_at,
+            "created_at": timestamp_to_iso(tool.created_at),
+            "last_ping_at": timestamp_to_iso(tool.last_ping_at),
             "session_id": tool.session_id,
+            "machine_id": tool.machine_id,
             "tags": list(tool.tags),
         }
 
@@ -223,7 +224,7 @@ class ToolManager(BaseToolManager):
                 idempotency_key=idempotency_key,
             )
 
-            response = self.connection_manager.tool_stub.ExecuteTool(
+            response = self.connection_manager.tool_stub.InvokeTool(
                 request, metadata=self.connection_manager.get_metadata()
             )
 

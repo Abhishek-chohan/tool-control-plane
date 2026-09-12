@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -147,7 +148,7 @@ func (s *GRPCServer) UpdateToolPing(ctx context.Context, req *proto.UpdateToolPi
 // CreateSession implements the gRPC CreateSession method
 func (s *GRPCServer) CreateSession(ctx context.Context, req *proto.CreateSessionRequest) (*proto.CreateSessionResponse, error) {
 	// Create session with optional client-specified ID
-	session, err := s.sessionService.CreateSession(req.UserId, req.Name, req.Description, req.ApiKey, req.SessionId, req.Namespace)
+	session, err := s.sessionService.CreateSession(req.UserId, req.Name, req.Description, req.SessionId, req.Namespace)
 	if err != nil {
 		// If session already exists, return existing session
 		if errors.Is(err, ErrAlreadyExists) {
@@ -219,11 +220,17 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *proto.DeleteSession
 
 // ListUserSessions implements the gRPC ListUserSessions method
 func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSessionsRequest) (*proto.ListUserSessionsResponse, error) {
-	// List user sessions with pagination and filtering
+	// List user sessions with pagination and filtering. The v1 cursor is an
+	// opaque token; the offset it encodes never leaves this handler.
+	offset, err := decodePageOffset(req.PageToken)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+	}
+
 	sessions, totalCount, err := s.sessionService.ListUserSessions(
 		req.UserId,
 		int(req.PageSize),
-		int(req.PageToken),
+		offset,
 		req.Filter,
 	)
 	if err != nil {
@@ -241,16 +248,19 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 		pageSize = 10
 	}
 
-	nextPageToken := int32(0)
-	nextStart := (int(req.PageToken) + 1) * pageSize
-	if nextStart < totalCount {
-		nextPageToken = req.PageToken + 1
+	page := &proto.ListPage{TotalSize: int32(totalCount)}
+	nextStart := offset + len(sessions)
+	if len(sessions) > 0 && nextStart < totalCount {
+		token, tokErr := encodePageOffset(nextStart)
+		if tokErr != nil {
+			return nil, status.Errorf(codes.Internal, "page token: %v", tokErr)
+		}
+		page.NextPageToken = token
 	}
 
 	return &proto.ListUserSessionsResponse{
-		Sessions:      protoSessions,
-		TotalCount:    int32(totalCount),
-		NextPageToken: nextPageToken,
+		Sessions: protoSessions,
+		Page:     page,
 	}, nil
 }
 
@@ -495,13 +505,19 @@ func (s *GRPCServer) GetRequest(ctx context.Context, req *proto.GetRequestReques
 
 // ListRequests implements the gRPC ListRequests method
 func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRequest) (*proto.ListRequestsResponse, error) {
-	// List requests
+	// List requests. The v1 cursor is opaque; the offset it encodes stays
+	// inside this handler.
+	offset, err := decodePageOffset(req.PageToken)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+	}
+
 	requests, err := s.requestService.ListRequests(
 		req.SessionId,
-		model.RequestStatus(req.Status),
+		requestStatusFromProto(req.Status),
 		req.ToolName,
-		int(req.Limit),
-		int(req.Offset),
+		int(req.PageSize),
+		offset,
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list requests: %v", err)
@@ -511,6 +527,15 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 	protoRequests := make([]*proto.Request, 0, len(requests))
 	for _, request := range requests {
 		protoRequests = append(protoRequests, convertModelRequestToProto(request))
+	}
+
+	page := &proto.ListPage{TotalSize: int32(len(protoRequests))}
+	if len(protoRequests) == int(req.PageSize) && len(protoRequests) > 0 {
+		token, tokErr := encodePageOffset(offset + len(protoRequests))
+		if tokErr != nil {
+			return nil, status.Errorf(codes.Internal, "page token: %v", tokErr)
+		}
+		page.NextPageToken = token
 	}
 
 	return &proto.ListRequestsResponse{
@@ -535,7 +560,7 @@ func (s *GRPCServer) UpdateRequest(ctx context.Context, req *proto.UpdateRequest
 		req.RequestId,
 		req.MachineId,
 		req.LeaseEpoch,
-		model.RequestStatus(req.Status),
+		requestStatusFromProto(req.Status),
 		result,
 		model.ResultType(req.ResultType),
 	)
@@ -715,7 +740,7 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 	// Return initial response
 	return &proto.ExecuteToolResponse{
 		RequestId: request.ID,
-		Status:    string(request.Status),
+		Status:    protoRequestStatus(request.Status),
 	}, nil
 }
 
@@ -910,4 +935,33 @@ func (s *GRPCServer) DrainMachine(ctx context.Context, req *proto.DrainMachineRe
 		return &proto.DrainMachineResponse{Drained: false}, status.Errorf(codes.Internal, "drain failed: %v", err)
 	}
 	return &proto.DrainMachineResponse{Drained: true}, nil
+}
+
+// encodePageOffset wraps a numeric list offset as the v1 opaque page token.
+func encodePageOffset(offset int) (string, error) {
+	return pageTokenCodec.Encode(offset)
+}
+
+// decodePageOffset unwraps a v1 opaque page token into its numeric list
+// offset. Empty means "from the start".
+func decodePageOffset(token string) (int, error) {
+	return pageTokenCodec.Decode(token)
+}
+
+// InvokeTool is the v1 name for synchronous tool invocation; ExecuteTool is
+// kept as a deprecated alias with identical behavior.
+func (s *GRPCServer) InvokeTool(ctx context.Context, req *proto.ExecuteToolRequest) (*proto.ExecuteToolResponse, error) {
+	return s.ExecuteTool(ctx, req)
+}
+
+// GetTool resolves a tool by ID or by name: the ID wins when both reference
+// fields are set.
+func (s *GRPCServer) GetTool(ctx context.Context, req *proto.GetToolRequest) (*proto.GetToolResponse, error) {
+	if strings.TrimSpace(req.ToolId) != "" {
+		return s.GetToolById(ctx, &proto.GetToolByIdRequest{SessionId: req.SessionId, ToolId: req.ToolId})
+	}
+	if strings.TrimSpace(req.ToolName) != "" {
+		return s.GetToolByName(ctx, &proto.GetToolByNameRequest{SessionId: req.SessionId, ToolName: req.ToolName})
+	}
+	return nil, status.Error(codes.InvalidArgument, "failed to get tool: provide either tool_id or tool_name")
 }

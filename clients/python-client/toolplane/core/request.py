@@ -18,13 +18,20 @@ from toolplane.proto.service_pb2 import (
     GetRequestRequest,
     ListRequestsRequest,
     RenewRequestLeaseRequest,
+    RequestStatus,
     ResumeStreamRequest,
     SubmitRequestResultRequest,
     UpdateRequestRequest,
 )
 
+from ..common.utils import proto_enum_name, timestamp_to_iso
 from .connection import ConnectionManager
-from .errors import RequestError, api_error_from_rpc_error
+from .errors import (
+    RequestError,
+    api_error_from_rpc_error,
+    normalize_status_name,
+    status_for_wire,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +63,16 @@ class RequestManager:
             "id": request.id,
             "sessionId": request.session_id,
             "toolName": request.tool_name,
-            "status": request.status,
+            "status": normalize_status_name(
+                proto_enum_name(request.status, RequestStatus)
+            ),
             "input": request.input,
-            "createdAt": request.created_at,
-            "updatedAt": request.updated_at,
+            "createdAt": timestamp_to_iso(request.created_at),
+            "updatedAt": timestamp_to_iso(request.updated_at),
             "executingMachineId": request.executing_machine_id,
             "leasedBy": request.leased_by,
             "leaseEpoch": request.lease_epoch,
-            "leaseExpiresAt": request.lease_expires_at,
+            "leaseExpiresAt": timestamp_to_iso(request.lease_expires_at),
             "timeoutSeconds": request.timeout_seconds,
         }
 
@@ -79,8 +88,8 @@ class RequestManager:
         if request.error:
             normalized["error"] = request.error
 
-        if request.stream_results:
-            normalized["streamResults"] = list(request.stream_results)
+        # stream_results moved to the request_chunks table in v1; chunk
+        # windows are fetched via GetRequestChunks/getRequestChunksWindow.
 
         return normalized
 
@@ -222,7 +231,9 @@ class RequestManager:
 
             # Get pending requests
             request = ListRequestsRequest(
-                session_id=session_id, status="pending", limit=limit
+                session_id=session_id,
+                status=status_for_wire("pending"),
+                page_size=limit,
             )
 
             response = self.connection_manager.requests_stub.ListRequests(
@@ -479,7 +490,7 @@ class RequestManager:
         request = UpdateRequestRequest(
             session_id=session_id,
             request_id=request_id,
-            status=status,
+            status=status_for_wire(status),
             machine_id=machine_id,
             lease_epoch=lease_epoch,
         )
@@ -658,18 +669,22 @@ class RequestManager:
         status: str = "",
         tool_name: str = "",
         limit: int = 10,
-        offset: int = 0,
+        page_token: str = "",
     ) -> List[Dict[str, Any]]:
-        """List requests in a session."""
+        """List requests in a session.
+
+        page_token is the opaque cursor from a previous page's response;
+        an empty string starts from the first page.
+        """
         try:
             self.connection_manager.ensure_connected()
 
             request = ListRequestsRequest(
                 session_id=session_id,
-                status=status,
+                status=status_for_wire(status),
                 tool_name=tool_name,
-                limit=limit,
-                offset=offset,
+                page_size=limit,
+                page_token=page_token or "",
             )
 
             response = self.connection_manager.requests_stub.ListRequests(

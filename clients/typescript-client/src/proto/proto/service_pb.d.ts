@@ -1,10 +1,34 @@
-// package: api
+// package: api.v1
 // file: proto/service.proto
 
 /* tslint:disable */
 /* eslint-disable */
 
 import * as jspb from "google-protobuf";
+import * as google_protobuf_timestamp_pb from "google-protobuf/google/protobuf/timestamp_pb";
+
+export class ListPage extends jspb.Message { 
+    getNextPageToken(): string;
+    setNextPageToken(value: string): ListPage;
+    getTotalSize(): number;
+    setTotalSize(value: number): ListPage;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): ListPage.AsObject;
+    static toObject(includeInstance: boolean, msg: ListPage): ListPage.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: ListPage, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): ListPage;
+    static deserializeBinaryFromReader(message: ListPage, reader: jspb.BinaryReader): ListPage;
+}
+
+export namespace ListPage {
+    export type AsObject = {
+        nextPageToken: string,
+        totalSize: number,
+    }
+}
 
 export class ResumeStreamRequest extends jspb.Message { 
     getRequestId(): string;
@@ -84,10 +108,16 @@ export class Tool extends jspb.Message {
 
     getConfigMap(): jspb.Map<string, string>;
     clearConfigMap(): void;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): Tool;
-    getLastPingAt(): string;
-    setLastPingAt(value: string): Tool;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Tool;
+
+    hasLastPingAt(): boolean;
+    clearLastPingAt(): void;
+    getLastPingAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setLastPingAt(value?: google_protobuf_timestamp_pb.Timestamp): Tool;
     getSessionId(): string;
     setSessionId(value: string): Tool;
     getMachineId(): string;
@@ -115,8 +145,8 @@ export namespace Tool {
         schema: string,
 
         configMap: Array<[string, string]>,
-        createdAt: string,
-        lastPingAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        lastPingAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         sessionId: string,
         machineId: string,
         tagsList: Array<string>,
@@ -130,12 +160,13 @@ export class Session extends jspb.Message {
     setName(value: string): Session;
     getDescription(): string;
     setDescription(value: string): Session;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): Session;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Session;
     getCreatedBy(): string;
     setCreatedBy(value: string): Session;
-    getApiKey(): string;
-    setApiKey(value: string): Session;
     getNamespace(): string;
     setNamespace(value: string): Session;
 
@@ -154,9 +185,8 @@ export namespace Session {
         id: string,
         name: string,
         description: string,
-        createdAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         createdBy: string,
-        apiKey: string,
         namespace: string,
     }
 }
@@ -170,12 +200,18 @@ export class ApiKey extends jspb.Message {
     setKey(value: string): ApiKey;
     getSessionId(): string;
     setSessionId(value: string): ApiKey;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): ApiKey;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): ApiKey;
     getCreatedBy(): string;
     setCreatedBy(value: string): ApiKey;
-    getRevokedAt(): string;
-    setRevokedAt(value: string): ApiKey;
+
+    hasRevokedAt(): boolean;
+    clearRevokedAt(): void;
+    getRevokedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setRevokedAt(value?: google_protobuf_timestamp_pb.Timestamp): ApiKey;
     clearCapabilitiesList(): void;
     getCapabilitiesList(): Array<string>;
     setCapabilitiesList(value: Array<string>): ApiKey;
@@ -199,9 +235,9 @@ export namespace ApiKey {
         name: string,
         key: string,
         sessionId: string,
-        createdAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         createdBy: string,
-        revokedAt: string,
+        revokedAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         capabilitiesList: Array<string>,
         keyPreview: string,
     }
@@ -218,10 +254,16 @@ export class Machine extends jspb.Message {
     setSdkLanguage(value: string): Machine;
     getIp(): string;
     setIp(value: string): Machine;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): Machine;
-    getLastPingAt(): string;
-    setLastPingAt(value: string): Machine;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Machine;
+
+    hasLastPingAt(): boolean;
+    clearLastPingAt(): void;
+    getLastPingAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setLastPingAt(value?: google_protobuf_timestamp_pb.Timestamp): Machine;
     getMachineToken(): string;
     setMachineToken(value: string): Machine;
 
@@ -242,8 +284,8 @@ export namespace Machine {
         sdkVersion: string,
         sdkLanguage: string,
         ip: string,
-        createdAt: string,
-        lastPingAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        lastPingAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         machineToken: string,
     }
 }
@@ -255,8 +297,8 @@ export class Request extends jspb.Message {
     setSessionId(value: string): Request;
     getToolName(): string;
     setToolName(value: string): Request;
-    getStatus(): string;
-    setStatus(value: string): Request;
+    getStatus(): RequestStatus;
+    setStatus(value: RequestStatus): Request;
     getInput(): string;
     setInput(value: string): Request;
     getResult(): string;
@@ -265,22 +307,27 @@ export class Request extends jspb.Message {
     setResultType(value: string): Request;
     getError(): string;
     setError(value: string): Request;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): Request;
-    getUpdatedAt(): string;
-    setUpdatedAt(value: string): Request;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Request;
+
+    hasUpdatedAt(): boolean;
+    clearUpdatedAt(): void;
+    getUpdatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setUpdatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Request;
     getExecutingMachineId(): string;
     setExecutingMachineId(value: string): Request;
-    clearStreamResultsList(): void;
-    getStreamResultsList(): Array<string>;
-    setStreamResultsList(value: Array<string>): Request;
-    addStreamResults(value: string, index?: number): string;
     getLeasedBy(): string;
     setLeasedBy(value: string): Request;
     getLeaseEpoch(): number;
     setLeaseEpoch(value: number): Request;
-    getLeaseExpiresAt(): string;
-    setLeaseExpiresAt(value: string): Request;
+
+    hasLeaseExpiresAt(): boolean;
+    clearLeaseExpiresAt(): void;
+    getLeaseExpiresAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setLeaseExpiresAt(value?: google_protobuf_timestamp_pb.Timestamp): Request;
     getTimeoutSeconds(): number;
     setTimeoutSeconds(value: number): Request;
 
@@ -299,18 +346,17 @@ export namespace Request {
         id: string,
         sessionId: string,
         toolName: string,
-        status: string,
+        status: RequestStatus,
         input: string,
         result: string,
         resultType: string,
         error: string,
-        createdAt: string,
-        updatedAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        updatedAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         executingMachineId: string,
-        streamResultsList: Array<string>,
         leasedBy: string,
         leaseEpoch: number,
-        leaseExpiresAt: string,
+        leaseExpiresAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         timeoutSeconds: number,
     }
 }
@@ -419,6 +465,32 @@ export class ListToolsResponse extends jspb.Message {
 export namespace ListToolsResponse {
     export type AsObject = {
         toolsList: Array<Tool.AsObject>,
+    }
+}
+
+export class GetToolRequest extends jspb.Message { 
+    getSessionId(): string;
+    setSessionId(value: string): GetToolRequest;
+    getToolId(): string;
+    setToolId(value: string): GetToolRequest;
+    getToolName(): string;
+    setToolName(value: string): GetToolRequest;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): GetToolRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: GetToolRequest): GetToolRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: GetToolRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): GetToolRequest;
+    static deserializeBinaryFromReader(message: GetToolRequest, reader: jspb.BinaryReader): GetToolRequest;
+}
+
+export namespace GetToolRequest {
+    export type AsObject = {
+        sessionId: string,
+        toolId: string,
+        toolName: string,
     }
 }
 
@@ -570,8 +642,6 @@ export class CreateSessionRequest extends jspb.Message {
     setName(value: string): CreateSessionRequest;
     getDescription(): string;
     setDescription(value: string): CreateSessionRequest;
-    getApiKey(): string;
-    setApiKey(value: string): CreateSessionRequest;
     getSessionId(): string;
     setSessionId(value: string): CreateSessionRequest;
     getNamespace(): string;
@@ -592,7 +662,6 @@ export namespace CreateSessionRequest {
         userId: string,
         name: string,
         description: string,
-        apiKey: string,
         sessionId: string,
         namespace: string,
     }
@@ -688,8 +757,8 @@ export class ListUserSessionsRequest extends jspb.Message {
     setUserId(value: string): ListUserSessionsRequest;
     getPageSize(): number;
     setPageSize(value: number): ListUserSessionsRequest;
-    getPageToken(): number;
-    setPageToken(value: number): ListUserSessionsRequest;
+    getPageToken(): string;
+    setPageToken(value: string): ListUserSessionsRequest;
     getFilter(): string;
     setFilter(value: string): ListUserSessionsRequest;
 
@@ -707,7 +776,7 @@ export namespace ListUserSessionsRequest {
     export type AsObject = {
         userId: string,
         pageSize: number,
-        pageToken: number,
+        pageToken: string,
         filter: string,
     }
 }
@@ -717,10 +786,11 @@ export class ListUserSessionsResponse extends jspb.Message {
     getSessionsList(): Array<Session>;
     setSessionsList(value: Array<Session>): ListUserSessionsResponse;
     addSessions(value?: Session, index?: number): Session;
-    getNextPageToken(): number;
-    setNextPageToken(value: number): ListUserSessionsResponse;
-    getTotalCount(): number;
-    setTotalCount(value: number): ListUserSessionsResponse;
+
+    hasPage(): boolean;
+    clearPage(): void;
+    getPage(): ListPage | undefined;
+    setPage(value?: ListPage): ListUserSessionsResponse;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ListUserSessionsResponse.AsObject;
@@ -735,8 +805,7 @@ export class ListUserSessionsResponse extends jspb.Message {
 export namespace ListUserSessionsResponse {
     export type AsObject = {
         sessionsList: Array<Session.AsObject>,
-        nextPageToken: number,
-        totalCount: number,
+        page?: ListPage.AsObject,
     }
 }
 
@@ -1267,8 +1336,8 @@ export namespace ExecuteToolRequest {
 export class ExecuteToolResponse extends jspb.Message { 
     getRequestId(): string;
     setRequestId(value: string): ExecuteToolResponse;
-    getStatus(): string;
-    setStatus(value: string): ExecuteToolResponse;
+    getStatus(): RequestStatus;
+    setStatus(value: RequestStatus): ExecuteToolResponse;
     getResult(): string;
     setResult(value: string): ExecuteToolResponse;
     getResultType(): string;
@@ -1289,7 +1358,7 @@ export class ExecuteToolResponse extends jspb.Message {
 export namespace ExecuteToolResponse {
     export type AsObject = {
         requestId: string,
-        status: string,
+        status: RequestStatus,
         result: string,
         resultType: string,
         error: string,
@@ -1386,14 +1455,14 @@ export namespace GetRequestRequest {
 export class ListRequestsRequest extends jspb.Message { 
     getSessionId(): string;
     setSessionId(value: string): ListRequestsRequest;
-    getStatus(): string;
-    setStatus(value: string): ListRequestsRequest;
+    getStatus(): RequestStatus;
+    setStatus(value: RequestStatus): ListRequestsRequest;
     getToolName(): string;
     setToolName(value: string): ListRequestsRequest;
-    getLimit(): number;
-    setLimit(value: number): ListRequestsRequest;
-    getOffset(): number;
-    setOffset(value: number): ListRequestsRequest;
+    getPageSize(): number;
+    setPageSize(value: number): ListRequestsRequest;
+    getPageToken(): string;
+    setPageToken(value: string): ListRequestsRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ListRequestsRequest.AsObject;
@@ -1408,10 +1477,10 @@ export class ListRequestsRequest extends jspb.Message {
 export namespace ListRequestsRequest {
     export type AsObject = {
         sessionId: string,
-        status: string,
+        status: RequestStatus,
         toolName: string,
-        limit: number,
-        offset: number,
+        pageSize: number,
+        pageToken: string,
     }
 }
 
@@ -1420,6 +1489,11 @@ export class ListRequestsResponse extends jspb.Message {
     getRequestsList(): Array<Request>;
     setRequestsList(value: Array<Request>): ListRequestsResponse;
     addRequests(value?: Request, index?: number): Request;
+
+    hasPage(): boolean;
+    clearPage(): void;
+    getPage(): ListPage | undefined;
+    setPage(value?: ListPage): ListRequestsResponse;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ListRequestsResponse.AsObject;
@@ -1434,6 +1508,7 @@ export class ListRequestsResponse extends jspb.Message {
 export namespace ListRequestsResponse {
     export type AsObject = {
         requestsList: Array<Request.AsObject>,
+        page?: ListPage.AsObject,
     }
 }
 
@@ -1442,8 +1517,8 @@ export class UpdateRequestRequest extends jspb.Message {
     setSessionId(value: string): UpdateRequestRequest;
     getRequestId(): string;
     setRequestId(value: string): UpdateRequestRequest;
-    getStatus(): string;
-    setStatus(value: string): UpdateRequestRequest;
+    getStatus(): RequestStatus;
+    setStatus(value: RequestStatus): UpdateRequestRequest;
     getResult(): string;
     setResult(value: string): UpdateRequestRequest;
     getResultType(): string;
@@ -1467,7 +1542,7 @@ export namespace UpdateRequestRequest {
     export type AsObject = {
         sessionId: string,
         requestId: string,
-        status: string,
+        status: RequestStatus,
         result: string,
         resultType: string,
         machineId: string,
@@ -1788,8 +1863,8 @@ export class Task extends jspb.Message {
     setSessionId(value: string): Task;
     getToolName(): string;
     setToolName(value: string): Task;
-    getStatus(): string;
-    setStatus(value: string): Task;
+    getStatus(): TaskStatus;
+    setStatus(value: TaskStatus): Task;
     getInput(): string;
     setInput(value: string): Task;
     getResult(): string;
@@ -1798,12 +1873,21 @@ export class Task extends jspb.Message {
     setResultType(value: string): Task;
     getError(): string;
     setError(value: string): Task;
-    getCreatedAt(): string;
-    setCreatedAt(value: string): Task;
-    getUpdatedAt(): string;
-    setUpdatedAt(value: string): Task;
-    getCompletedAt(): string;
-    setCompletedAt(value: string): Task;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Task;
+
+    hasUpdatedAt(): boolean;
+    clearUpdatedAt(): void;
+    getUpdatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setUpdatedAt(value?: google_protobuf_timestamp_pb.Timestamp): Task;
+
+    hasCompletedAt(): boolean;
+    clearCompletedAt(): void;
+    getCompletedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCompletedAt(value?: google_protobuf_timestamp_pb.Timestamp): Task;
     getCurrentRequestId(): string;
     setCurrentRequestId(value: string): Task;
 
@@ -1822,14 +1906,14 @@ export namespace Task {
         id: string,
         sessionId: string,
         toolName: string,
-        status: string,
+        status: TaskStatus,
         input: string,
         result: string,
         resultType: string,
         error: string,
-        createdAt: string,
-        updatedAt: string,
-        completedAt: string,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        updatedAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        completedAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         currentRequestId: string,
     }
 }
@@ -1969,4 +2053,23 @@ export namespace CancelTaskResponse {
     export type AsObject = {
         success: boolean,
     }
+}
+
+export enum RequestStatus {
+    REQUEST_STATUS_UNSPECIFIED = 0,
+    REQUEST_STATUS_PENDING = 1,
+    REQUEST_STATUS_CLAIMED = 2,
+    REQUEST_STATUS_RUNNING = 3,
+    REQUEST_STATUS_DONE = 4,
+    REQUEST_STATUS_FAILED = 5,
+}
+
+export enum TaskStatus {
+    TASK_STATUS_UNSPECIFIED = 0,
+    TASK_STATUS_PENDING = 1,
+    TASK_STATUS_RUNNING = 2,
+    TASK_STATUS_COMPLETED = 3,
+    TASK_STATUS_FAILED = 4,
+    TASK_STATUS_CANCELLED = 5,
+    TASK_STATUS_DEAD_LETTER = 6,
 }

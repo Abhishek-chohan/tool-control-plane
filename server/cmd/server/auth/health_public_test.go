@@ -72,7 +72,7 @@ func TestNonPublicMethodsStillRequireAuthentication(t *testing.T) {
 	_, err := interceptor(
 		context.Background(),
 		nil,
-		&grpc.UnaryServerInfo{FullMethod: "/api.ToolService/ListTools"},
+		&grpc.UnaryServerInfo{FullMethod: "/api.v1.ToolService/ListTools"},
 		func(ctx context.Context, req interface{}) (interface{}, error) { return nil, nil },
 	)
 	if status.Code(err) != codes.Unauthenticated {
