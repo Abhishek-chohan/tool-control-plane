@@ -27,7 +27,7 @@ For a concrete first-offload workload, think of one sandboxed code-execution wor
 - Generic `ExecuteTool()` and `StreamExecuteTool()` helpers that follow the real request lifecycle.
 - Numeric convenience helpers `Add()`, `Subtract()`, `Multiply()`, and `Divide()` that call `ExecuteTool()` against named tools.
 - Tool discovery helpers `ListTools()`, `GetToolByID()`, `GetToolByName()`, and `DeleteTool()`.
-- Opt-in live integration coverage in `client/toolplane_client_integration_test.go`.
+- Opt-in live integration coverage in [client/toolplane_client_integration_test.go](client/toolplane_client_integration_test.go).
 
 ## Installation
 
@@ -153,6 +153,47 @@ The client exposes public wrappers for:
 `RegisterTool` binds tools to the current machine ID when one is registered. For brand-new sessions, either register a machine first or embed tool definitions directly in `RegisterMachine(...)`.
 
 `CreateSession` uses the configured transport auth metadata and does not forward the legacy `CreateSession.api_key` request field. `CreateAPIKey` is the only maintained helper that returns secret material. `ListAPIKeys` returns redacted metadata with `Key == ""`, plus `KeyPreview` and `Capabilities`.
+
+<!-- BEGIN GENERATED: api-surface -- tooling: tools/gen_sdk_readmes.py; edits inside this block are overwritten -->
+### Method reference
+
+All 32 exported `ToolplaneClient` methods, parsed from `client/toolplane_client.go`:
+
+| Method | Returns |
+| --- | --- |
+| `Connect()` | `error` |
+| `Disconnect()` | `error` |
+| `Ping()` | `(string, error)` |
+| `ExecuteTool(ctx context.Context, toolName string, params map[string]interface{})` | `(*pb.Request, error)` |
+| `ExecuteToolWithKey(ctx context.Context, toolName string, params map[string]interface{}, idempotencyKey string)` | `(*pb.Request, error)` |
+| `ResumeStream(ctx context.Context, requestID string, lastSeq int32, onChunk func(*pb.ExecuteToolChunk) error)` | `([]*pb.ExecuteToolChunk, error)` |
+| `StreamExecuteTool(ctx context.Context, toolName string, params map[string]interface{}, onChunk func(*pb.ExecuteToolChunk) error)` | `([]*pb.ExecuteToolChunk, error)` |
+| `RegisterTool(name, description, schema string, config map[string]string, tags []string)` | `(*pb.Tool, error)` |
+| `ListTools()` | `([]*pb.Tool, error)` |
+| `GetToolByID(toolID string)` | `(*pb.Tool, error)` |
+| `GetToolByName(toolName string)` | `(*pb.Tool, error)` |
+| `DeleteTool(toolID string)` | `(bool, error)` |
+| `CreateSession(name, description, namespace string)` | `(*pb.Session, error)` |
+| `GetSession()` | `(*pb.Session, error)` |
+| `ListSessions()` | `([]*pb.Session, error)` |
+| `UpdateSession(name, description, namespace string)` | `(*pb.Session, error)` |
+| `CreateAPIKey(name string, capabilities ...string)` | `(*pb.ApiKey, error)` |
+| `ListAPIKeys()` | `([]*pb.ApiKey, error)` |
+| `RevokeAPIKey(keyID string)` | `(bool, error)` |
+| `RegisterMachine(machineID, sdkVersion string, tools []*pb.RegisterToolRequest)` | `(*pb.Machine, error)` |
+| `ListMachines()` | `([]*pb.Machine, error)` |
+| `GetMachine(machineID string)` | `(*pb.Machine, error)` |
+| `UnregisterMachine(machineID string)` | `(bool, error)` |
+| `DrainMachine(machineID string)` | `(bool, error)` |
+| `CreateRequest(toolName, input string)` | `(*pb.Request, error)` |
+| `GetRequest(requestID string)` | `(*pb.Request, error)` |
+| `ListRequests(status, toolName string, limit int32, pageToken string)` | `(*pb.ListRequestsResponse, error)` |
+| `CancelRequest(requestID string)` | `(bool, error)` |
+| `CreateTask(toolName, input string)` | `(*pb.Task, error)` |
+| `GetTask(taskID string)` | `(*pb.Task, error)` |
+| `ListTasks()` | `([]*pb.Task, error)` |
+| `CancelTask(taskID string)` | `(bool, error)` |
+<!-- END GENERATED: api-surface -->
 
 ## Examples
 

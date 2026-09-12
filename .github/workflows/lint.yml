@@ -124,3 +124,20 @@ jobs:
       - name: Run ESLint
         working-directory: clients/typescript-mcp-adapter
         run: npm run lint
+
+  sdk-readme-drift:
+    name: SDK README Drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check generated SDK README sections
+        run: python tools/gen_sdk_readmes.py --check
