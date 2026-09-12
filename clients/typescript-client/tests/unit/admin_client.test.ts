@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Timestamp } from 'google-protobuf/google/protobuf/timestamp_pb';
+
 import { ToolplaneClient } from '../../src/core/toolplane_client';
 import { ClientProtocol } from '../../src/interfaces';
 import {
@@ -24,6 +26,12 @@ type MutableClientState = {
   machineId: string;
 };
 
+function timestamp(date: string): Timestamp {
+  const value = new Timestamp();
+  value.fromDate(new Date(date));
+  return value;
+}
+
 function createTool(overrides: Partial<{
   id: string;
   name: string;
@@ -43,8 +51,8 @@ function createTool(overrides: Partial<{
   for (const [key, value] of Object.entries(overrides.config ?? { region: 'test' })) {
     tool.getConfigMap().set(key, value);
   }
-  tool.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
-  tool.setLastPingAt(overrides.lastPingAt ?? '2025-01-01T00:01:00Z');
+  tool.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
+  tool.setLastPingAt(timestamp(overrides.lastPingAt ?? '2025-01-01T00:01:00Z'));
   tool.setSessionId(overrides.sessionId ?? 'session-1');
   tool.setTagsList(overrides.tags ?? ['core']);
   return tool;
@@ -56,16 +64,14 @@ function createSession(overrides: Partial<{
   description: string;
   createdAt: string;
   createdBy: string;
-  apiKey: string;
   namespace: string;
 }> = {}): ProtoSession {
   const session = new ProtoSession();
   session.setId(overrides.id ?? 'session-1');
   session.setName(overrides.name ?? 'primary');
   session.setDescription(overrides.description ?? 'demo session');
-  session.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
+  session.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
   session.setCreatedBy(overrides.createdBy ?? 'unit-user');
-  session.setApiKey(overrides.apiKey ?? 'api-key');
   session.setNamespace(overrides.namespace ?? 'default');
   return session;
 }
@@ -85,12 +91,14 @@ function createApiKey(overrides: Partial<{
   apiKey.setId(overrides.id ?? 'key-1');
   apiKey.setName(overrides.name ?? 'cli');
   apiKey.setKey(overrides.key ?? 'secret');
-	apiKey.setKeyPreview(overrides.keyPreview ?? 'toolplan...cret');
+  apiKey.setKeyPreview(overrides.keyPreview ?? 'toolplan...cret');
   apiKey.setSessionId(overrides.sessionId ?? 'session-1');
-  apiKey.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
+  apiKey.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
   apiKey.setCreatedBy(overrides.createdBy ?? 'unit-user');
-	apiKey.setCapabilitiesList(overrides.capabilities ?? ['read', 'execute', 'admin']);
-  apiKey.setRevokedAt(overrides.revokedAt ?? '');
+  apiKey.setCapabilitiesList(overrides.capabilities ?? ['read', 'execute', 'admin']);
+  if (overrides.revokedAt) {
+    apiKey.setRevokedAt(timestamp(overrides.revokedAt));
+  }
   return apiKey;
 }
 
@@ -134,7 +142,7 @@ test('getToolById returns a normalized tool payload', async () => {
 
   const client = createConnectedClient({
     toolClient: {
-      getToolById: unaryResponse(response),
+      getTool: unaryResponse(response),
     },
   });
 
@@ -151,7 +159,7 @@ test('getToolByName returns a normalized tool payload', async () => {
 
   const client = createConnectedClient({
     toolClient: {
-      getToolByName: unaryResponse(response),
+      getTool: unaryResponse(response),
     },
   });
 
@@ -256,7 +264,7 @@ test('listApiKeys normalizes api key responses', async () => {
   assert.deepEqual(apiKeys.map((apiKey) => apiKey.id), ['key-1', 'key-2']);
 	assert.equal(apiKeys[0].keyPreview, 'toolplan...cret');
 	assert.deepEqual(apiKeys[0].capabilities, ['read', 'execute', 'admin']);
-  assert.equal(apiKeys[1].revokedAt, '2025-01-01T01:00:00Z');
+  assert.equal(apiKeys[1].revokedAt, '2025-01-01T01:00:00.000Z');
 });
 
 test('revokeApiKey returns the server success flag', async () => {

@@ -12,7 +12,7 @@ import (
 
 func TestGRPCServerCreateApiKeyReturnsInvalidArgumentForUnsupportedCapabilities(t *testing.T) {
 	sessionService := NewSessionsService(trace.NopTracer(), nil)
-	session, err := sessionService.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	session, err := sessionService.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

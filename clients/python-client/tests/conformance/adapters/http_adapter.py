@@ -103,7 +103,7 @@ class HttpConformanceAdapter:
         return self.client.list_user_sessions(
             user_id=request["user_id"],
             page_size=request.get("page_size", 10),
-            page_token=request.get("page_token", 0),
+            page_token=str(request.get("page_token", "") or ""),
             filter=request.get("filter", ""),
         )
 
@@ -205,7 +205,7 @@ class HttpConformanceAdapter:
         try:
             self.client.connection_manager.ensure_connected()
             response = self.client.connection_manager.stream_post(
-                "api/ResumeStream",
+                "api.v1/ResumeStream",
                 {"requestId": request_id, "lastSeq": last_seq},
             )
 
@@ -279,7 +279,7 @@ class HttpConformanceAdapter:
             status=request.get("list_status", ""),
             tool_name=request.get("tool_name_filter", ""),
             limit=request.get("limit", 10),
-            offset=request.get("offset", 0),
+            page_token=str(request.get("page_token", "") or ""),
         )
 
     # ---------------- Fenced provider primitives ----------------

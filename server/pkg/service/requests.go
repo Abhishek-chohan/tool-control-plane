@@ -324,7 +324,7 @@ func (s *RequestsService) ListRequests(
 	toolName string,
 	limit int,
 	offset int,
-) ([]*model.Request, error) {
+) ([]*model.Request, int, error) {
 	// Store-first when a store is configured: the store is authoritative, so
 	// requests created on other replicas are visible here without waiting
 	// for a local write to mirror them. Results mirror into the local cache
@@ -334,7 +334,7 @@ func (s *RequestsService) ListRequests(
 		defer cancel()
 		stored, err := s.store.ListRequestsBySession(ctx, sessionID)
 		if err != nil {
-			return nil, fmt.Errorf("persist request list failed: %w", err)
+			return nil, 0, fmt.Errorf("persist request list failed: %w", err)
 		}
 		s.requestsMutex.Lock()
 		if _, ok := s.requests[sessionID]; !ok {
@@ -351,7 +351,7 @@ func (s *RequestsService) ListRequests(
 
 	// Check if session exists
 	if _, ok := s.requests[sessionID]; !ok {
-		return []*model.Request{}, nil
+		return []*model.Request{}, 0, nil
 	}
 
 	// Apply filters
@@ -378,6 +378,9 @@ func (s *RequestsService) ListRequests(
 	// stable and the store's oldest-first ordering survives the cache.
 	sort.Slice(filtered, func(i, j int) bool { return filtered[i].CreatedAt.Before(filtered[j].CreatedAt) })
 
+	// The filtered total feeds the v1 ListPage trailer.
+	totalCount := len(filtered)
+
 	// Apply pagination
 	if limit <= 0 {
 		limit = 10 // Default limit
@@ -395,7 +398,7 @@ func (s *RequestsService) ListRequests(
 
 	// Check bounds
 	if offset >= len(filtered) {
-		return []*model.Request{}, nil
+		return []*model.Request{}, totalCount, nil
 	}
 
 	// Hand out clones: callers iterate outside the service lock while
@@ -404,7 +407,7 @@ func (s *RequestsService) ListRequests(
 	for _, req := range filtered[offset:end] {
 		cloned = append(cloned, req.Clone())
 	}
-	return cloned, nil
+	return cloned, totalCount, nil
 }
 
 // UpdateRequest is a fenced provider write: it updates a request's status,

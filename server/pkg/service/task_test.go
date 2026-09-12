@@ -142,7 +142,7 @@ func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
 		t.Fatalf("task status = %q, want %q", updatedTask.Status, model.StatusFailed)
 	}
 
-	requests, err := requestService.ListRequests(sessionID, "", "echo", 10, 0)
+	requests, _, err := requestService.ListRequests(sessionID, "", "echo", 10, 0)
 	if err != nil {
 		t.Fatalf("list requests: %v", err)
 	}

@@ -94,8 +94,8 @@ func TestGRPCLiveExecuteAndStreamExecuteTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to execute unary tool: %v\n%s", err, serverOutput.String())
 	}
-	if request.GetStatus() != "done" {
-		t.Fatalf("expected unary request to finish with status done, got %q", request.GetStatus())
+	if request.GetStatus() != pb.RequestStatus_REQUEST_STATUS_DONE {
+		t.Fatalf("expected unary request to finish with status done, got %d", request.GetStatus())
 	}
 
 	var unaryResult map[string]string
@@ -198,8 +198,8 @@ func processPendingRequests(
 	listCtx, listCancel := outgoingContext(ctx, apiKey, defaultGRPCCallTimeout)
 	response, err := requestsClient.ListRequests(listCtx, &pb.ListRequestsRequest{
 		SessionId: sessionID,
-		Status:    "pending",
-		Limit:     20,
+		Status:    pb.RequestStatus_REQUEST_STATUS_PENDING,
+		PageSize:  20,
 	})
 	listCancel()
 	if err != nil {

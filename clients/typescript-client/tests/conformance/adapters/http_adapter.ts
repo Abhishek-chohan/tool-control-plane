@@ -49,6 +49,27 @@ function numberValue(value: unknown, fallback: number): number {
   return fallback;
 }
 
+// v1 wire statuses arrive as enum names ("REQUEST_STATUS_DONE"); conformance
+// assertions keep using the friendly lowercase forms.
+function normalizeStatusName(status: unknown): string {
+  const value = String(status ?? '');
+  for (const prefix of ['REQUEST_STATUS_', 'TASK_STATUS_']) {
+    if (value.startsWith(prefix)) {
+      return value.slice(prefix.length).toLowerCase();
+    }
+  }
+  return value;
+}
+
+function statusNameForWire(status: unknown): string | undefined {
+  const value = String(status ?? '').trim().toLowerCase();
+  if (!value) {
+    // protojson rejects an empty string for an enum field; omit the filter.
+    return undefined;
+  }
+  return `REQUEST_STATUS_${value.toUpperCase()}`;
+}
+
 function normalizeGatewayErrorCode(payload: unknown): string {
   if (typeof payload === 'string') {
     try {
@@ -166,7 +187,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async connect(): Promise<void> {
-    await this.post('api/HealthCheck');
+    await this.post('api.v1/HealthCheck');
   }
 
   async close(): Promise<void> {
@@ -180,7 +201,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
 
     await Promise.allSettled(
       providers.map(async ([sessionId, state]) => {
-        await this.post('api/UnregisterMachine', {
+        await this.post('api.v1/UnregisterMachine', {
           sessionId,
           machineId: state.machineId,
         });
@@ -189,7 +210,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async createSession(request: Record<string, unknown>): Promise<string> {
-    const response = await this.post<Record<string, unknown>>('api/CreateSession', {
+    const response = await this.post<Record<string, unknown>>('api.v1/CreateSession', {
       userId: String(request.user_id ?? this.userId),
       name: String(request.name ?? ''),
       description: String(request.description ?? ''),
@@ -206,13 +227,13 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async getSessionContext(sessionId: string): Promise<Record<string, unknown> | null> {
-    const response = await this.post<Record<string, unknown>>('api/GetSession', { sessionId });
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}`, { sessionId });
     const session = this.unwrapObject(response.session ?? response);
     return Object.keys(session).length > 0 ? this.normalizeSession(session) : null;
   }
 
   async updateSession(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/UpdateSession', {
+    const response = await this.post<Record<string, unknown>>('api.v1/UpdateSession', {
       sessionId,
       name: String(request.updated_name ?? ''),
       description: String(request.updated_description ?? ''),
@@ -223,19 +244,23 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async listUserSessions(request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/ListUserSessions', {
-      userId: String(request.user_id ?? this.userId),
+    const userId = String(request.user_id ?? this.userId);
+    const response = await this.post<Record<string, unknown>>(`api.v1/users/${userId}/sessions`, {
+      userId,
       pageSize: numberValue(request.page_size, 10),
-      pageToken: numberValue(request.page_token, 0),
+      pageToken: String(request.page_token ?? ''),
       filter: String(request.filter ?? ''),
     });
 
     const sessions = Array.isArray(response.sessions) ? response.sessions : [];
+    const page = this.unwrapObject(response.page);
     return {
       ...response,
       sessions: sessions
         .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
         .map((entry) => this.normalizeSession(entry)),
+      nextPageToken: page.nextPageToken ?? '',
+      totalCount: numberValue(page.totalSize, 0),
     };
   }
 
@@ -245,7 +270,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       return;
     }
 
-    await this.post('api/RegisterTool', {
+    await this.post('api.v1/RegisterTool', {
       sessionId,
       machineId: state.machineId,
       name: toolName,
@@ -270,7 +295,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       return;
     }
 
-    await this.post('api/RegisterTool', {
+    await this.post('api.v1/RegisterTool', {
       sessionId,
       machineId: state.machineId,
       name: toolName,
@@ -291,7 +316,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async listTools(sessionId: string): Promise<Record<string, unknown>[]> {
-    const response = await this.post<Record<string, unknown>>('api/ListTools', { sessionId });
+    const response = await this.post<Record<string, unknown>>('api.v1/ListTools', { sessionId });
     const tools = Array.isArray(response.tools) ? response.tools : [];
     return tools
       .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
@@ -299,22 +324,22 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async getToolById(sessionId: string, toolId: string): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/GetToolById', { sessionId, toolId });
+    const response = await this.post<Record<string, unknown>>('api.v1/GetTool', { sessionId, toolId });
     return this.normalizeTool(this.unwrapObject(response.tool ?? response));
   }
 
   async getToolByName(sessionId: string, toolName: string): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/GetToolByName', { sessionId, toolName });
+    const response = await this.post<Record<string, unknown>>('api.v1/GetTool', { sessionId, toolName });
     return this.normalizeTool(this.unwrapObject(response.tool ?? response));
   }
 
   async deleteTool(sessionId: string, toolId: string): Promise<boolean> {
-    const response = await this.post<Record<string, unknown>>('api/DeleteTool', { sessionId, toolId });
+    const response = await this.post<Record<string, unknown>>('api.v1/DeleteTool', { sessionId, toolId });
     return response.success === true;
   }
 
   async createRequest(sessionId: string, toolName: string, params: Record<string, unknown>, idempotencyKey: string = ''): Promise<string> {
-    const response = await this.post<Record<string, unknown>>('api/CreateRequest', {
+    const response = await this.post<Record<string, unknown>>('api.v1/CreateRequest', {
       sessionId,
       toolName,
       input: JSON.stringify(params),
@@ -345,7 +370,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async getRequestStatus(sessionId: string, requestId: string): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/GetRequest', {
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests/${requestId}`, {
       sessionId,
       requestId,
     });
@@ -353,7 +378,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     const normalized = this.normalizeRequest(this.unwrapObject(response.request ?? response));
 
     try {
-      const chunkResponse = await this.post<Record<string, unknown>>('api/GetRequestChunks', {
+      const chunkResponse = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests/${requestId}/chunks`, {
         sessionId,
         requestId,
       });
@@ -369,7 +394,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async getRequestChunksWindow(sessionId: string, requestId: string): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/GetRequestChunks', {
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests/${requestId}/chunks`, {
       sessionId,
       requestId,
     });
@@ -383,7 +408,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
 
   async resumeStream(requestId: string, lastSeq: number): Promise<Record<string, unknown>> {
     const response = await this.client.post<NodeJS.ReadableStream>(
-      '/api/ResumeStream',
+      '/api.v1/ResumeStream',
       { requestId, lastSeq },
       {
         responseType: 'stream',
@@ -513,13 +538,18 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async listRequests(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>[]> {
-    const response = await this.post<Record<string, unknown>>('api/ListRequests', {
+    const payload: Record<string, unknown> = {
       sessionId,
-      status: String(request.list_status ?? ''),
       toolName: String(request.tool_name_filter ?? ''),
-      limit: numberValue(request.limit, 10),
-      offset: numberValue(request.offset, 0),
-    });
+      pageSize: numberValue(request.limit, 10),
+      pageToken: String(request.page_token ?? ''),
+    };
+    const status = statusNameForWire(request.list_status);
+    if (status) {
+      payload.status = status;
+    }
+
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests`, payload);
 
     const requests = Array.isArray(response.requests) ? response.requests : [];
     return requests
@@ -528,7 +558,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/CreateApiKey', {
+    const response = await this.post<Record<string, unknown>>('api.v1/CreateApiKey', {
       sessionId,
       name,
 		capabilities,
@@ -537,7 +567,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async listApiKeys(sessionId: string): Promise<Record<string, unknown>[]> {
-    const response = await this.post<Record<string, unknown>>('api/ListApiKeys', { sessionId });
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/api-keys`, { sessionId });
     const apiKeys = Array.isArray(response.apiKeys)
       ? response.apiKeys
       : Array.isArray(response.api_keys)
@@ -550,7 +580,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async revokeApiKey(sessionId: string, keyId: string): Promise<boolean> {
-    const response = await this.post<Record<string, unknown>>('api/RevokeApiKey', {
+    const response = await this.post<Record<string, unknown>>('api.v1/RevokeApiKey', {
       sessionId,
       keyId,
     });
@@ -558,7 +588,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async registerMachine(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/RegisterMachine', {
+    const response = await this.post<Record<string, unknown>>('api.v1/RegisterMachine', {
       sessionId,
       machineId: String(request.machine_id ?? randomUUID()),
       sdkVersion: String(request.sdk_version ?? '1.0.0-conformance'),
@@ -570,7 +600,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async listMachines(sessionId: string): Promise<Record<string, unknown>[]> {
-    const response = await this.post<Record<string, unknown>>('api/ListMachines', { sessionId });
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/machines`, { sessionId });
     const machines = Array.isArray(response.machines) ? response.machines : [];
 
     return machines
@@ -588,7 +618,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     requestId: string,
     machineId: string,
   ): Promise<Record<string, unknown>> {
-    const settled = await this.postSettled('api/ClaimRequest', {
+    const settled = await this.postSettled('api.v1/ClaimRequest', {
       sessionId,
       requestId,
       machineId,
@@ -606,7 +636,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     leaseEpoch: number,
     result: unknown,
   ): Promise<Record<string, unknown>> {
-    const settled = await this.postSettled('api/SubmitRequestResult', {
+    const settled = await this.postSettled('api.v1/SubmitRequestResult', {
       sessionId,
       requestId,
       result: JSON.stringify(result),
@@ -627,7 +657,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     machineId: string,
     leaseEpoch: number,
   ): Promise<Record<string, unknown>> {
-    const settled = await this.postSettled('api/RenewRequestLease', {
+    const settled = await this.postSettled('api.v1/RenewRequestLease', {
       sessionId,
       requestId,
       machineId,
@@ -645,7 +675,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     const leaseExpiresAt = body.leaseExpiresAt ?? body.lease_expires_at ?? '';
     return {
       id: body.id,
-      status: body.status,
+      status: normalizeStatusName(body.status),
       leasedBy,
       leaseEpoch,
       leaseExpiresAt,
@@ -681,7 +711,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async getMachine(sessionId: string, machineId: string): Promise<Record<string, unknown>> {
-    const response = await this.post<Record<string, unknown>>('api/GetMachine', {
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/machines/${machineId}`, {
       sessionId,
       machineId,
     });
@@ -690,7 +720,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async unregisterMachine(sessionId: string, machineId: string): Promise<boolean> {
-    const response = await this.post<Record<string, unknown>>('api/UnregisterMachine', {
+    const response = await this.post<Record<string, unknown>>('api.v1/UnregisterMachine', {
       sessionId,
       machineId,
     });
@@ -698,7 +728,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async drainMachine(sessionId: string, machineId: string): Promise<boolean> {
-    const response = await this.post<Record<string, unknown>>('api/DrainMachine', {
+    const response = await this.post<Record<string, unknown>>('api.v1/DrainMachine', {
       sessionId,
       machineId,
     });
@@ -706,7 +736,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async invoke(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<unknown> {
-    const response = await this.post<Record<string, unknown>>('api/ExecuteTool', {
+    const response = await this.post<Record<string, unknown>>('api.v1/InvokeTool', {
       sessionId,
       toolName,
       input: JSON.stringify(params),
@@ -719,7 +749,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async stream(sessionId: string, toolName: string, params: Record<string, unknown>): Promise<[unknown[], boolean]> {
-    const response = await this.post<Record<string, unknown>>('api/ExecuteTool', {
+    const response = await this.post<Record<string, unknown>>('api.v1/InvokeTool', {
       sessionId,
       toolName,
       input: JSON.stringify(params),
@@ -852,7 +882,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       tools: new Map(),
     };
 
-    await this.post('api/RegisterMachine', {
+    await this.post('api.v1/RegisterMachine', {
       sessionId,
       machineId: state.machineId,
       sdkVersion: '1.0.0-conformance',
@@ -872,10 +902,10 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
 
     const deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
-      const response = await this.post<Record<string, unknown>>('api/ListRequests', {
+      const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests`, {
         sessionId,
-        status: 'pending',
-        limit: 20,
+        status: 'REQUEST_STATUS_PENDING',
+        pageSize: 20,
       });
 
       const requests = Array.isArray(response.requests) ? response.requests : [];
@@ -890,7 +920,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
 
       // The claim response carries the lease grant; every fenced provider
       // write below must present it.
-      const claimResponse = await this.post<Record<string, unknown>>('api/ClaimRequest', {
+      const claimResponse = await this.post<Record<string, unknown>>('api.v1/ClaimRequest', {
         sessionId,
         requestId: targetRequestId,
         machineId: state.machineId,
@@ -900,10 +930,10 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
         leaseEpoch: numberValue(claimResponse.leaseEpoch, 0),
       };
 
-      await this.post('api/UpdateRequest', {
+      await this.post('api.v1/UpdateRequest', {
         sessionId,
         requestId: targetRequestId,
-        status: 'running',
+        status: 'REQUEST_STATUS_RUNNING',
         machineId: lease.machineId,
         leaseEpoch: lease.leaseEpoch,
       });
@@ -956,7 +986,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       const value = `${prefix}-${index + 1}`;
       chunks.push(value);
 
-      await this.post('api/AppendRequestChunks', {
+      await this.post('api.v1/AppendRequestChunks', {
         sessionId,
         requestId,
         chunks: [value],
@@ -978,7 +1008,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     resultType: string,
     lease: LeaseGrant,
   ): Promise<void> {
-    await this.post('api/SubmitRequestResult', {
+    await this.post('api.v1/SubmitRequestResult', {
       sessionId,
       requestId,
       result,
@@ -1064,7 +1094,7 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       id: request.id ?? '',
       sessionId: request.sessionId ?? request.session_id ?? '',
       toolName: request.toolName ?? request.tool_name ?? '',
-      status: request.status ?? '',
+      status: normalizeStatusName(request.status),
       input: request.input ?? '',
       createdAt: request.createdAt ?? request.created_at ?? '',
       updatedAt: request.updatedAt ?? request.updated_at ?? '',

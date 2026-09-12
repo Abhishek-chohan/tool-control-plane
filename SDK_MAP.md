@@ -86,13 +86,15 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | --- | --- | --- | --- | --- |
 | `RegisterTool` | `partial`: provider registration via explicit `ProviderRuntime` | `full`: `RegisterTool()` | `full`: `registerTool()` plus `ProviderRuntime.registerTool()` / `ProviderRuntime.tool()` | Direct TypeScript registration still requires a machine; the explicit runtime now owns the maintained provider path |
 | `ListTools` | `full`: `get_available_tools()` / `list_tools()` | `full`: `ListTools()` | `full`: `listTools()` | Covered by `conformance/cases/tool_discovery.json` |
-| `GetToolById` | `full`: `get_tool_by_id()` | `full`: `GetToolByID()` | `full`: `getToolById()` | Covered by `conformance/cases/tool_discovery.json` |
-| `GetToolByName` | `full`: `get_tool_by_name()` | `full`: `GetToolByName()` | `full`: `getToolByName()` | Covered by `conformance/cases/tool_discovery.json` |
+| `GetTool` | `full`: `get_tool_by_id()` / `get_tool_by_name()` | `full`: `GetToolByID()` / `GetToolByName()` | `full`: `getToolById()` / `getToolByName()` | v1 unified lookup: one RPC resolves by ID or by name. Covered by `conformance/cases/tool_discovery.json` |
+| `GetToolById` | deprecated alias of `GetTool` | `full` via `GetToolByID()` | `full` via `getToolById()` | Deprecated v0 alias, retained for migration |
+| `GetToolByName` | deprecated alias of `GetTool` | `full` via `GetToolByName()` | `full` via `getToolByName()` | Deprecated v0 alias, retained for migration |
 | `DeleteTool` | `full`: `delete_tool()` | `full`: `DeleteTool()` | `full`: `deleteTool()` | Covered by `conformance/cases/tool_discovery.json` |
 | `UpdateToolPing` | `partial`: explicit provider heartbeat path | `unsupported` | `unsupported` | No standalone public ping wrapper (provider scope) |
 | `StreamExecuteTool` | `full`: `stream()` / `astream()` | `full`: `StreamExecuteTool()` | `unsupported` | Covered by `conformance/cases/invoke_stream.json` |
 | `ResumeStream` | `full`: `request_manager.resume_stream()` (gRPC + HTTP) | `full`: `ResumeStream()` | `full`: `resumeStream()` | Replays retained chunks after `last_seq` and streams live until the final marker; the server returns `OUT_OF_RANGE` when replay falls behind the retained window. The Python `stream()` fallback resumes through it instead of re-invoking |
-| `ExecuteTool` | `full`: `invoke()` / awaitable `ainvoke()` | `full`: `ExecuteTool()` | `full`: `executeTool()` | Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
+| `InvokeTool` | `full`: `invoke()` / awaitable `ainvoke()` | `full`: `ExecuteTool()` | `full`: `executeTool()` | v1 invocation name. Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
+| `ExecuteTool` | deprecated alias of `InvokeTool` | `full` via `ExecuteTool()` | `full` via `executeTool()` | Deprecated v0 alias, retained for migration |
 | `HealthCheck` | `partial`: `ToolplaneHTTP.health()` plus connect probes | `full`: gRPC `Ping()` / `Connect()` | `full`: gRPC `ping()` / `connect()` | TypeScript and Go treat health checks as part of the maintained gRPC connection path |
 
 ## SessionsService
@@ -104,7 +106,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `ListSessions` | `full`: `list_sessions()` | `full`: `ListSessions()` | `full`: `listSessions()` | Covered by `conformance/cases/session_list.json` |
 | `UpdateSession` | `full`: `update_session()` | `full`: `UpdateSession()` | `full`: `updateSession()` | Covered by `conformance/cases/session_update.json` |
 | `DeleteSession` | `partial`: internal `_delete_session_on_server()` | `unsupported` | `unsupported` | Public bulk invalidation exists instead of direct delete |
-| `ListUserSessions` | `full`: `list_user_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
+| `ListUserSessions` | `full`: `list_user_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope). v1 pagination: `page_size` + opaque `page_token`, `ListPage` trailer |
 | `BulkDeleteSessions` | `full`: `bulk_delete_sessions()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `GetSessionStats` | `full`: `get_session_stats()` | `unsupported` | `unsupported` | Python-only session admin helper (admin scope) |
 | `InvalidateSession` | `full`: `invalidate_session()` | `unsupported` | `unsupported` | Session-wide kill switch (admin scope): revokes every live API key of the session so no credential authenticates again. `RefreshSessionToken` was removed — it fabricated a token that authenticated nothing |
@@ -129,7 +131,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | --- | --- | --- | --- | --- |
 | `CreateRequest` | `full`: `create_request()` | `full` via `ExecuteToolWithKey()` | `full`: `createRequest()` | Optional `idempotency_key` dedups retries within a session. Covered by `conformance/cases/request_create.json` and `request_idempotency_retry.json` |
 | `GetRequest` | `full`: `get_request_status()` | `full`: `GetRequest()` | `full`: `getRequest()` | Python keeps the `get_request_status()` name, while Go and TypeScript expose direct request lookup wrappers |
-| `ListRequests` | `full`: `list_requests()` | `full`: `ListRequests()` | `full`: `listRequests()` | Public across Python, Go, and TypeScript |
+| `ListRequests` | `full`: `list_requests()` | `full`: `ListRequests()` | `full`: `listRequests()` | Public across Python, Go, and TypeScript. v1 pagination: `page_size` + opaque `page_token`, `ListPage` trailer; status filter is the `RequestStatus` enum |
 | `UpdateRequest` | `partial`: internal result-status updates | `unsupported` | `full`: `updateRequest()` | Fenced provider write: the request's `machineId` + `leaseEpoch` from the claim response must be presented, otherwise the server rejects with `FAILED_PRECONDITION`. TypeScript exposes the provider-running/status transition helper used by the maintained runtime |
 | `ClaimRequest` | `partial`: explicit provider poll loop | `unsupported` | `full`: `claimRequest()` plus `ProviderRuntime` | Python and TypeScript provider runtimes claim queued work; Go still lacks a maintained runtime loop. The claim response carries the lease grant (`leasedBy`, `leaseEpoch`, `leaseExpiresAt`) that fenced writes and renewals echo |
 | `CancelRequest` | `full`: `cancel_request()` | `full`: `CancelRequest()` | `full`: `cancelRequest()` | Public across Python, Go, and TypeScript |
@@ -155,10 +157,10 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `session_list` | `SessionsService.ListSessions` | Python `list_sessions()`, Go `ListSessions()`, TypeScript `listSessions()` |
 | `session_update` | `SessionsService.UpdateSession` | Python `update_session()`, Go `UpdateSession()`, TypeScript `updateSession()` |
 | `request_create` | `RequestsService.CreateRequest`, `RequestsService.GetRequest`, `RequestsService.ListRequests` | Python `create_request()`, `get_request_status()`, `list_requests()`, Go `CreateRequest()` / `GetRequest()` / `ListRequests()`, TypeScript `createRequest()` / `getRequest()` / `listRequests()` |
-| `tool_discovery` | `ToolService.ListTools`, `ToolService.GetToolById`, `ToolService.GetToolByName`, `ToolService.DeleteTool` | Python `list_tools()` / `get_tool_by_id()` / `get_tool_by_name()` / `delete_tool()`, Go `ListTools()` / `GetToolByID()` / `GetToolByName()` / `DeleteTool()`, TypeScript `listTools()` / `getToolById()` / `getToolByName()` / `deleteTool()` |
+| `tool_discovery` | `ToolService.ListTools`, `ToolService.GetTool`, `ToolService.DeleteTool` | Python `list_tools()` / `get_tool_by_id()` / `get_tool_by_name()` / `delete_tool()`, Go `ListTools()` / `GetToolByID()` / `GetToolByName()` / `DeleteTool()`, TypeScript `listTools()` / `getToolById()` / `getToolByName()` / `deleteTool()` |
 | `api_key_lifecycle` | `SessionsService.CreateApiKey`, `SessionsService.ListApiKeys`, `SessionsService.RevokeApiKey` | Python `create_api_key()`, `list_api_keys()`, `revoke_api_key()`, Go `CreateAPIKey()` / `ListAPIKeys()` / `RevokeAPIKey()`, TypeScript `createApiKey()` / `listApiKeys()` / `revokeApiKey()` |
 | `machine_lifecycle` | `MachinesService.RegisterMachine`, `MachinesService.ListMachines`, `MachinesService.GetMachine`, `MachinesService.DrainMachine`, plus in-flight request completion during drain | Python `list_machines()`, `get_machine()`, `drain_machine()`, and `invoke()`, plus the matching Go and TypeScript machine wrappers |
-| `invoke_unary` | `ToolService.RegisterTool`, `ToolService.ExecuteTool` | Python `tool()` + `invoke()`, Go `ExecuteTool()`, TypeScript `executeTool()` |
+| `invoke_unary` | `ToolService.RegisterTool`, `ToolService.InvokeTool` | Python `tool()` + `invoke()`, Go `ExecuteTool()`, TypeScript `executeTool()` |
 | `invoke_stream` | `ToolService.RegisterTool`, `ToolService.StreamExecuteTool` | Python `tool()` + `stream()` / `astream()`, Go `StreamExecuteTool()` |
 | `provider_runtime_unary_claim_submit` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |
 | `provider_runtime_stream_append_chunks` | `MachinesService.RegisterMachine`, `RequestsService.CreateRequest`, `RequestsService.ClaimRequest`, `RequestsService.AppendRequestChunks`, `RequestsService.SubmitRequestResult` | Python `ProviderRuntime` plus `create_request()`, TypeScript `ProviderRuntime` plus `createRequest()` |

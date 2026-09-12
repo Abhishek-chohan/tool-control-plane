@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Timestamp } from 'google-protobuf/google/protobuf/timestamp_pb';
+
 import { ToolplaneClient } from '../../src/core/toolplane_client';
 import { ClientProtocol } from '../../src/interfaces';
 import {
@@ -20,6 +22,12 @@ type MutableClientState = {
   machineId: string;
 };
 
+function timestamp(date: string): Timestamp {
+  const value = new Timestamp();
+  value.fromDate(new Date(date));
+  return value;
+}
+
 function createMachine(overrides: Partial<{
   id: string;
   sessionId: string;
@@ -35,8 +43,8 @@ function createMachine(overrides: Partial<{
   machine.setSdkVersion(overrides.sdkVersion ?? '1.0.0-test');
   machine.setSdkLanguage(overrides.sdkLanguage ?? 'typescript');
   machine.setIp(overrides.ip ?? '127.0.0.1');
-  machine.setCreatedAt(overrides.createdAt ?? '2025-01-01T00:00:00Z');
-  machine.setLastPingAt(overrides.lastPingAt ?? '2025-01-01T00:01:00Z');
+  machine.setCreatedAt(timestamp(overrides.createdAt ?? '2025-01-01T00:00:00Z'));
+  machine.setLastPingAt(timestamp(overrides.lastPingAt ?? '2025-01-01T00:01:00Z'));
   return machine;
 }
 
@@ -88,8 +96,8 @@ test('listMachines normalizes machine responses', async () => {
       sdkVersion: '1.0.0-test',
       sdkLanguage: 'typescript',
       ip: '127.0.0.1',
-      createdAt: '2025-01-01T00:00:00Z',
-      lastPingAt: '2025-01-01T00:01:00Z',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      lastPingAt: '2025-01-01T00:01:00.000Z',
     },
   ]);
 });
@@ -121,7 +129,7 @@ test('updateMachinePing uses the registered machine by default and returns a nor
   const result = await client.updateMachinePing();
 
   assert.equal(result.id, 'machine-1');
-  assert.equal(result.lastPingAt, '2025-01-01T00:02:00Z');
+  assert.equal(result.lastPingAt, '2025-01-01T00:02:00.000Z');
 });
 
 test('drainMachine uses the registered machine by default and clears cached machine state', async () => {

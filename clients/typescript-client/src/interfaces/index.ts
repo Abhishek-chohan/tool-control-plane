@@ -29,7 +29,6 @@ export interface Session {
   description: string;
   createdAt: string;
   createdBy: string;
-  apiKey: string;
   namespace: string;
 }
 
@@ -93,7 +92,6 @@ export interface Request {
   result?: unknown;
   resultType?: string;
   error?: string;
-  streamResults?: unknown[];
   /** Lease metadata for the current execution attempt (populated once claimed). */
   leasedBy?: string;
   leaseEpoch?: number;
@@ -239,7 +237,8 @@ export interface RequestListOptions {
   status?: string;
   toolName?: string;
   limit?: number;
-  offset?: number;
+  /** Opaque cursor from a previous page; omit to start from the first page. */
+  pageToken?: string;
 }
 
 /**

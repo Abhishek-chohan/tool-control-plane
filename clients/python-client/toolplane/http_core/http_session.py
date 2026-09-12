@@ -180,21 +180,33 @@ class HTTPSessionManager:
 
     # New methods for user session management
     def list_user_sessions(
-        self, user_id: str, page_size: int = 10, page_token: int = 0, filter: str = ""
+        self, user_id: str, page_size: int = 10, page_token: str = "", filter: str = ""
     ) -> Dict[str, Any]:
-        """List user sessions with pagination and filtering."""
+        """List user sessions with pagination and filtering.
+
+        page_token is the opaque cursor from a previous page's response;
+        an empty string starts from the first page.
+        """
         try:
             self.connection_manager.ensure_connected()
 
             payload = {
                 "userId": user_id,
                 "pageSize": page_size,
-                "pageToken": page_token,
+                "pageToken": page_token or "",
                 "filter": filter,
             }
 
             response = self.connection_manager.list_user_sessions(payload)
-            return response
+            page = response.get("page", {}) if isinstance(response, dict) else {}
+            sessions = (
+                response.get("sessions", []) if isinstance(response, dict) else []
+            )
+            return {
+                "sessions": [self._normalize_session(entry) for entry in sessions],
+                "total_count": int(page.get("totalSize", 0) or 0),
+                "next_page_token": page.get("nextPageToken", ""),
+            }
 
         except Exception as e:
             raise SessionError(f"Failed to list user sessions: {e}")

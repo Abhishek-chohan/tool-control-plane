@@ -60,8 +60,7 @@ import {
   ExecuteToolRequest as ExecuteToolMessage,
   ExecuteToolResponse as ExecuteToolResponseMessage,
   GetMachineRequest as GetMachineMessage,
-  GetToolByIdRequest as GetToolByIdMessage,
-  GetToolByNameRequest as GetToolByNameMessage,
+  GetToolRequest as GetToolMessage,
   GetToolResponse as GetToolResponseMessage,
   GetTaskRequest as GetTaskMessage,
   GetRequestChunksRequest as GetRequestChunksMessage,
@@ -91,10 +90,12 @@ import {
   RegisterToolRequest as RegisterToolMessage,
   RegisterToolResponse as RegisterToolResponseMessage,
   Request as ProtoRequest,
+  RequestStatus,
   Session as ProtoSession,
   SubmitRequestResultRequest as SubmitRequestResultMessage,
   SubmitRequestResultResponse as SubmitRequestResultResponseMessage,
   Task as ProtoTask,
+  TaskStatus,
   Tool as ProtoTool,
   UpdateMachinePingRequest as UpdateMachinePingMessage,
   UpdateRequestRequest as UpdateRequestMessage,
@@ -129,6 +130,67 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+// v1 wire statuses are enums; the SDK keeps exposing the friendly lowercase
+// names callers have always seen.
+function normalizeRequestStatus(status: number): string {
+  switch (status) {
+    case RequestStatus.REQUEST_STATUS_DONE:
+      return 'done';
+    case RequestStatus.REQUEST_STATUS_FAILED:
+      return 'failure';
+    case RequestStatus.REQUEST_STATUS_PENDING:
+      return 'pending';
+    case RequestStatus.REQUEST_STATUS_CLAIMED:
+      return 'claimed';
+    case RequestStatus.REQUEST_STATUS_RUNNING:
+      return 'running';
+    default:
+      return '';
+  }
+}
+
+function requestStatusForWire(status?: string): number {
+  switch ((status ?? '').trim().toLowerCase()) {
+    case 'done':
+      return RequestStatus.REQUEST_STATUS_DONE;
+    case 'failure':
+    case 'failed':
+      return RequestStatus.REQUEST_STATUS_FAILED;
+    case 'pending':
+      return RequestStatus.REQUEST_STATUS_PENDING;
+    case 'claimed':
+      return RequestStatus.REQUEST_STATUS_CLAIMED;
+    case 'running':
+      return RequestStatus.REQUEST_STATUS_RUNNING;
+    default:
+      return RequestStatus.REQUEST_STATUS_UNSPECIFIED;
+  }
+}
+
+function normalizeTaskStatus(status: number): string {
+  switch (status) {
+    case TaskStatus.TASK_STATUS_COMPLETED:
+      return 'completed';
+    case TaskStatus.TASK_STATUS_FAILED:
+      return 'failed';
+    case TaskStatus.TASK_STATUS_CANCELLED:
+      return 'cancelled';
+    case TaskStatus.TASK_STATUS_DEAD_LETTER:
+      return 'dead_letter';
+    case TaskStatus.TASK_STATUS_PENDING:
+      return 'pending';
+    case TaskStatus.TASK_STATUS_RUNNING:
+      return 'running';
+    default:
+      return '';
+  }
+}
+
+// v1 carries times as google.protobuf.Timestamp; the SDK surfaces ISO strings.
+function timestampToIso(value: { toDate(): Date } | undefined): string {
+  return value ? value.toDate().toISOString() : '';
 }
 
 export class ToolplaneClient {
@@ -357,12 +419,12 @@ export class ToolplaneClient {
   async getToolById(toolId: string): Promise<Tool> {
     this.ensureGRPCConnected('tool lookup');
 
-    const request = new GetToolByIdMessage();
+    const request = new GetToolMessage();
     request.setSessionId(this.getRequiredSessionId('tool lookup'));
     request.setToolId(toolId);
 
     const response = await this.invokeGRPCUnary<GetToolResponseMessage>(
-      (metadata, options, callback) => this.toolClient!.getToolById(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient!.getTool(request, metadata, options, callback),
       `failed to retrieve tool ${toolId}`,
     );
 
@@ -372,12 +434,12 @@ export class ToolplaneClient {
   async getToolByName(toolName: string): Promise<Tool> {
     this.ensureGRPCConnected('tool lookup');
 
-    const request = new GetToolByNameMessage();
+    const request = new GetToolMessage();
     request.setSessionId(this.getRequiredSessionId('tool lookup'));
     request.setToolName(toolName);
 
     const response = await this.invokeGRPCUnary<GetToolResponseMessage>(
-      (metadata, options, callback) => this.toolClient!.getToolByName(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient!.getTool(request, metadata, options, callback),
       `failed to retrieve tool ${toolName}`,
     );
 
@@ -420,7 +482,6 @@ export class ToolplaneClient {
     message.setUserId(request.userId);
     message.setName(request.name);
     message.setDescription(request.description);
-		message.setApiKey('');
     message.setSessionId(request.sessionId);
     message.setNamespace(request.namespace);
 
@@ -783,16 +844,17 @@ export class ToolplaneClient {
     status?: string;
     toolName?: string;
     limit?: number;
-    offset?: number;
+    /** Opaque cursor from a previous page; omit to start from the first page. */
+    pageToken?: string;
   } = {}): Promise<RequestModel[]> {
     this.ensureGRPCConnected('request listing');
 
     const request = new ListRequestsMessage();
     request.setSessionId(this.getRequiredSessionId('request listing'));
-    request.setStatus(options.status ?? '');
+    request.setStatus(requestStatusForWire(options.status));
     request.setToolName(options.toolName ?? '');
-    request.setLimit(options.limit ?? 0);
-    request.setOffset(options.offset ?? 0);
+    request.setPageSize(options.limit ?? 0);
+    request.setPageToken(options.pageToken ?? '');
 
     const response = await this.invokeGRPCUnary<ListRequestsResponseMessage>(
       (metadata, optionsArg, callback) => this.requestsClient!.listRequests(request, metadata, optionsArg, callback),
@@ -825,7 +887,7 @@ export class ToolplaneClient {
     const request = new UpdateRequestMessage();
     request.setSessionId(this.getRequiredSessionId('request update'));
     request.setRequestId(requestId);
-    request.setStatus(update.status ?? '');
+    request.setStatus(requestStatusForWire(update.status));
     request.setResult(update.result ?? '');
     request.setResultType(update.resultType ?? '');
     // Fencing: present the lease grant for provider writes.
@@ -1049,7 +1111,7 @@ export class ToolplaneClient {
     request.setIdempotencyKey(idempotencyKey);
 
     const response = await this.invokeGRPCUnary<ExecuteToolResponseMessage>(
-      (metadata, options, callback) => this.toolClient!.executeTool(request, metadata, options, callback),
+      (metadata, options, callback) => this.toolClient!.invokeTool(request, metadata, options, callback),
       `failed to execute tool ${toolName}`,
     );
 
@@ -1081,9 +1143,9 @@ export class ToolplaneClient {
       );
 
       switch (response.getStatus()) {
-        case 'done':
+        case RequestStatus.REQUEST_STATUS_DONE:
           return response;
-        case 'failure': {
+        case RequestStatus.REQUEST_STATUS_FAILED: {
           const errorMessage = response.getError() || `request ${requestId} failed`;
           throw new FailedPreconditionError(errorMessage, { requestId, status: 'failure' });
         }
@@ -1247,15 +1309,14 @@ export class ToolplaneClient {
       config[key] = value;
     });
 
-    const lastPingAt = tool.getLastPingAt();
     return {
       id: tool.getId(),
       name: tool.getName(),
       description: tool.getDescription(),
       schema: tool.getSchema(),
       config,
-      createdAt: tool.getCreatedAt(),
-      lastPingAt: lastPingAt || undefined,
+      createdAt: timestampToIso(tool.getCreatedAt()),
+      lastPingAt: timestampToIso(tool.getLastPingAt()) || undefined,
       sessionId: tool.getSessionId(),
       tags: tool.getTagsList(),
     };
@@ -1270,9 +1331,8 @@ export class ToolplaneClient {
       id: session.getId(),
       name: session.getName(),
       description: session.getDescription(),
-      createdAt: session.getCreatedAt(),
+      createdAt: timestampToIso(session.getCreatedAt()),
       createdBy: session.getCreatedBy(),
-      apiKey: session.getApiKey(),
       namespace: session.getNamespace(),
     };
   }
@@ -1282,17 +1342,16 @@ export class ToolplaneClient {
       throw new ProtocolError('API key response was empty');
     }
 
-    const revokedAt = apiKey.getRevokedAt();
     return {
       id: apiKey.getId(),
       name: apiKey.getName(),
       key: apiKey.getKey(),
-		keyPreview: apiKey.getKeyPreview() || undefined,
+      keyPreview: apiKey.getKeyPreview() || undefined,
       sessionId: apiKey.getSessionId(),
-      createdAt: apiKey.getCreatedAt(),
+      createdAt: timestampToIso(apiKey.getCreatedAt()),
       createdBy: apiKey.getCreatedBy(),
-		capabilities: apiKey.getCapabilitiesList(),
-      revokedAt: revokedAt || undefined,
+      capabilities: apiKey.getCapabilitiesList(),
+      revokedAt: timestampToIso(apiKey.getRevokedAt()) || undefined,
     };
   }
 
@@ -1301,15 +1360,14 @@ export class ToolplaneClient {
       throw new ProtocolError('Machine response was empty');
     }
 
-    const lastPingAt = machine.getLastPingAt();
     return {
       id: machine.getId(),
       sessionId: machine.getSessionId(),
       sdkVersion: machine.getSdkVersion(),
       sdkLanguage: machine.getSdkLanguage(),
       ip: machine.getIp(),
-      createdAt: machine.getCreatedAt(),
-      lastPingAt: lastPingAt || undefined,
+      createdAt: timestampToIso(machine.getCreatedAt()),
+      lastPingAt: timestampToIso(machine.getLastPingAt()) || undefined,
     };
   }
 
@@ -1318,19 +1376,18 @@ export class ToolplaneClient {
       throw new ProtocolError('Task response was empty');
     }
 
-    const completedAt = task.getCompletedAt();
     return {
       id: task.getId(),
       sessionId: task.getSessionId(),
       toolName: task.getToolName(),
-      status: task.getStatus(),
+      status: normalizeTaskStatus(task.getStatus()),
       input: task.getInput(),
       result: task.getResult(),
       resultType: task.getResultType(),
       error: task.getError(),
-      createdAt: task.getCreatedAt(),
-      updatedAt: task.getUpdatedAt(),
-      completedAt: completedAt || undefined,
+      createdAt: timestampToIso(task.getCreatedAt()),
+      updatedAt: timestampToIso(task.getUpdatedAt()),
+      completedAt: timestampToIso(task.getCompletedAt()) || undefined,
     };
   }
 
@@ -1343,14 +1400,14 @@ export class ToolplaneClient {
       id: request.getId(),
       sessionId: request.getSessionId(),
       toolName: request.getToolName(),
-      status: request.getStatus(),
+      status: normalizeRequestStatus(request.getStatus()),
       input: request.getInput(),
-      createdAt: request.getCreatedAt(),
-      updatedAt: request.getUpdatedAt(),
+      createdAt: timestampToIso(request.getCreatedAt()),
+      updatedAt: timestampToIso(request.getUpdatedAt()),
       executingMachineId: request.getExecutingMachineId(),
       leasedBy: request.getLeasedBy(),
       leaseEpoch: request.getLeaseEpoch(),
-      leaseExpiresAt: request.getLeaseExpiresAt(),
+      leaseExpiresAt: timestampToIso(request.getLeaseExpiresAt()) || undefined,
       timeoutSeconds: request.getTimeoutSeconds(),
     };
 
@@ -1365,11 +1422,6 @@ export class ToolplaneClient {
 
     if (request.getError()) {
       normalized.error = request.getError();
-    }
-
-    const streamResults = request.getStreamResultsList().map((value) => this.parseResultPayload(value));
-    if (streamResults.length > 0) {
-      normalized.streamResults = streamResults;
     }
 
     return normalized;

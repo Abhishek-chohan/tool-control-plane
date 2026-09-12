@@ -46,6 +46,13 @@ import { McpError } from '@modelcontextprotocol/sdk/types.js';
 
 type JSONObject = Record<string, unknown>;
 
+/**
+ * The v1 request message no longer carries chunk payloads; the adapter
+ * hydrates the retained chunk window into this extended view when building
+ * translated results.
+ */
+type HydratedRequest = ToolplaneRequest & { streamResults?: unknown[] };
+
 /** Cadence for polling a request on the 2026 sync tools/call path. */
 const SYNC_POLL_INTERVAL_MS = 250;
 
@@ -122,7 +129,7 @@ function sanitizeSession(session: ToolplaneSession): JSONObject {
   };
 }
 
-function buildTranslationDetails(request: ToolplaneRequest): JSONObject {
+function buildTranslationDetails(request: HydratedRequest): JSONObject {
   const streamResults = request.streamResults ?? [];
 
   return {
@@ -135,7 +142,7 @@ function buildTranslationDetails(request: ToolplaneRequest): JSONObject {
   };
 }
 
-function buildRequestPayload(request: ToolplaneRequest): JSONObject {
+function buildRequestPayload(request: HydratedRequest): JSONObject {
   return {
     adapter: ADAPTER_NAME,
     requestId: request.id,
@@ -154,7 +161,7 @@ function buildRequestPayload(request: ToolplaneRequest): JSONObject {
   };
 }
 
-function buildRequestSummary(request: ToolplaneRequest): string {
+function buildRequestSummary(request: HydratedRequest): string {
   const streamResults = request.streamResults ?? [];
   const lines: string[] = [
     `Toolplane request ${request.id} completed with status ${request.status}.`,
@@ -468,21 +475,22 @@ export class ToolplaneMcpBridge {
     // Chunk payloads no longer travel on the request message; hydrate them
     // from the authoritative chunk window. Read failures degrade to the
     // payload without chunks.
+    let hydrated: HydratedRequest = request;
     try {
       const window = await this.client.getRequestChunksWindow(request.id);
-      request = { ...request, streamResults: window.chunks };
+      hydrated = { ...request, streamResults: window.chunks };
     } catch (error) {
       debugLog(`chunk window read failed for ${request.id}: ${describeError(error)}`);
     }
 
-    const structuredContent = buildRequestPayload(request);
+    const structuredContent = buildRequestPayload(hydrated);
     const isError = request.status !== 'done' || Boolean(request.error);
 
     return {
       content: [
         {
           type: 'text',
-          text: buildRequestSummary(request),
+          text: buildRequestSummary(hydrated),
         },
         {
           type: 'resource_link',

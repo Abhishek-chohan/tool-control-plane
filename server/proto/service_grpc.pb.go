@@ -19,16 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ToolService_RegisterTool_FullMethodName      = "/api.ToolService/RegisterTool"
-	ToolService_ListTools_FullMethodName         = "/api.ToolService/ListTools"
-	ToolService_GetToolById_FullMethodName       = "/api.ToolService/GetToolById"
-	ToolService_GetToolByName_FullMethodName     = "/api.ToolService/GetToolByName"
-	ToolService_DeleteTool_FullMethodName        = "/api.ToolService/DeleteTool"
-	ToolService_UpdateToolPing_FullMethodName    = "/api.ToolService/UpdateToolPing"
-	ToolService_StreamExecuteTool_FullMethodName = "/api.ToolService/StreamExecuteTool"
-	ToolService_ResumeStream_FullMethodName      = "/api.ToolService/ResumeStream"
-	ToolService_ExecuteTool_FullMethodName       = "/api.ToolService/ExecuteTool"
-	ToolService_HealthCheck_FullMethodName       = "/api.ToolService/HealthCheck"
+	ToolService_RegisterTool_FullMethodName      = "/api.v1.ToolService/RegisterTool"
+	ToolService_ListTools_FullMethodName         = "/api.v1.ToolService/ListTools"
+	ToolService_GetTool_FullMethodName           = "/api.v1.ToolService/GetTool"
+	ToolService_GetToolById_FullMethodName       = "/api.v1.ToolService/GetToolById"
+	ToolService_GetToolByName_FullMethodName     = "/api.v1.ToolService/GetToolByName"
+	ToolService_DeleteTool_FullMethodName        = "/api.v1.ToolService/DeleteTool"
+	ToolService_UpdateToolPing_FullMethodName    = "/api.v1.ToolService/UpdateToolPing"
+	ToolService_StreamExecuteTool_FullMethodName = "/api.v1.ToolService/StreamExecuteTool"
+	ToolService_ResumeStream_FullMethodName      = "/api.v1.ToolService/ResumeStream"
+	ToolService_InvokeTool_FullMethodName        = "/api.v1.ToolService/InvokeTool"
+	ToolService_ExecuteTool_FullMethodName       = "/api.v1.ToolService/ExecuteTool"
+	ToolService_HealthCheck_FullMethodName       = "/api.v1.ToolService/HealthCheck"
 )
 
 // ToolServiceClient is the client API for ToolService service.
@@ -42,7 +44,14 @@ type ToolServiceClient interface {
 	// Tool management
 	RegisterTool(ctx context.Context, in *RegisterToolRequest, opts ...grpc.CallOption) (*RegisterToolResponse, error)
 	ListTools(ctx context.Context, in *ListToolsRequest, opts ...grpc.CallOption) (*ListToolsResponse, error)
+	// GetTool resolves a tool by ID or by name: exactly one of the reference
+	// fields should be set; the ID wins when both are provided.
+	GetTool(ctx context.Context, in *GetToolRequest, opts ...grpc.CallOption) (*GetToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use GetTool. Retained as a stable alias.
 	GetToolById(ctx context.Context, in *GetToolByIdRequest, opts ...grpc.CallOption) (*GetToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use GetTool. Retained as a stable alias.
 	GetToolByName(ctx context.Context, in *GetToolByNameRequest, opts ...grpc.CallOption) (*GetToolResponse, error)
 	DeleteTool(ctx context.Context, in *DeleteToolRequest, opts ...grpc.CallOption) (*DeleteToolResponse, error)
 	UpdateToolPing(ctx context.Context, in *UpdateToolPingRequest, opts ...grpc.CallOption) (*Tool, error)
@@ -53,6 +62,10 @@ type ToolServiceClient interface {
 	// The server retains a bounded chunk window; if the requested sequence has
 	// fallen out of that window, this RPC fails with OUT_OF_RANGE.
 	ResumeStream(ctx context.Context, in *ResumeStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteToolChunk], error)
+	// InvokeTool is the v1 name for synchronous tool invocation.
+	InvokeTool(ctx context.Context, in *ExecuteToolRequest, opts ...grpc.CallOption) (*ExecuteToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use InvokeTool. Retained as a stable alias.
 	ExecuteTool(ctx context.Context, in *ExecuteToolRequest, opts ...grpc.CallOption) (*ExecuteToolResponse, error)
 	// Health check (can be in any service or its own)
 	HealthCheck(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
@@ -86,6 +99,17 @@ func (c *toolServiceClient) ListTools(ctx context.Context, in *ListToolsRequest,
 	return out, nil
 }
 
+func (c *toolServiceClient) GetTool(ctx context.Context, in *GetToolRequest, opts ...grpc.CallOption) (*GetToolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetToolResponse)
+	err := c.cc.Invoke(ctx, ToolService_GetTool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Deprecated: Do not use.
 func (c *toolServiceClient) GetToolById(ctx context.Context, in *GetToolByIdRequest, opts ...grpc.CallOption) (*GetToolResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetToolResponse)
@@ -96,6 +120,7 @@ func (c *toolServiceClient) GetToolById(ctx context.Context, in *GetToolByIdRequ
 	return out, nil
 }
 
+// Deprecated: Do not use.
 func (c *toolServiceClient) GetToolByName(ctx context.Context, in *GetToolByNameRequest, opts ...grpc.CallOption) (*GetToolResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetToolResponse)
@@ -164,6 +189,17 @@ func (c *toolServiceClient) ResumeStream(ctx context.Context, in *ResumeStreamRe
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ToolService_ResumeStreamClient = grpc.ServerStreamingClient[ExecuteToolChunk]
 
+func (c *toolServiceClient) InvokeTool(ctx context.Context, in *ExecuteToolRequest, opts ...grpc.CallOption) (*ExecuteToolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExecuteToolResponse)
+	err := c.cc.Invoke(ctx, ToolService_InvokeTool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Deprecated: Do not use.
 func (c *toolServiceClient) ExecuteTool(ctx context.Context, in *ExecuteToolRequest, opts ...grpc.CallOption) (*ExecuteToolResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ExecuteToolResponse)
@@ -195,7 +231,14 @@ type ToolServiceServer interface {
 	// Tool management
 	RegisterTool(context.Context, *RegisterToolRequest) (*RegisterToolResponse, error)
 	ListTools(context.Context, *ListToolsRequest) (*ListToolsResponse, error)
+	// GetTool resolves a tool by ID or by name: exactly one of the reference
+	// fields should be set; the ID wins when both are provided.
+	GetTool(context.Context, *GetToolRequest) (*GetToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use GetTool. Retained as a stable alias.
 	GetToolById(context.Context, *GetToolByIdRequest) (*GetToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use GetTool. Retained as a stable alias.
 	GetToolByName(context.Context, *GetToolByNameRequest) (*GetToolResponse, error)
 	DeleteTool(context.Context, *DeleteToolRequest) (*DeleteToolResponse, error)
 	UpdateToolPing(context.Context, *UpdateToolPingRequest) (*Tool, error)
@@ -206,6 +249,10 @@ type ToolServiceServer interface {
 	// The server retains a bounded chunk window; if the requested sequence has
 	// fallen out of that window, this RPC fails with OUT_OF_RANGE.
 	ResumeStream(*ResumeStreamRequest, grpc.ServerStreamingServer[ExecuteToolChunk]) error
+	// InvokeTool is the v1 name for synchronous tool invocation.
+	InvokeTool(context.Context, *ExecuteToolRequest) (*ExecuteToolResponse, error)
+	// Deprecated: Do not use.
+	// Deprecated: use InvokeTool. Retained as a stable alias.
 	ExecuteTool(context.Context, *ExecuteToolRequest) (*ExecuteToolResponse, error)
 	// Health check (can be in any service or its own)
 	HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error)
@@ -225,6 +272,9 @@ func (UnimplementedToolServiceServer) RegisterTool(context.Context, *RegisterToo
 func (UnimplementedToolServiceServer) ListTools(context.Context, *ListToolsRequest) (*ListToolsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListTools not implemented")
 }
+func (UnimplementedToolServiceServer) GetTool(context.Context, *GetToolRequest) (*GetToolResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTool not implemented")
+}
 func (UnimplementedToolServiceServer) GetToolById(context.Context, *GetToolByIdRequest) (*GetToolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetToolById not implemented")
 }
@@ -242,6 +292,9 @@ func (UnimplementedToolServiceServer) StreamExecuteTool(*ExecuteToolRequest, grp
 }
 func (UnimplementedToolServiceServer) ResumeStream(*ResumeStreamRequest, grpc.ServerStreamingServer[ExecuteToolChunk]) error {
 	return status.Errorf(codes.Unimplemented, "method ResumeStream not implemented")
+}
+func (UnimplementedToolServiceServer) InvokeTool(context.Context, *ExecuteToolRequest) (*ExecuteToolResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InvokeTool not implemented")
 }
 func (UnimplementedToolServiceServer) ExecuteTool(context.Context, *ExecuteToolRequest) (*ExecuteToolResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecuteTool not implemented")
@@ -302,6 +355,24 @@ func _ToolService_ListTools_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ToolServiceServer).ListTools(ctx, req.(*ListToolsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ToolService_GetTool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetToolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ToolServiceServer).GetTool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ToolService_GetTool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ToolServiceServer).GetTool(ctx, req.(*GetToolRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -400,6 +471,24 @@ func _ToolService_ResumeStream_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ToolService_ResumeStreamServer = grpc.ServerStreamingServer[ExecuteToolChunk]
 
+func _ToolService_InvokeTool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecuteToolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ToolServiceServer).InvokeTool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ToolService_InvokeTool_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ToolServiceServer).InvokeTool(ctx, req.(*ExecuteToolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ToolService_ExecuteTool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ExecuteToolRequest)
 	if err := dec(in); err != nil {
@@ -440,7 +529,7 @@ func _ToolService_HealthCheck_Handler(srv interface{}, ctx context.Context, dec 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ToolService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.ToolService",
+	ServiceName: "api.v1.ToolService",
 	HandlerType: (*ToolServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -450,6 +539,10 @@ var ToolService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListTools",
 			Handler:    _ToolService_ListTools_Handler,
+		},
+		{
+			MethodName: "GetTool",
+			Handler:    _ToolService_GetTool_Handler,
 		},
 		{
 			MethodName: "GetToolById",
@@ -466,6 +559,10 @@ var ToolService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateToolPing",
 			Handler:    _ToolService_UpdateToolPing_Handler,
+		},
+		{
+			MethodName: "InvokeTool",
+			Handler:    _ToolService_InvokeTool_Handler,
 		},
 		{
 			MethodName: "ExecuteTool",
@@ -492,18 +589,18 @@ var ToolService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	SessionsService_CreateSession_FullMethodName      = "/api.SessionsService/CreateSession"
-	SessionsService_GetSession_FullMethodName         = "/api.SessionsService/GetSession"
-	SessionsService_ListSessions_FullMethodName       = "/api.SessionsService/ListSessions"
-	SessionsService_UpdateSession_FullMethodName      = "/api.SessionsService/UpdateSession"
-	SessionsService_DeleteSession_FullMethodName      = "/api.SessionsService/DeleteSession"
-	SessionsService_ListUserSessions_FullMethodName   = "/api.SessionsService/ListUserSessions"
-	SessionsService_BulkDeleteSessions_FullMethodName = "/api.SessionsService/BulkDeleteSessions"
-	SessionsService_GetSessionStats_FullMethodName    = "/api.SessionsService/GetSessionStats"
-	SessionsService_InvalidateSession_FullMethodName  = "/api.SessionsService/InvalidateSession"
-	SessionsService_CreateApiKey_FullMethodName       = "/api.SessionsService/CreateApiKey"
-	SessionsService_ListApiKeys_FullMethodName        = "/api.SessionsService/ListApiKeys"
-	SessionsService_RevokeApiKey_FullMethodName       = "/api.SessionsService/RevokeApiKey"
+	SessionsService_CreateSession_FullMethodName      = "/api.v1.SessionsService/CreateSession"
+	SessionsService_GetSession_FullMethodName         = "/api.v1.SessionsService/GetSession"
+	SessionsService_ListSessions_FullMethodName       = "/api.v1.SessionsService/ListSessions"
+	SessionsService_UpdateSession_FullMethodName      = "/api.v1.SessionsService/UpdateSession"
+	SessionsService_DeleteSession_FullMethodName      = "/api.v1.SessionsService/DeleteSession"
+	SessionsService_ListUserSessions_FullMethodName   = "/api.v1.SessionsService/ListUserSessions"
+	SessionsService_BulkDeleteSessions_FullMethodName = "/api.v1.SessionsService/BulkDeleteSessions"
+	SessionsService_GetSessionStats_FullMethodName    = "/api.v1.SessionsService/GetSessionStats"
+	SessionsService_InvalidateSession_FullMethodName  = "/api.v1.SessionsService/InvalidateSession"
+	SessionsService_CreateApiKey_FullMethodName       = "/api.v1.SessionsService/CreateApiKey"
+	SessionsService_ListApiKeys_FullMethodName        = "/api.v1.SessionsService/ListApiKeys"
+	SessionsService_RevokeApiKey_FullMethodName       = "/api.v1.SessionsService/RevokeApiKey"
 )
 
 // SessionsServiceClient is the client API for SessionsService service.
@@ -977,7 +1074,7 @@ func _SessionsService_RevokeApiKey_Handler(srv interface{}, ctx context.Context,
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var SessionsService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.SessionsService",
+	ServiceName: "api.v1.SessionsService",
 	HandlerType: (*SessionsServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1034,12 +1131,12 @@ var SessionsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	MachinesService_RegisterMachine_FullMethodName   = "/api.MachinesService/RegisterMachine"
-	MachinesService_ListMachines_FullMethodName      = "/api.MachinesService/ListMachines"
-	MachinesService_GetMachine_FullMethodName        = "/api.MachinesService/GetMachine"
-	MachinesService_UpdateMachinePing_FullMethodName = "/api.MachinesService/UpdateMachinePing"
-	MachinesService_UnregisterMachine_FullMethodName = "/api.MachinesService/UnregisterMachine"
-	MachinesService_DrainMachine_FullMethodName      = "/api.MachinesService/DrainMachine"
+	MachinesService_RegisterMachine_FullMethodName   = "/api.v1.MachinesService/RegisterMachine"
+	MachinesService_ListMachines_FullMethodName      = "/api.v1.MachinesService/ListMachines"
+	MachinesService_GetMachine_FullMethodName        = "/api.v1.MachinesService/GetMachine"
+	MachinesService_UpdateMachinePing_FullMethodName = "/api.v1.MachinesService/UpdateMachinePing"
+	MachinesService_UnregisterMachine_FullMethodName = "/api.v1.MachinesService/UnregisterMachine"
+	MachinesService_DrainMachine_FullMethodName      = "/api.v1.MachinesService/DrainMachine"
 )
 
 // MachinesServiceClient is the client API for MachinesService service.
@@ -1305,7 +1402,7 @@ func _MachinesService_DrainMachine_Handler(srv interface{}, ctx context.Context,
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var MachinesService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.MachinesService",
+	ServiceName: "api.v1.MachinesService",
 	HandlerType: (*MachinesServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1338,16 +1435,16 @@ var MachinesService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RequestsService_CreateRequest_FullMethodName       = "/api.RequestsService/CreateRequest"
-	RequestsService_GetRequest_FullMethodName          = "/api.RequestsService/GetRequest"
-	RequestsService_ListRequests_FullMethodName        = "/api.RequestsService/ListRequests"
-	RequestsService_UpdateRequest_FullMethodName       = "/api.RequestsService/UpdateRequest"
-	RequestsService_ClaimRequest_FullMethodName        = "/api.RequestsService/ClaimRequest"
-	RequestsService_CancelRequest_FullMethodName       = "/api.RequestsService/CancelRequest"
-	RequestsService_SubmitRequestResult_FullMethodName = "/api.RequestsService/SubmitRequestResult"
-	RequestsService_AppendRequestChunks_FullMethodName = "/api.RequestsService/AppendRequestChunks"
-	RequestsService_GetRequestChunks_FullMethodName    = "/api.RequestsService/GetRequestChunks"
-	RequestsService_RenewRequestLease_FullMethodName   = "/api.RequestsService/RenewRequestLease"
+	RequestsService_CreateRequest_FullMethodName       = "/api.v1.RequestsService/CreateRequest"
+	RequestsService_GetRequest_FullMethodName          = "/api.v1.RequestsService/GetRequest"
+	RequestsService_ListRequests_FullMethodName        = "/api.v1.RequestsService/ListRequests"
+	RequestsService_UpdateRequest_FullMethodName       = "/api.v1.RequestsService/UpdateRequest"
+	RequestsService_ClaimRequest_FullMethodName        = "/api.v1.RequestsService/ClaimRequest"
+	RequestsService_CancelRequest_FullMethodName       = "/api.v1.RequestsService/CancelRequest"
+	RequestsService_SubmitRequestResult_FullMethodName = "/api.v1.RequestsService/SubmitRequestResult"
+	RequestsService_AppendRequestChunks_FullMethodName = "/api.v1.RequestsService/AppendRequestChunks"
+	RequestsService_GetRequestChunks_FullMethodName    = "/api.v1.RequestsService/GetRequestChunks"
+	RequestsService_RenewRequestLease_FullMethodName   = "/api.v1.RequestsService/RenewRequestLease"
 )
 
 // RequestsServiceClient is the client API for RequestsService service.
@@ -1757,7 +1854,7 @@ func _RequestsService_RenewRequestLease_Handler(srv interface{}, ctx context.Con
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RequestsService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.RequestsService",
+	ServiceName: "api.v1.RequestsService",
 	HandlerType: (*RequestsServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -1806,10 +1903,10 @@ var RequestsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	TasksService_CreateTask_FullMethodName = "/api.TasksService/CreateTask"
-	TasksService_GetTask_FullMethodName    = "/api.TasksService/GetTask"
-	TasksService_ListTasks_FullMethodName  = "/api.TasksService/ListTasks"
-	TasksService_CancelTask_FullMethodName = "/api.TasksService/CancelTask"
+	TasksService_CreateTask_FullMethodName = "/api.v1.TasksService/CreateTask"
+	TasksService_GetTask_FullMethodName    = "/api.v1.TasksService/GetTask"
+	TasksService_ListTasks_FullMethodName  = "/api.v1.TasksService/ListTasks"
+	TasksService_CancelTask_FullMethodName = "/api.v1.TasksService/CancelTask"
 )
 
 // TasksServiceClient is the client API for TasksService service.
@@ -2007,7 +2104,7 @@ func _TasksService_CancelTask_Handler(srv interface{}, ctx context.Context, dec 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var TasksService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.TasksService",
+	ServiceName: "api.v1.TasksService",
 	HandlerType: (*TasksServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{

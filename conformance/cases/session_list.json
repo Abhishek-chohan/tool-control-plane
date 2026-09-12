@@ -5,7 +5,7 @@
   "request": {
     "user_id": "conformance-user",
     "page_size": 100,
-    "page_token": 0,
+    "page_token": "",
     "filter": ""
   },
   "expected": {

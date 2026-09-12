@@ -14,7 +14,7 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 	tracer := &recordingTracer{}
 	svc := NewSessionsService(tracer, nil)
 
-	session, err := svc.CreateSession("user-audit", "Audit Session", "session for trace coverage", "", "", "tenant-a")
+	session, err := svc.CreateSession("user-audit", "Audit Session", "session for trace coverage", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
 
-	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
 
-	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *tes
 func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
 
-	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "", "tenant-a")
+	session, err := svc.CreateSession("user-audit", "Auth Session", "session auth coverage", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -159,15 +159,15 @@ func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
 func TestSessionsServiceListUserSessionsReturnsNewestSessionsFirst(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
 
-	oldest, err := svc.CreateSession("user-order", "oldest", "", "", "", "tenant-a")
+	oldest, err := svc.CreateSession("user-order", "oldest", "", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create oldest session: %v", err)
 	}
-	middle, err := svc.CreateSession("user-order", "middle", "", "", "", "tenant-a")
+	middle, err := svc.CreateSession("user-order", "middle", "", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create middle session: %v", err)
 	}
-	newest, err := svc.CreateSession("user-order", "newest", "", "", "", "tenant-a")
+	newest, err := svc.CreateSession("user-order", "newest", "", "", "tenant-a")
 	if err != nil {
 		t.Fatalf("create newest session: %v", err)
 	}
@@ -188,7 +188,9 @@ func TestSessionsServiceListUserSessionsReturnsNewestSessionsFirst(t *testing.T)
 		t.Fatalf("page 0 ids = %v, want [%s %s]", got, newest.ID, middle.ID)
 	}
 
-	pageOne, totalCount, err := svc.ListUserSessions("user-order", 2, 1, "")
+	// The third argument is the item offset the opaque v1 cursor decodes
+	// to: page two of a size-2 listing starts at item 2.
+	pageOne, totalCount, err := svc.ListUserSessions("user-order", 2, 2, "")
 	if err != nil {
 		t.Fatalf("list user sessions page 1: %v", err)
 	}
@@ -210,7 +212,7 @@ func sessionIDs(sessions []*model.Session) []string {
 
 func TestSessionsServiceCreateApiKeyRequiresExplicitCapabilities(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
-	session, err := svc.CreateSession("user-caps", "Caps Session", "", "", "", "")
+	session, err := svc.CreateSession("user-caps", "Caps Session", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -228,7 +230,7 @@ func TestSessionsServiceCreateApiKeyRequiresExplicitCapabilities(t *testing.T) {
 
 func TestSessionsServiceApiKeySecretDoesNotEmbedSessionID(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
-	session, err := svc.CreateSession("user-fmt", "Format Session", "", "", "", "")
+	session, err := svc.CreateSession("user-fmt", "Format Session", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -247,7 +249,7 @@ func TestSessionsServiceApiKeySecretDoesNotEmbedSessionID(t *testing.T) {
 
 func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
 	svc := NewSessionsService(trace.NopTracer(), nil)
-	session, err := svc.CreateSession("user-inval", "Invalidate Session", "", "", "", "")
+	session, err := svc.CreateSession("user-inval", "Invalidate Session", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

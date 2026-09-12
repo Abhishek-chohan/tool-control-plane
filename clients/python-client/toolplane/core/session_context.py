@@ -8,7 +8,11 @@ from typing import Any, Callable, Dict, List, Optional
 from toolplane.utils.schema import generate_schema_from_function
 
 from .connection import ConnectionManager
-from .errors import ToolplaneError, ToolplaneInvalidArgumentError
+from .errors import (
+    ToolplaneError,
+    ToolplaneInvalidArgumentError,
+    normalize_status_name,
+)
 from .machine import MachineManager
 from .request import RequestManager
 from .session import SessionManager
@@ -261,11 +265,11 @@ class SessionContext:
 
                 last_chunk_count = len(chunks)
 
-            if status["status"] == "done":
+            if normalize_status_name(status["status"]) == "done":
                 callback("", True)
                 break
 
-            if status["status"] == "failure":
+            if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Streaming failed: {status.get('error', 'Unknown error')}"
                 )
@@ -328,11 +332,11 @@ class SessionContext:
         while time.time() - start_time < timeout:
             status = self.get_request_status(request_id)
 
-            if status["status"] == "done":
+            if normalize_status_name(status["status"]) == "done":
                 # Ensure result is JSON-parsed if possible (RequestManager already attempts this)
                 return status
 
-            if status["status"] == "failure":
+            if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Tool execution failed: {status.get('error', 'Unknown error')}"
                 )

@@ -8,9 +8,65 @@ package service
 import (
 	"encoding/json"
 	"time"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"toolplane/pkg/model"
 	proto "toolplane/proto"
 )
+
+// timestampProto converts a model time into its proto representation; the
+// zero time maps to nil (field absent on the wire).
+// timestampProtoFromPtr converts an optional model time; nil maps to nil.
+func timestampProtoFromPtr(t *time.Time) *timestamppb.Timestamp {
+	if t == nil {
+		return nil
+	}
+	return timestampProto(*t)
+}
+
+func timestampProto(t time.Time) *timestamppb.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+	return timestamppb.New(t)
+}
+
+// protoRequestStatus maps the model's string status onto the v1 enum.
+func protoRequestStatus(s model.RequestStatus) proto.RequestStatus {
+	switch s {
+	case model.RequestStatusPending:
+		return proto.RequestStatus_REQUEST_STATUS_PENDING
+	case model.RequestStatusClaimed:
+		return proto.RequestStatus_REQUEST_STATUS_CLAIMED
+	case model.RequestStatusRunning:
+		return proto.RequestStatus_REQUEST_STATUS_RUNNING
+	case model.RequestStatusDone:
+		return proto.RequestStatus_REQUEST_STATUS_DONE
+	case model.RequestStatusFailed:
+		return proto.RequestStatus_REQUEST_STATUS_FAILED
+	default:
+		return proto.RequestStatus_REQUEST_STATUS_UNSPECIFIED
+	}
+}
+
+// protoTaskStatus maps the model's string status onto the v1 enum.
+func protoTaskStatus(s model.TaskStatus) proto.TaskStatus {
+	switch s {
+	case model.StatusPending:
+		return proto.TaskStatus_TASK_STATUS_PENDING
+	case model.StatusRunning:
+		return proto.TaskStatus_TASK_STATUS_RUNNING
+	case model.StatusCompleted:
+		return proto.TaskStatus_TASK_STATUS_COMPLETED
+	case model.StatusFailed:
+		return proto.TaskStatus_TASK_STATUS_FAILED
+	case model.StatusCancelled:
+		return proto.TaskStatus_TASK_STATUS_CANCELLED
+	default:
+		return proto.TaskStatus_TASK_STATUS_UNSPECIFIED
+	}
+}
 
 func convertModelToolToProto(in *model.Tool) *proto.Tool {
 	if in == nil {
@@ -34,8 +90,8 @@ func convertModelToolToProto(in *model.Tool) *proto.Tool {
 		Description: in.Description,
 		Schema:      in.Schema,
 		Config:      configMap,
-		CreatedAt:   in.CreatedAt.Format(time.RFC3339),
-		LastPingAt:  in.LastPingAt.Format(time.RFC3339),
+		CreatedAt:   timestampProto(in.CreatedAt),
+		LastPingAt:  timestampProto(in.LastPingAt),
 		SessionId:   in.SessionID,
 		Tags:        in.Tags,
 	}
@@ -50,9 +106,8 @@ func convertModelSessionToProto(in *model.Session) *proto.Session {
 		Id:          in.ID,
 		Name:        in.Name,
 		Description: in.Description,
-		CreatedAt:   in.CreatedAt.Format(time.RFC3339),
+		CreatedAt:   timestampProto(in.CreatedAt),
 		CreatedBy:   in.CreatedBy,
-		ApiKey:      in.ApiKey,
 		Namespace:   in.Namespace,
 	}
 	return out
@@ -62,16 +117,13 @@ func convertModelApiKeyToProto(in *model.ApiKey) *proto.ApiKey {
 	if in == nil {
 		return nil
 	}
-	var revokedAt string
-	if in.RevokedAt != nil {
-		revokedAt = in.RevokedAt.Format(time.RFC3339)
-	}
+	revokedAt := timestampProtoFromPtr(in.RevokedAt)
 	out := &proto.ApiKey{
 		Id:        in.ID,
 		Name:      in.Name,
 		Key:       in.Key,
 		SessionId: in.SessionID,
-		CreatedAt: in.CreatedAt.Format(time.RFC3339),
+		CreatedAt: timestampProto(in.CreatedAt),
 		CreatedBy: in.CreatedBy,
 		RevokedAt: revokedAt,
 	}
@@ -88,8 +140,8 @@ func convertModelMachineToProto(in *model.Machine) *proto.Machine {
 		SdkVersion:  in.SDKVersion,
 		SdkLanguage: in.SDKLanguage,
 		Ip:          in.IP,
-		CreatedAt:   in.CreatedAt.Format(time.RFC3339),
-		LastPingAt:  in.LastPingAt.Format(time.RFC3339),
+		CreatedAt:   timestampProto(in.CreatedAt),
+		LastPingAt:  timestampProto(in.LastPingAt),
 	}
 	return out
 }
@@ -105,21 +157,21 @@ func convertModelRequestToProto(in *model.Request) *proto.Request {
 			resultStr = string(bytes)
 		}
 	}
-	leaseExpiresAt := ""
+	var leaseExpiresAt *timestamppb.Timestamp
 	if !in.VisibleAt.IsZero() && (in.Status == model.RequestStatusClaimed || in.Status == model.RequestStatusRunning) {
-		leaseExpiresAt = in.VisibleAt.Format(time.RFC3339)
+		leaseExpiresAt = timestampProto(in.VisibleAt)
 	}
 	out := &proto.Request{
 		Id:                 in.ID,
 		SessionId:          in.SessionID,
 		ToolName:           in.ToolName,
-		Status:             string(in.Status),
+		Status:             protoRequestStatus(in.Status),
 		Input:              in.Input,
 		Result:             resultStr,
 		ResultType:         string(in.ResultType),
 		Error:              in.Error,
-		CreatedAt:          in.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:          in.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:          timestampProto(in.CreatedAt),
+		UpdatedAt:          timestampProto(in.UpdatedAt),
 		ExecutingMachineId: in.ExecutingMachineID,
 		LeasedBy:           in.LeasedBy,
 		LeaseEpoch:         in.LeaseEpoch,
@@ -133,23 +185,38 @@ func convertModelTaskToProto(in *model.Task) *proto.Task {
 	if in == nil {
 		return nil
 	}
-	var completedAt string
-	if in.CompletedAt != nil {
-		completedAt = in.CompletedAt.Format(time.RFC3339)
-	}
+	completedAt := timestampProtoFromPtr(in.CompletedAt)
 	out := &proto.Task{
 		Id:               in.ID,
 		SessionId:        in.SessionID,
 		ToolName:         in.ToolName,
-		Status:           string(in.Status),
+		Status:           protoTaskStatus(in.Status),
 		Input:            in.Input,
 		Result:           in.Result,
 		ResultType:       in.ResultType,
 		Error:            in.Error,
-		CreatedAt:        in.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:        in.UpdatedAt.Format(time.RFC3339),
+		CreatedAt:        timestampProto(in.CreatedAt),
+		UpdatedAt:        timestampProto(in.UpdatedAt),
 		CompletedAt:      completedAt,
 		CurrentRequestId: in.CurrentRequestID,
 	}
 	return out
+}
+
+// requestStatusFromProto maps the v1 enum onto the model's string status.
+func requestStatusFromProto(s proto.RequestStatus) model.RequestStatus {
+	switch s {
+	case proto.RequestStatus_REQUEST_STATUS_PENDING:
+		return model.RequestStatusPending
+	case proto.RequestStatus_REQUEST_STATUS_CLAIMED:
+		return model.RequestStatusClaimed
+	case proto.RequestStatus_REQUEST_STATUS_RUNNING:
+		return model.RequestStatusRunning
+	case proto.RequestStatus_REQUEST_STATUS_DONE:
+		return model.RequestStatusDone
+	case proto.RequestStatus_REQUEST_STATUS_FAILED:
+		return model.RequestStatusFailed
+	default:
+		return ""
+	}
 }

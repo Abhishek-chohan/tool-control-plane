@@ -17,6 +17,7 @@ from toolplane.proto.service_pb2 import (
     UpdateMachinePingRequest,
 )
 
+from ..common.utils import timestamp_to_iso
 from .connection import ConnectionManager
 from .errors import MachineError, api_error_from_rpc_error
 
@@ -71,8 +72,8 @@ class MachineManager:
             "sdk_version": machine.sdk_version,
             "sdk_language": machine.sdk_language,
             "ip": machine.ip,
-            "created_at": machine.created_at,
-            "last_ping_at": getattr(machine, "last_ping_at", ""),
+            "created_at": timestamp_to_iso(machine.created_at),
+            "last_ping_at": timestamp_to_iso(getattr(machine, "last_ping_at", None)),
         }
 
     def _clear_local_machine(self, session_id: str, machine_id: str) -> None:

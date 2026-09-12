@@ -342,14 +342,14 @@ if ! wait_for_http_ok "http://127.0.0.1:${bootstrap_http_port}/health" 120; then
 fi
 
 session_json="$(curl -fsS \
-	"http://127.0.0.1:${bootstrap_http_port}/api/CreateSession" \
+	"http://127.0.0.1:${bootstrap_http_port}/api.v1/CreateSession" \
 	-H "Authorization: Bearer ${bootstrap_token}" \
 	-H 'Content-Type: application/json' \
 	-d '{"userId":"bootstrap-admin","name":"bootstrap-admin","description":"one-time admin bootstrap","namespace":"ops"}')"
 session_id="$(extract_json_field "$session_json" 'session.id')"
 
 admin_key_json="$(curl -fsS \
-	"http://127.0.0.1:${bootstrap_http_port}/api/CreateApiKey" \
+	"http://127.0.0.1:${bootstrap_http_port}/api.v1/CreateApiKey" \
 	-H "Authorization: Bearer ${bootstrap_token}" \
 	-H 'Content-Type: application/json' \
 	-d "{\"sessionId\":\"${session_id}\",\"name\":\"reference-admin\",\"capabilities\":[\"read\",\"execute\",\"admin\"]}")"
@@ -384,7 +384,7 @@ validate_metrics "http://127.0.0.1:${metrics_port}/metrics"
 validate_health "http://127.0.0.1:${http_port}/health"
 
 get_session_json="$(curl -fsS \
-	"http://127.0.0.1:${http_port}/api/GetSession" \
+	"http://127.0.0.1:${http_port}/api.v1/sessions/${session_id}" \
 	-H "Authorization: Bearer ${admin_api_key}" \
 	-H 'Content-Type: application/json' \
 	-d "{\"sessionId\":\"${session_id}\"}")"

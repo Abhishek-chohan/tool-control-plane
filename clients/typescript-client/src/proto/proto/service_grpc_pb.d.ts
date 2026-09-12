@@ -1,4 +1,4 @@
-// package: api
+// package: api.v1
 // file: proto/service.proto
 
 /* tslint:disable */
@@ -6,22 +6,25 @@
 
 import * as grpc from "@grpc/grpc-js";
 import * as proto_service_pb from "../proto/service_pb";
+import * as google_protobuf_timestamp_pb from "google-protobuf/google/protobuf/timestamp_pb";
 
 interface IToolServiceService extends grpc.ServiceDefinition<grpc.UntypedServiceImplementation> {
     registerTool: IToolServiceService_IRegisterTool;
     listTools: IToolServiceService_IListTools;
+    getTool: IToolServiceService_IGetTool;
     getToolById: IToolServiceService_IGetToolById;
     getToolByName: IToolServiceService_IGetToolByName;
     deleteTool: IToolServiceService_IDeleteTool;
     updateToolPing: IToolServiceService_IUpdateToolPing;
     streamExecuteTool: IToolServiceService_IStreamExecuteTool;
     resumeStream: IToolServiceService_IResumeStream;
+    invokeTool: IToolServiceService_IInvokeTool;
     executeTool: IToolServiceService_IExecuteTool;
     healthCheck: IToolServiceService_IHealthCheck;
 }
 
 interface IToolServiceService_IRegisterTool extends grpc.MethodDefinition<proto_service_pb.RegisterToolRequest, proto_service_pb.RegisterToolResponse> {
-    path: "/api.ToolService/RegisterTool";
+    path: "/api.v1.ToolService/RegisterTool";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.RegisterToolRequest>;
@@ -30,7 +33,7 @@ interface IToolServiceService_IRegisterTool extends grpc.MethodDefinition<proto_
     responseDeserialize: grpc.deserialize<proto_service_pb.RegisterToolResponse>;
 }
 interface IToolServiceService_IListTools extends grpc.MethodDefinition<proto_service_pb.ListToolsRequest, proto_service_pb.ListToolsResponse> {
-    path: "/api.ToolService/ListTools";
+    path: "/api.v1.ToolService/ListTools";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListToolsRequest>;
@@ -38,8 +41,17 @@ interface IToolServiceService_IListTools extends grpc.MethodDefinition<proto_ser
     responseSerialize: grpc.serialize<proto_service_pb.ListToolsResponse>;
     responseDeserialize: grpc.deserialize<proto_service_pb.ListToolsResponse>;
 }
+interface IToolServiceService_IGetTool extends grpc.MethodDefinition<proto_service_pb.GetToolRequest, proto_service_pb.GetToolResponse> {
+    path: "/api.v1.ToolService/GetTool";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<proto_service_pb.GetToolRequest>;
+    requestDeserialize: grpc.deserialize<proto_service_pb.GetToolRequest>;
+    responseSerialize: grpc.serialize<proto_service_pb.GetToolResponse>;
+    responseDeserialize: grpc.deserialize<proto_service_pb.GetToolResponse>;
+}
 interface IToolServiceService_IGetToolById extends grpc.MethodDefinition<proto_service_pb.GetToolByIdRequest, proto_service_pb.GetToolResponse> {
-    path: "/api.ToolService/GetToolById";
+    path: "/api.v1.ToolService/GetToolById";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetToolByIdRequest>;
@@ -48,7 +60,7 @@ interface IToolServiceService_IGetToolById extends grpc.MethodDefinition<proto_s
     responseDeserialize: grpc.deserialize<proto_service_pb.GetToolResponse>;
 }
 interface IToolServiceService_IGetToolByName extends grpc.MethodDefinition<proto_service_pb.GetToolByNameRequest, proto_service_pb.GetToolResponse> {
-    path: "/api.ToolService/GetToolByName";
+    path: "/api.v1.ToolService/GetToolByName";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetToolByNameRequest>;
@@ -57,7 +69,7 @@ interface IToolServiceService_IGetToolByName extends grpc.MethodDefinition<proto
     responseDeserialize: grpc.deserialize<proto_service_pb.GetToolResponse>;
 }
 interface IToolServiceService_IDeleteTool extends grpc.MethodDefinition<proto_service_pb.DeleteToolRequest, proto_service_pb.DeleteToolResponse> {
-    path: "/api.ToolService/DeleteTool";
+    path: "/api.v1.ToolService/DeleteTool";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.DeleteToolRequest>;
@@ -66,7 +78,7 @@ interface IToolServiceService_IDeleteTool extends grpc.MethodDefinition<proto_se
     responseDeserialize: grpc.deserialize<proto_service_pb.DeleteToolResponse>;
 }
 interface IToolServiceService_IUpdateToolPing extends grpc.MethodDefinition<proto_service_pb.UpdateToolPingRequest, proto_service_pb.Tool> {
-    path: "/api.ToolService/UpdateToolPing";
+    path: "/api.v1.ToolService/UpdateToolPing";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.UpdateToolPingRequest>;
@@ -75,7 +87,7 @@ interface IToolServiceService_IUpdateToolPing extends grpc.MethodDefinition<prot
     responseDeserialize: grpc.deserialize<proto_service_pb.Tool>;
 }
 interface IToolServiceService_IStreamExecuteTool extends grpc.MethodDefinition<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolChunk> {
-    path: "/api.ToolService/StreamExecuteTool";
+    path: "/api.v1.ToolService/StreamExecuteTool";
     requestStream: false;
     responseStream: true;
     requestSerialize: grpc.serialize<proto_service_pb.ExecuteToolRequest>;
@@ -84,7 +96,7 @@ interface IToolServiceService_IStreamExecuteTool extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.ExecuteToolChunk>;
 }
 interface IToolServiceService_IResumeStream extends grpc.MethodDefinition<proto_service_pb.ResumeStreamRequest, proto_service_pb.ExecuteToolChunk> {
-    path: "/api.ToolService/ResumeStream";
+    path: "/api.v1.ToolService/ResumeStream";
     requestStream: false;
     responseStream: true;
     requestSerialize: grpc.serialize<proto_service_pb.ResumeStreamRequest>;
@@ -92,8 +104,17 @@ interface IToolServiceService_IResumeStream extends grpc.MethodDefinition<proto_
     responseSerialize: grpc.serialize<proto_service_pb.ExecuteToolChunk>;
     responseDeserialize: grpc.deserialize<proto_service_pb.ExecuteToolChunk>;
 }
+interface IToolServiceService_IInvokeTool extends grpc.MethodDefinition<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolResponse> {
+    path: "/api.v1.ToolService/InvokeTool";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<proto_service_pb.ExecuteToolRequest>;
+    requestDeserialize: grpc.deserialize<proto_service_pb.ExecuteToolRequest>;
+    responseSerialize: grpc.serialize<proto_service_pb.ExecuteToolResponse>;
+    responseDeserialize: grpc.deserialize<proto_service_pb.ExecuteToolResponse>;
+}
 interface IToolServiceService_IExecuteTool extends grpc.MethodDefinition<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolResponse> {
-    path: "/api.ToolService/ExecuteTool";
+    path: "/api.v1.ToolService/ExecuteTool";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ExecuteToolRequest>;
@@ -102,7 +123,7 @@ interface IToolServiceService_IExecuteTool extends grpc.MethodDefinition<proto_s
     responseDeserialize: grpc.deserialize<proto_service_pb.ExecuteToolResponse>;
 }
 interface IToolServiceService_IHealthCheck extends grpc.MethodDefinition<proto_service_pb.HealthCheckRequest, proto_service_pb.HealthCheckResponse> {
-    path: "/api.ToolService/HealthCheck";
+    path: "/api.v1.ToolService/HealthCheck";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.HealthCheckRequest>;
@@ -116,12 +137,14 @@ export const ToolServiceService: IToolServiceService;
 export interface IToolServiceServer extends grpc.UntypedServiceImplementation {
     registerTool: grpc.handleUnaryCall<proto_service_pb.RegisterToolRequest, proto_service_pb.RegisterToolResponse>;
     listTools: grpc.handleUnaryCall<proto_service_pb.ListToolsRequest, proto_service_pb.ListToolsResponse>;
+    getTool: grpc.handleUnaryCall<proto_service_pb.GetToolRequest, proto_service_pb.GetToolResponse>;
     getToolById: grpc.handleUnaryCall<proto_service_pb.GetToolByIdRequest, proto_service_pb.GetToolResponse>;
     getToolByName: grpc.handleUnaryCall<proto_service_pb.GetToolByNameRequest, proto_service_pb.GetToolResponse>;
     deleteTool: grpc.handleUnaryCall<proto_service_pb.DeleteToolRequest, proto_service_pb.DeleteToolResponse>;
     updateToolPing: grpc.handleUnaryCall<proto_service_pb.UpdateToolPingRequest, proto_service_pb.Tool>;
     streamExecuteTool: grpc.handleServerStreamingCall<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolChunk>;
     resumeStream: grpc.handleServerStreamingCall<proto_service_pb.ResumeStreamRequest, proto_service_pb.ExecuteToolChunk>;
+    invokeTool: grpc.handleUnaryCall<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolResponse>;
     executeTool: grpc.handleUnaryCall<proto_service_pb.ExecuteToolRequest, proto_service_pb.ExecuteToolResponse>;
     healthCheck: grpc.handleUnaryCall<proto_service_pb.HealthCheckRequest, proto_service_pb.HealthCheckResponse>;
 }
@@ -133,6 +156,9 @@ export interface IToolServiceClient {
     listTools(request: proto_service_pb.ListToolsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
     listTools(request: proto_service_pb.ListToolsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
     listTools(request: proto_service_pb.ListToolsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
+    getTool(request: proto_service_pb.GetToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
+    getTool(request: proto_service_pb.GetToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
+    getTool(request: proto_service_pb.GetToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     getToolById(request: proto_service_pb.GetToolByIdRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     getToolById(request: proto_service_pb.GetToolByIdRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     getToolById(request: proto_service_pb.GetToolByIdRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
@@ -149,6 +175,9 @@ export interface IToolServiceClient {
     streamExecuteTool(request: proto_service_pb.ExecuteToolRequest, metadata?: grpc.Metadata, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
     resumeStream(request: proto_service_pb.ResumeStreamRequest, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
     resumeStream(request: proto_service_pb.ResumeStreamRequest, metadata?: grpc.Metadata, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
+    invokeTool(request: proto_service_pb.ExecuteToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
+    invokeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
+    invokeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     executeTool(request: proto_service_pb.ExecuteToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     executeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     executeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
@@ -165,6 +194,9 @@ export class ToolServiceClient extends grpc.Client implements IToolServiceClient
     public listTools(request: proto_service_pb.ListToolsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
     public listTools(request: proto_service_pb.ListToolsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
     public listTools(request: proto_service_pb.ListToolsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListToolsResponse) => void): grpc.ClientUnaryCall;
+    public getTool(request: proto_service_pb.GetToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
+    public getTool(request: proto_service_pb.GetToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
+    public getTool(request: proto_service_pb.GetToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     public getToolById(request: proto_service_pb.GetToolByIdRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     public getToolById(request: proto_service_pb.GetToolByIdRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
     public getToolById(request: proto_service_pb.GetToolByIdRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.GetToolResponse) => void): grpc.ClientUnaryCall;
@@ -181,6 +213,9 @@ export class ToolServiceClient extends grpc.Client implements IToolServiceClient
     public streamExecuteTool(request: proto_service_pb.ExecuteToolRequest, metadata?: grpc.Metadata, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
     public resumeStream(request: proto_service_pb.ResumeStreamRequest, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
     public resumeStream(request: proto_service_pb.ResumeStreamRequest, metadata?: grpc.Metadata, options?: Partial<grpc.CallOptions>): grpc.ClientReadableStream<proto_service_pb.ExecuteToolChunk>;
+    public invokeTool(request: proto_service_pb.ExecuteToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
+    public invokeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
+    public invokeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     public executeTool(request: proto_service_pb.ExecuteToolRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     public executeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
     public executeTool(request: proto_service_pb.ExecuteToolRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ExecuteToolResponse) => void): grpc.ClientUnaryCall;
@@ -205,7 +240,7 @@ interface ISessionsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
 }
 
 interface ISessionsServiceService_ICreateSession extends grpc.MethodDefinition<proto_service_pb.CreateSessionRequest, proto_service_pb.CreateSessionResponse> {
-    path: "/api.SessionsService/CreateSession";
+    path: "/api.v1.SessionsService/CreateSession";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CreateSessionRequest>;
@@ -214,7 +249,7 @@ interface ISessionsServiceService_ICreateSession extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.CreateSessionResponse>;
 }
 interface ISessionsServiceService_IGetSession extends grpc.MethodDefinition<proto_service_pb.GetSessionRequest, proto_service_pb.Session> {
-    path: "/api.SessionsService/GetSession";
+    path: "/api.v1.SessionsService/GetSession";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetSessionRequest>;
@@ -223,7 +258,7 @@ interface ISessionsServiceService_IGetSession extends grpc.MethodDefinition<prot
     responseDeserialize: grpc.deserialize<proto_service_pb.Session>;
 }
 interface ISessionsServiceService_IListSessions extends grpc.MethodDefinition<proto_service_pb.ListSessionsRequest, proto_service_pb.ListSessionsResponse> {
-    path: "/api.SessionsService/ListSessions";
+    path: "/api.v1.SessionsService/ListSessions";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListSessionsRequest>;
@@ -232,7 +267,7 @@ interface ISessionsServiceService_IListSessions extends grpc.MethodDefinition<pr
     responseDeserialize: grpc.deserialize<proto_service_pb.ListSessionsResponse>;
 }
 interface ISessionsServiceService_IUpdateSession extends grpc.MethodDefinition<proto_service_pb.UpdateSessionRequest, proto_service_pb.Session> {
-    path: "/api.SessionsService/UpdateSession";
+    path: "/api.v1.SessionsService/UpdateSession";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.UpdateSessionRequest>;
@@ -241,7 +276,7 @@ interface ISessionsServiceService_IUpdateSession extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.Session>;
 }
 interface ISessionsServiceService_IDeleteSession extends grpc.MethodDefinition<proto_service_pb.DeleteSessionRequest, proto_service_pb.DeleteSessionResponse> {
-    path: "/api.SessionsService/DeleteSession";
+    path: "/api.v1.SessionsService/DeleteSession";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.DeleteSessionRequest>;
@@ -250,7 +285,7 @@ interface ISessionsServiceService_IDeleteSession extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.DeleteSessionResponse>;
 }
 interface ISessionsServiceService_IListUserSessions extends grpc.MethodDefinition<proto_service_pb.ListUserSessionsRequest, proto_service_pb.ListUserSessionsResponse> {
-    path: "/api.SessionsService/ListUserSessions";
+    path: "/api.v1.SessionsService/ListUserSessions";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListUserSessionsRequest>;
@@ -259,7 +294,7 @@ interface ISessionsServiceService_IListUserSessions extends grpc.MethodDefinitio
     responseDeserialize: grpc.deserialize<proto_service_pb.ListUserSessionsResponse>;
 }
 interface ISessionsServiceService_IBulkDeleteSessions extends grpc.MethodDefinition<proto_service_pb.BulkDeleteSessionsRequest, proto_service_pb.BulkDeleteSessionsResponse> {
-    path: "/api.SessionsService/BulkDeleteSessions";
+    path: "/api.v1.SessionsService/BulkDeleteSessions";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.BulkDeleteSessionsRequest>;
@@ -268,7 +303,7 @@ interface ISessionsServiceService_IBulkDeleteSessions extends grpc.MethodDefinit
     responseDeserialize: grpc.deserialize<proto_service_pb.BulkDeleteSessionsResponse>;
 }
 interface ISessionsServiceService_IGetSessionStats extends grpc.MethodDefinition<proto_service_pb.GetSessionStatsRequest, proto_service_pb.GetSessionStatsResponse> {
-    path: "/api.SessionsService/GetSessionStats";
+    path: "/api.v1.SessionsService/GetSessionStats";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetSessionStatsRequest>;
@@ -277,7 +312,7 @@ interface ISessionsServiceService_IGetSessionStats extends grpc.MethodDefinition
     responseDeserialize: grpc.deserialize<proto_service_pb.GetSessionStatsResponse>;
 }
 interface ISessionsServiceService_IInvalidateSession extends grpc.MethodDefinition<proto_service_pb.InvalidateSessionRequest, proto_service_pb.InvalidateSessionResponse> {
-    path: "/api.SessionsService/InvalidateSession";
+    path: "/api.v1.SessionsService/InvalidateSession";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.InvalidateSessionRequest>;
@@ -286,7 +321,7 @@ interface ISessionsServiceService_IInvalidateSession extends grpc.MethodDefiniti
     responseDeserialize: grpc.deserialize<proto_service_pb.InvalidateSessionResponse>;
 }
 interface ISessionsServiceService_ICreateApiKey extends grpc.MethodDefinition<proto_service_pb.CreateApiKeyRequest, proto_service_pb.ApiKey> {
-    path: "/api.SessionsService/CreateApiKey";
+    path: "/api.v1.SessionsService/CreateApiKey";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CreateApiKeyRequest>;
@@ -295,7 +330,7 @@ interface ISessionsServiceService_ICreateApiKey extends grpc.MethodDefinition<pr
     responseDeserialize: grpc.deserialize<proto_service_pb.ApiKey>;
 }
 interface ISessionsServiceService_IListApiKeys extends grpc.MethodDefinition<proto_service_pb.ListApiKeysRequest, proto_service_pb.ListApiKeysResponse> {
-    path: "/api.SessionsService/ListApiKeys";
+    path: "/api.v1.SessionsService/ListApiKeys";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListApiKeysRequest>;
@@ -304,7 +339,7 @@ interface ISessionsServiceService_IListApiKeys extends grpc.MethodDefinition<pro
     responseDeserialize: grpc.deserialize<proto_service_pb.ListApiKeysResponse>;
 }
 interface ISessionsServiceService_IRevokeApiKey extends grpc.MethodDefinition<proto_service_pb.RevokeApiKeyRequest, proto_service_pb.RevokeApiKeyResponse> {
-    path: "/api.SessionsService/RevokeApiKey";
+    path: "/api.v1.SessionsService/RevokeApiKey";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.RevokeApiKeyRequest>;
@@ -419,7 +454,7 @@ interface IMachinesServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
 }
 
 interface IMachinesServiceService_IRegisterMachine extends grpc.MethodDefinition<proto_service_pb.RegisterMachineRequest, proto_service_pb.Machine> {
-    path: "/api.MachinesService/RegisterMachine";
+    path: "/api.v1.MachinesService/RegisterMachine";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.RegisterMachineRequest>;
@@ -428,7 +463,7 @@ interface IMachinesServiceService_IRegisterMachine extends grpc.MethodDefinition
     responseDeserialize: grpc.deserialize<proto_service_pb.Machine>;
 }
 interface IMachinesServiceService_IListMachines extends grpc.MethodDefinition<proto_service_pb.ListMachinesRequest, proto_service_pb.ListMachinesResponse> {
-    path: "/api.MachinesService/ListMachines";
+    path: "/api.v1.MachinesService/ListMachines";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListMachinesRequest>;
@@ -437,7 +472,7 @@ interface IMachinesServiceService_IListMachines extends grpc.MethodDefinition<pr
     responseDeserialize: grpc.deserialize<proto_service_pb.ListMachinesResponse>;
 }
 interface IMachinesServiceService_IGetMachine extends grpc.MethodDefinition<proto_service_pb.GetMachineRequest, proto_service_pb.Machine> {
-    path: "/api.MachinesService/GetMachine";
+    path: "/api.v1.MachinesService/GetMachine";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetMachineRequest>;
@@ -446,7 +481,7 @@ interface IMachinesServiceService_IGetMachine extends grpc.MethodDefinition<prot
     responseDeserialize: grpc.deserialize<proto_service_pb.Machine>;
 }
 interface IMachinesServiceService_IUpdateMachinePing extends grpc.MethodDefinition<proto_service_pb.UpdateMachinePingRequest, proto_service_pb.Machine> {
-    path: "/api.MachinesService/UpdateMachinePing";
+    path: "/api.v1.MachinesService/UpdateMachinePing";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.UpdateMachinePingRequest>;
@@ -455,7 +490,7 @@ interface IMachinesServiceService_IUpdateMachinePing extends grpc.MethodDefiniti
     responseDeserialize: grpc.deserialize<proto_service_pb.Machine>;
 }
 interface IMachinesServiceService_IUnregisterMachine extends grpc.MethodDefinition<proto_service_pb.UnregisterMachineRequest, proto_service_pb.UnregisterMachineResponse> {
-    path: "/api.MachinesService/UnregisterMachine";
+    path: "/api.v1.MachinesService/UnregisterMachine";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.UnregisterMachineRequest>;
@@ -464,7 +499,7 @@ interface IMachinesServiceService_IUnregisterMachine extends grpc.MethodDefiniti
     responseDeserialize: grpc.deserialize<proto_service_pb.UnregisterMachineResponse>;
 }
 interface IMachinesServiceService_IDrainMachine extends grpc.MethodDefinition<proto_service_pb.DrainMachineRequest, proto_service_pb.DrainMachineResponse> {
-    path: "/api.MachinesService/DrainMachine";
+    path: "/api.v1.MachinesService/DrainMachine";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.DrainMachineRequest>;
@@ -541,7 +576,7 @@ interface IRequestsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
 }
 
 interface IRequestsServiceService_ICreateRequest extends grpc.MethodDefinition<proto_service_pb.CreateRequestRequest, proto_service_pb.Request> {
-    path: "/api.RequestsService/CreateRequest";
+    path: "/api.v1.RequestsService/CreateRequest";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CreateRequestRequest>;
@@ -550,7 +585,7 @@ interface IRequestsServiceService_ICreateRequest extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
 }
 interface IRequestsServiceService_IGetRequest extends grpc.MethodDefinition<proto_service_pb.GetRequestRequest, proto_service_pb.Request> {
-    path: "/api.RequestsService/GetRequest";
+    path: "/api.v1.RequestsService/GetRequest";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetRequestRequest>;
@@ -559,7 +594,7 @@ interface IRequestsServiceService_IGetRequest extends grpc.MethodDefinition<prot
     responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
 }
 interface IRequestsServiceService_IListRequests extends grpc.MethodDefinition<proto_service_pb.ListRequestsRequest, proto_service_pb.ListRequestsResponse> {
-    path: "/api.RequestsService/ListRequests";
+    path: "/api.v1.RequestsService/ListRequests";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListRequestsRequest>;
@@ -568,7 +603,7 @@ interface IRequestsServiceService_IListRequests extends grpc.MethodDefinition<pr
     responseDeserialize: grpc.deserialize<proto_service_pb.ListRequestsResponse>;
 }
 interface IRequestsServiceService_IUpdateRequest extends grpc.MethodDefinition<proto_service_pb.UpdateRequestRequest, proto_service_pb.Request> {
-    path: "/api.RequestsService/UpdateRequest";
+    path: "/api.v1.RequestsService/UpdateRequest";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.UpdateRequestRequest>;
@@ -577,7 +612,7 @@ interface IRequestsServiceService_IUpdateRequest extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
 }
 interface IRequestsServiceService_IClaimRequest extends grpc.MethodDefinition<proto_service_pb.ClaimRequestRequest, proto_service_pb.Request> {
-    path: "/api.RequestsService/ClaimRequest";
+    path: "/api.v1.RequestsService/ClaimRequest";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ClaimRequestRequest>;
@@ -586,7 +621,7 @@ interface IRequestsServiceService_IClaimRequest extends grpc.MethodDefinition<pr
     responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
 }
 interface IRequestsServiceService_ICancelRequest extends grpc.MethodDefinition<proto_service_pb.CancelRequestRequest, proto_service_pb.CancelRequestResponse> {
-    path: "/api.RequestsService/CancelRequest";
+    path: "/api.v1.RequestsService/CancelRequest";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CancelRequestRequest>;
@@ -595,7 +630,7 @@ interface IRequestsServiceService_ICancelRequest extends grpc.MethodDefinition<p
     responseDeserialize: grpc.deserialize<proto_service_pb.CancelRequestResponse>;
 }
 interface IRequestsServiceService_ISubmitRequestResult extends grpc.MethodDefinition<proto_service_pb.SubmitRequestResultRequest, proto_service_pb.SubmitRequestResultResponse> {
-    path: "/api.RequestsService/SubmitRequestResult";
+    path: "/api.v1.RequestsService/SubmitRequestResult";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.SubmitRequestResultRequest>;
@@ -604,7 +639,7 @@ interface IRequestsServiceService_ISubmitRequestResult extends grpc.MethodDefini
     responseDeserialize: grpc.deserialize<proto_service_pb.SubmitRequestResultResponse>;
 }
 interface IRequestsServiceService_IAppendRequestChunks extends grpc.MethodDefinition<proto_service_pb.AppendRequestChunksRequest, proto_service_pb.AppendRequestChunksResponse> {
-    path: "/api.RequestsService/AppendRequestChunks";
+    path: "/api.v1.RequestsService/AppendRequestChunks";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.AppendRequestChunksRequest>;
@@ -613,7 +648,7 @@ interface IRequestsServiceService_IAppendRequestChunks extends grpc.MethodDefini
     responseDeserialize: grpc.deserialize<proto_service_pb.AppendRequestChunksResponse>;
 }
 interface IRequestsServiceService_IGetRequestChunks extends grpc.MethodDefinition<proto_service_pb.GetRequestChunksRequest, proto_service_pb.GetRequestChunksResponse> {
-    path: "/api.RequestsService/GetRequestChunks";
+    path: "/api.v1.RequestsService/GetRequestChunks";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetRequestChunksRequest>;
@@ -622,7 +657,7 @@ interface IRequestsServiceService_IGetRequestChunks extends grpc.MethodDefinitio
     responseDeserialize: grpc.deserialize<proto_service_pb.GetRequestChunksResponse>;
 }
 interface IRequestsServiceService_IRenewRequestLease extends grpc.MethodDefinition<proto_service_pb.RenewRequestLeaseRequest, proto_service_pb.Request> {
-    path: "/api.RequestsService/RenewRequestLease";
+    path: "/api.v1.RequestsService/RenewRequestLease";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.RenewRequestLeaseRequest>;
@@ -721,7 +756,7 @@ interface ITasksServiceService extends grpc.ServiceDefinition<grpc.UntypedServic
 }
 
 interface ITasksServiceService_ICreateTask extends grpc.MethodDefinition<proto_service_pb.CreateTaskRequest, proto_service_pb.Task> {
-    path: "/api.TasksService/CreateTask";
+    path: "/api.v1.TasksService/CreateTask";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CreateTaskRequest>;
@@ -730,7 +765,7 @@ interface ITasksServiceService_ICreateTask extends grpc.MethodDefinition<proto_s
     responseDeserialize: grpc.deserialize<proto_service_pb.Task>;
 }
 interface ITasksServiceService_IGetTask extends grpc.MethodDefinition<proto_service_pb.GetTaskRequest, proto_service_pb.Task> {
-    path: "/api.TasksService/GetTask";
+    path: "/api.v1.TasksService/GetTask";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.GetTaskRequest>;
@@ -739,7 +774,7 @@ interface ITasksServiceService_IGetTask extends grpc.MethodDefinition<proto_serv
     responseDeserialize: grpc.deserialize<proto_service_pb.Task>;
 }
 interface ITasksServiceService_IListTasks extends grpc.MethodDefinition<proto_service_pb.ListTasksRequest, proto_service_pb.ListTasksResponse> {
-    path: "/api.TasksService/ListTasks";
+    path: "/api.v1.TasksService/ListTasks";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.ListTasksRequest>;
@@ -748,7 +783,7 @@ interface ITasksServiceService_IListTasks extends grpc.MethodDefinition<proto_se
     responseDeserialize: grpc.deserialize<proto_service_pb.ListTasksResponse>;
 }
 interface ITasksServiceService_ICancelTask extends grpc.MethodDefinition<proto_service_pb.CancelTaskRequest, proto_service_pb.CancelTaskResponse> {
-    path: "/api.TasksService/CancelTask";
+    path: "/api.v1.TasksService/CancelTask";
     requestStream: false;
     responseStream: false;
     requestSerialize: grpc.serialize<proto_service_pb.CancelTaskRequest>;

@@ -288,7 +288,7 @@ func TestToolsListNormalizesSchema(t *testing.T) {
 	conn, sessionService, _ := startBackend(t)
 	handler := newFacade(t, conn)
 
-	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "", "")
+	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestToolsCallReturnsTaskHandleForTasksClients(t *testing.T) {
 	conn, sessionService, _ := startBackend(t)
 	handler := newFacade(t, conn)
 
-	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "", "")
+	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -425,7 +425,7 @@ func TestTasksGetUnknownTaskRejected(t *testing.T) {
 	conn, sessionService, _ := startBackend(t)
 	handler := newFacade(t, conn)
 
-	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "", "")
+	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -446,7 +446,7 @@ func TestSyncCallTimesOutWithTaskReference(t *testing.T) {
 	conn, sessionService, _ := startBackend(t)
 	handler := newFacade(t, conn, mcp.WithSyncTimeout(300*time.Millisecond), mcp.WithPollInterval(50*time.Millisecond))
 
-	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "", "")
+	session, err := sessionService.CreateSession("test-user", "fixture", "", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

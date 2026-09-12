@@ -1,9 +1,45 @@
 syntax = "proto3";
 
-package api;
-option go_package = "toolplane/proto"; // Adjusted go_package
+package api.v1;
+option go_package = "toolplane/proto";
 
 import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// ======================
+// Shared contract types
+// ======================
+
+// ListPage is the unified pagination trailer for list responses.
+// next_page_token is opaque: pass it back verbatim as page_token on the
+// next call. Empty string means no further pages. total_size is the total
+// number of items across all pages when the server can compute it cheaply,
+// otherwise 0.
+message ListPage {
+  string next_page_token = 1;
+  int32 total_size = 2;
+}
+
+// RequestStatus is the lifecycle state of a Request.
+enum RequestStatus {
+  REQUEST_STATUS_UNSPECIFIED = 0;
+  REQUEST_STATUS_PENDING = 1;
+  REQUEST_STATUS_CLAIMED = 2;
+  REQUEST_STATUS_RUNNING = 3;
+  REQUEST_STATUS_DONE = 4;
+  REQUEST_STATUS_FAILED = 5;
+}
+
+// TaskStatus is the lifecycle state of a Task.
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+  TASK_STATUS_CANCELLED = 5;
+  TASK_STATUS_DEAD_LETTER = 6;
+}
 
 // ======================
 // Tool Service
@@ -12,37 +48,49 @@ service ToolService {
   // Tool management
   rpc RegisterTool(RegisterToolRequest) returns (RegisterToolResponse) {
     option (google.api.http) = {
-      post: "/api/RegisterTool";
+      post: "/api.v1/RegisterTool";
       body: "*";
     };
   }
   rpc ListTools(ListToolsRequest) returns (ListToolsResponse) {
     option (google.api.http) = {
-      post: "/api/ListTools";
+      post: "/api.v1/ListTools";
       body: "*";
     };
   }
+  // GetTool resolves a tool by ID or by name: exactly one of the reference
+  // fields should be set; the ID wins when both are provided.
+  rpc GetTool(GetToolRequest) returns (GetToolResponse) {
+    option (google.api.http) = {
+      post: "/api.v1/GetTool";
+      body: "*";
+    };
+  }
+  // Deprecated: use GetTool. Retained as a stable alias.
   rpc GetToolById(GetToolByIdRequest) returns (GetToolResponse) {
+    option deprecated = true;
     option (google.api.http) = {
-      post: "/api/GetToolById";
+      post: "/api.v1/GetToolById";
       body: "*";
     };
   }
+  // Deprecated: use GetTool. Retained as a stable alias.
   rpc GetToolByName(GetToolByNameRequest) returns (GetToolResponse) {
+    option deprecated = true;
     option (google.api.http) = {
-      post: "/api/GetToolByName";
+      post: "/api.v1/GetToolByName";
       body: "*";
     };
   }
   rpc DeleteTool(DeleteToolRequest) returns (DeleteToolResponse) {
     option (google.api.http) = {
-      post: "/api/DeleteTool";
+      post: "/api.v1/DeleteTool";
       body: "*";
     };
   }
   rpc UpdateToolPing(UpdateToolPingRequest) returns (Tool) {
     option (google.api.http) = {
-      post: "/api/UpdateToolPing";
+      post: "/api.v1/UpdateToolPing";
       body: "*";
     };
   }
@@ -51,7 +99,7 @@ service ToolService {
   // Request state, claim, and result lifecycle ownership stays in RequestsService.
   rpc StreamExecuteTool(ExecuteToolRequest) returns (stream ExecuteToolChunk) {
     option (google.api.http) = {
-      post: "/api/StreamExecuteTool";
+      post: "/api.v1/StreamExecuteTool";
       body: "*";
     };
   }
@@ -60,14 +108,23 @@ service ToolService {
   // fallen out of that window, this RPC fails with OUT_OF_RANGE.
   rpc ResumeStream(ResumeStreamRequest) returns (stream ExecuteToolChunk) {
     option (google.api.http) = {
-      post: "/api/ResumeStream";
+      post: "/api.v1/ResumeStream";
       body: "*";
     };
   }
 
-  rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse) {
+  // InvokeTool is the v1 name for synchronous tool invocation.
+  rpc InvokeTool(ExecuteToolRequest) returns (ExecuteToolResponse) {
     option (google.api.http) = {
-      post: "/api/ExecuteTool";
+      post: "/api.v1/InvokeTool";
+      body: "*";
+    };
+  }
+  // Deprecated: use InvokeTool. Retained as a stable alias.
+  rpc ExecuteTool(ExecuteToolRequest) returns (ExecuteToolResponse) {
+    option deprecated = true;
+    option (google.api.http) = {
+      post: "/api.v1/ExecuteTool";
       body: "*";
     };
   }
@@ -75,8 +132,12 @@ service ToolService {
   // Health check (can be in any service or its own)
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {
     option (google.api.http) = {
-      post: "/api/HealthCheck"; // Or use get: "/healthz"
+      post: "/api.v1/healthz";
       body: "*";
+      additional_bindings {
+        post: "/api.v1/HealthCheck";
+        body: "*";
+      }
     };
   }
 }
@@ -94,31 +155,31 @@ service SessionsService {
   // Session management
   rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse) {
     option (google.api.http) = {
-      post: "/api/CreateSession";
+      post: "/api.v1/CreateSession";
       body: "*";
     };
   }
   rpc GetSession(GetSessionRequest) returns (Session) {
     option (google.api.http) = {
-      post: "/api/GetSession";
+      post: "/api.v1/sessions/{session_id}";
       body: "*";
     };
   }
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {
     option (google.api.http) = {
-      post: "/api/ListSessions";
+      post: "/api.v1/sessions";
       body: "*";
     };
   }
   rpc UpdateSession(UpdateSessionRequest) returns (Session) {
     option (google.api.http) = {
-      post: "/api/UpdateSession";
+      post: "/api.v1/UpdateSession";
       body: "*";
     };
   }
   rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse) {
     option (google.api.http) = {
-      post: "/api/DeleteSession";
+      post: "/api.v1/DeleteSession";
       body: "*";
     };
   }
@@ -126,19 +187,19 @@ service SessionsService {
   // Enhanced session management
   rpc ListUserSessions(ListUserSessionsRequest) returns (ListUserSessionsResponse) {
     option (google.api.http) = {
-      post: "/api/ListUserSessions";
+      post: "/api.v1/users/{user_id}/sessions";
       body: "*";
     };
   }
   rpc BulkDeleteSessions(BulkDeleteSessionsRequest) returns (BulkDeleteSessionsResponse) {
     option (google.api.http) = {
-      post: "/api/BulkDeleteSessions";
+      post: "/api.v1/BulkDeleteSessions";
       body: "*";
     };
   }
   rpc GetSessionStats(GetSessionStatsRequest) returns (GetSessionStatsResponse) {
     option (google.api.http) = {
-      post: "/api/GetSessionStats";
+      post: "/api.v1/users/{user_id}/session-stats";
       body: "*";
     };
   }
@@ -148,7 +209,7 @@ service SessionsService {
   // DeleteSession to remove it).
   rpc InvalidateSession(InvalidateSessionRequest) returns (InvalidateSessionResponse) {
     option (google.api.http) = {
-      post: "/api/InvalidateSession";
+      post: "/api.v1/InvalidateSession";
       body: "*";
     };
   }
@@ -156,19 +217,19 @@ service SessionsService {
   // API key management
   rpc CreateApiKey(CreateApiKeyRequest) returns (ApiKey) {
     option (google.api.http) = {
-      post: "/api/CreateApiKey";
+      post: "/api.v1/CreateApiKey";
       body: "*";
     };
   }
   rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse) {
     option (google.api.http) = {
-      post: "/api/ListApiKeys";
+      post: "/api.v1/sessions/{session_id}/api-keys";
       body: "*";
     };
   }
   rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse) {
     option (google.api.http) = {
-      post: "/api/RevokeApiKey";
+      post: "/api.v1/RevokeApiKey";
       body: "*";
     };
   }
@@ -181,38 +242,38 @@ service MachinesService {
   // Machine management
   rpc RegisterMachine(RegisterMachineRequest) returns (Machine) {
     option (google.api.http) = {
-      post: "/api/RegisterMachine";
+      post: "/api.v1/RegisterMachine";
       body: "*";
     };
   }
   rpc ListMachines(ListMachinesRequest) returns (ListMachinesResponse) {
     option (google.api.http) = {
-      post: "/api/ListMachines";
+      post: "/api.v1/sessions/{session_id}/machines";
       body: "*";
     };
   }
   rpc GetMachine(GetMachineRequest) returns (Machine) {
     option (google.api.http) = {
-      post: "/api/GetMachine";
+      post: "/api.v1/sessions/{session_id}/machines/{machine_id}";
       body: "*";
     };
   }
   rpc UpdateMachinePing(UpdateMachinePingRequest) returns (Machine) {
     option (google.api.http) = {
-      post: "/api/UpdateMachinePing";
+      post: "/api.v1/UpdateMachinePing";
       body: "*";
     };
   }
   rpc UnregisterMachine(UnregisterMachineRequest) returns (UnregisterMachineResponse) {
     option (google.api.http) = {
-      post: "/api/UnregisterMachine";
+      post: "/api.v1/UnregisterMachine";
       body: "*";
     };
   }
   // Drain a machine: finish in-flight work then unregister
   rpc DrainMachine(DrainMachineRequest) returns (DrainMachineResponse) {
     option (google.api.http) = {
-      post: "/api/DrainMachine";
+      post: "/api.v1/DrainMachine";
       body: "*";
     };
   }
@@ -234,55 +295,55 @@ service RequestsService {
   // Request management
   rpc CreateRequest(CreateRequestRequest) returns (Request) {
     option (google.api.http) = {
-      post: "/api/CreateRequest";
+      post: "/api.v1/CreateRequest";
       body: "*";
     };
   }
   rpc GetRequest(GetRequestRequest) returns (Request) {
     option (google.api.http) = {
-      post: "/api/GetRequest";
+      post: "/api.v1/sessions/{session_id}/requests/{request_id}";
       body: "*";
     };
   }
   rpc ListRequests(ListRequestsRequest) returns (ListRequestsResponse) {
     option (google.api.http) = {
-      post: "/api/ListRequests";
+      post: "/api.v1/sessions/{session_id}/requests";
       body: "*";
     };
   }
   rpc UpdateRequest(UpdateRequestRequest) returns (Request) {
     option (google.api.http) = {
-      post: "/api/UpdateRequest";
+      post: "/api.v1/UpdateRequest";
       body: "*";
     };
   }
   rpc ClaimRequest(ClaimRequestRequest) returns (Request) {
     option (google.api.http) = {
-      post: "/api/ClaimRequest";
+      post: "/api.v1/ClaimRequest";
       body: "*";
     };
   }
   rpc CancelRequest(CancelRequestRequest) returns (CancelRequestResponse) {
     option (google.api.http) = {
-      post: "/api/CancelRequest";
+      post: "/api.v1/CancelRequest";
       body: "*";
     };
   }
   rpc SubmitRequestResult(SubmitRequestResultRequest) returns (SubmitRequestResultResponse) {
     option (google.api.http) = {
-      post: "/api/SubmitRequestResult";
+      post: "/api.v1/SubmitRequestResult";
       body: "*";
     };
   }
   rpc AppendRequestChunks(AppendRequestChunksRequest) returns (AppendRequestChunksResponse) {
     option (google.api.http) = {
-      post: "/api/AppendRequestChunks";
+      post: "/api.v1/AppendRequestChunks";
       body: "*";
     };
   }
   rpc GetRequestChunks(GetRequestChunksRequest) returns (GetRequestChunksResponse) {
     option (google.api.http) = {
-      post: "/api/GetRequestChunks";
+      post: "/api.v1/sessions/{session_id}/requests/{request_id}/chunks";
       body: "*";
     };
   }
@@ -295,7 +356,7 @@ service RequestsService {
   // stale, reclaimed, or expired.
   rpc RenewRequestLease(RenewRequestLeaseRequest) returns (Request) {
     option (google.api.http) = {
-      post: "/api/RenewRequestLease";
+      post: "/api.v1/RenewRequestLease";
       body: "*";
     };
   }
@@ -308,25 +369,25 @@ service TasksService {
   // Task management
   rpc CreateTask(CreateTaskRequest) returns (Task) {
     option (google.api.http) = {
-      post: "/api/CreateTask";
+      post: "/api.v1/CreateTask";
       body: "*";
     };
   }
   rpc GetTask(GetTaskRequest) returns (Task) {
     option (google.api.http) = {
-      post: "/api/GetTask";
+      post: "/api.v1/sessions/{session_id}/tasks/{task_id}";
       body: "*";
     };
   }
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse) {
     option (google.api.http) = {
-      post: "/api/ListTasks";
+      post: "/api.v1/sessions/{session_id}/tasks";
       body: "*";
     };
   }
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse) {
     option (google.api.http) = {
-      post: "/api/CancelTask";
+      post: "/api.v1/CancelTask";
       body: "*";
     };
   }
@@ -339,8 +400,8 @@ message Tool {
   string description = 3;
   string schema = 4;  // JSON schema as string
   map<string, string> config = 5;
-  string created_at = 6;
-  string last_ping_at = 7;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_ping_at = 7;
   string session_id = 8;
   string machine_id = 9;
   repeated string tags = 10;  // Optional tags for categorization
@@ -351,12 +412,9 @@ message Session {
   string id = 1;
   string name = 2;
   string description = 3;
-  string created_at = 4;
+  google.protobuf.Timestamp created_at = 4;
   string created_by = 5;
-  // Legacy transitional field. New auth enforcement is owned by api_keys records.
-  // The server no longer uses this as the maintained auth boundary.
-  string api_key = 6;
-  string namespace = 7;  // Optional namespace for organization
+  string namespace = 6;  // Optional namespace for organization
 }
 
 // API Key definition
@@ -367,9 +425,9 @@ message ApiKey {
   // ListApiKeys returns metadata with this field empty.
   string key = 3;
   string session_id = 4;
-  string created_at = 5;
+  google.protobuf.Timestamp created_at = 5;
   string created_by = 6;
-  string revoked_at = 7;
+  google.protobuf.Timestamp revoked_at = 7;
   repeated string capabilities = 8;
   string key_preview = 9;
 }
@@ -381,8 +439,8 @@ message Machine {
   string sdk_version = 3;
   string sdk_language = 4;
   string ip = 5;
-  string created_at = 6;
-  string last_ping_at = 7;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_ping_at = 7;
   // Per-machine credential, returned exactly once by RegisterMachine on the
   // registration that minted it (empty otherwise). Provide-scoped RPCs must
   // present it via the x-toolplane-machine-token metadata/header when the
@@ -395,23 +453,22 @@ message Request {
   string id = 1;
   string session_id = 2;
   string tool_name = 3;
-  string status = 4;
+  RequestStatus status = 4;
   string input = 5;  // JSON input as string
   string result = 6;  // JSON result as string
   string result_type = 7;
   string error = 8;
-  string created_at = 9;
-  string updated_at = 10;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
   string executing_machine_id = 11;
-  repeated string stream_results = 12;
   // Lease metadata for the current execution attempt. lease_epoch identifies
   // the claim grant and must be echoed by the lease holder on fenced provider
   // writes (UpdateRequest, SubmitRequestResult, AppendRequestChunks,
-  // RenewRequestLease). lease_expires_at is RFC3339 and empty when the request
-  // has no active lease.
+  // RenewRequestLease). lease_expires_at is unset when the request has no
+  // active lease.
   string leased_by = 13;
   int64 lease_epoch = 14;
-  string lease_expires_at = 15;
+  google.protobuf.Timestamp lease_expires_at = 15;
   int32 timeout_seconds = 16;
 }
 
@@ -441,13 +498,21 @@ message ListToolsResponse {
   repeated Tool tools = 1;
 }
 
-// GetToolByIdRequest
+// GetToolRequest resolves a tool by ID or by name: exactly one of the two
+// references should be set; the ID wins when both are provided.
+message GetToolRequest {
+  string session_id = 1;
+  string tool_id = 2;
+  string tool_name = 3;
+}
+
+// Deprecated: use GetToolRequest.
 message GetToolByIdRequest {
   string session_id = 1;
   string tool_id = 2;
 }
 
-// GetToolByNameRequest
+// Deprecated: use GetToolRequest.
 message GetToolByNameRequest {
   string session_id = 1;
   string tool_name = 2;
@@ -486,12 +551,9 @@ message CreateSessionRequest {
   string user_id = 1;
   string name = 2;
   string description = 3;
-  // Legacy transitional field retained for compatibility only.
-  // New callers should leave this empty.
-  string api_key = 4;
   // Optional client-specified session ID
-  string session_id = 5;
-  string namespace = 6;  // Optional namespace for organization
+  string session_id = 4;
+  string namespace = 5;  // Optional namespace for organization
 }
 
 // CreateSessionResponse
@@ -518,15 +580,15 @@ message ListSessionsResponse {
 message ListUserSessionsRequest {
   string user_id = 1;
   int32 page_size = 2;
-  int32 page_token = 3;
+  // Opaque pagination cursor: pass back page.next_page_token verbatim.
+  string page_token = 3;
   string filter = 4; // Optional filter (e.g., by namespace or status)
 }
 
 // ListUserSessionsResponse
 message ListUserSessionsResponse {
   repeated Session sessions = 1;
-  int32 next_page_token = 2;
-  int32 total_count = 3;
+  ListPage page = 2;
 }
 
 // BulkDeleteSessionsRequest
@@ -674,7 +736,7 @@ message ExecuteToolRequest {
 // ExecuteToolResponse
 message ExecuteToolResponse {
   string request_id = 1;
-  string status = 2;
+  RequestStatus status = 2;
   string result = 3;  // JSON result as string
   string result_type = 4;
   string error = 5;
@@ -715,15 +777,18 @@ message GetRequestRequest {
 // ListRequestsRequest
 message ListRequestsRequest {
   string session_id = 1;
-  string status = 2;
+  // Filter by lifecycle state; REQUEST_STATUS_UNSPECIFIED means all.
+  RequestStatus status = 2;
   string tool_name = 3;
-  int32 limit = 4;
-  int32 offset = 5;
+  int32 page_size = 4;
+  // Opaque pagination cursor: pass back page.next_page_token verbatim.
+  string page_token = 5;
 }
 
 // ListRequestsResponse
 message ListRequestsResponse {
   repeated Request requests = 1;
+  ListPage page = 2;
 }
 
 // UpdateRequestRequest is a fenced provider write: machine_id and lease_epoch
@@ -732,7 +797,7 @@ message ListRequestsResponse {
 message UpdateRequestRequest {
   string session_id = 1;
   string request_id = 2;
-  string status = 3;
+  RequestStatus status = 3;
   string result = 4;
   string result_type = 5;
   string machine_id = 6;
@@ -831,14 +896,14 @@ message Task {
   string id = 1;
   string session_id = 2;
   string tool_name = 3;
-  string status = 4;
+  TaskStatus status = 4;
   string input = 5;  // JSON input as string
   string result = 6;  // JSON result as string
   string result_type = 7;
   string error = 8;
-  string created_at = 9;
-  string updated_at = 10;
-  string completed_at = 11;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  google.protobuf.Timestamp completed_at = 11;
   string current_request_id = 12;  // request executing the current attempt (empty when idle)
 }
 
