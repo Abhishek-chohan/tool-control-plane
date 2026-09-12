@@ -375,8 +375,8 @@ func methodPolicyFor(fullMethod string) (MethodPolicy, bool) {
 // The legacy "execute" capability satisfies both invoke and provide (it
 // normalizes to invoke+provide), so pre-split keys keep working.
 var methodPolicies = map[string]MethodPolicy{
-	"/grpc.health.v1.Health/Check":             {Public: true},
-	"/grpc.health.v1.Health/Watch":             {Public: true},
+	"/grpc.health.v1.Health/Check":                {Public: true},
+	"/grpc.health.v1.Health/Watch":                {Public: true},
 	"/api.v1.ToolService/RegisterTool":            {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.v1.ToolService/ListTools":               {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.v1.ToolService/GetTool":                 {Capability: model.APIKeyCapabilityRead, BindSession: true},

@@ -243,11 +243,6 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 		protoSessions = append(protoSessions, convertPublicSessionToProto(session))
 	}
 
-	pageSize := int(req.PageSize)
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-
 	page := &proto.ListPage{TotalSize: int32(totalCount)}
 	nextStart := offset + len(sessions)
 	if len(sessions) > 0 && nextStart < totalCount {
