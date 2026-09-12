@@ -52,6 +52,8 @@ node_modules/
 .github/instructions/
 .plans/
 .tmp/
+# Scratch files at the repo root (.tmp_*.py and friends).
+.tmp*
 attached_assets/
 # Python bytecode and cache
 __pycache__/
