@@ -785,6 +785,8 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
             page_size = int(request.get("page_size", 3))
             extra_requests = int(request.get("extra_requests", 2))
             total_created = page_size + extra_requests
+            expected_first = int(expected.get("first_page_size", page_size))
+            expected_last = int(expected.get("last_page_size", extra_requests))
             tool_name = request["tool_name"]
             adapter.register_unary_echo_tool(
                 session_id=session_id,
@@ -795,10 +797,10 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                 adapter.create_request(session_id, tool_name, {"index": index})
 
             first_page = adapter.list_requests_page(session_id, {"page_size": page_size})
-            if len(first_page.get("requests", [])) != page_size:
+            if len(first_page.get("requests", [])) != expected_first:
                 raise AssertionError(
                     f"[{transport}] {case_id}: first page returned "
-                    f"{len(first_page.get('requests', []))} requests, want {page_size}"
+                    f"{len(first_page.get('requests', []))} requests, want {expected_first}"
                 )
             if first_page.get("total_size") != total_created:
                 raise AssertionError(
@@ -814,10 +816,10 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                 session_id,
                 {"page_size": page_size, "page_token": first_page["next_page_token"]},
             )
-            if len(second_page.get("requests", [])) != extra_requests:
+            if len(second_page.get("requests", [])) != expected_last:
                 raise AssertionError(
                     f"[{transport}] {case_id}: last page returned "
-                    f"{len(second_page.get('requests', []))} requests, want {extra_requests}"
+                    f"{len(second_page.get('requests', []))} requests, want {expected_last}"
                 )
             if second_page.get("total_size") != total_created:
                 raise AssertionError(

@@ -448,6 +448,8 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
       const pageSize = Number(request.page_size ?? 3);
       const extraRequests = Number(request.extra_requests ?? 2);
       const totalCreated = pageSize + extraRequests;
+      const expectedFirst = Number(expected.first_page_size ?? pageSize);
+      const expectedLast = Number(expected.last_page_size ?? extraRequests);
       const toolName = String(request.tool_name ?? '');
       await adapter.registerUnaryEchoTool(
         sessionId,
@@ -460,8 +462,8 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
 
       const firstPage = await adapter.listRequestsPage(sessionId, { page_size: pageSize });
       const firstRows = Array.isArray(firstPage.requests) ? firstPage.requests.length : -1;
-      if (firstRows !== pageSize) {
-        throw new Error(`[${transport}] ${caseId}: first page returned ${firstRows} requests, want ${pageSize}`);
+      if (firstRows !== expectedFirst) {
+        throw new Error(`[${transport}] ${caseId}: first page returned ${firstRows} requests, want ${expectedFirst}`);
       }
       if (firstPage.totalSize !== totalCreated) {
         throw new Error(`[${transport}] ${caseId}: first page total_size ${firstPage.totalSize}, want ${totalCreated}`);
@@ -475,8 +477,8 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
         page_token: String(firstPage.nextPageToken),
       });
       const secondRows = Array.isArray(secondPage.requests) ? secondPage.requests.length : -1;
-      if (secondRows !== extraRequests) {
-        throw new Error(`[${transport}] ${caseId}: last page returned ${secondRows} requests, want ${extraRequests}`);
+      if (secondRows !== expectedLast) {
+        throw new Error(`[${transport}] ${caseId}: last page returned ${secondRows} requests, want ${expectedLast}`);
       }
       if (secondPage.totalSize !== totalCreated) {
         throw new Error(`[${transport}] ${caseId}: last page total_size ${secondPage.totalSize}, want ${totalCreated}`);
