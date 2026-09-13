@@ -234,6 +234,14 @@ The current runtime constants come from `server/pkg/service/constants.go` and th
 | Task max attempts | 3 | Internal model default |
 | Task timeout field | 60 seconds | Default per-attempt deadline stored on the task model and enforced when `TimeoutSeconds > 0` |
 | Retained stream chunk window | 100 chunks | `model.Request.AddStreamChunk()` keeps only the newest 100 while tracking absolute start and next sequence numbers |
+| Terminal request retention | 7 days | Retention sweeper removes done/failed requests whose last transition is older than this (audit events: 30 days) |
+
+**Clock domain.** Every lease and visibility deadline — `leased_at`,
+`visible_at`, `next_attempt_at`, and the absolute per-attempt timeout — is
+computed server-side from the control plane's wall clock at transition time.
+Providers never supply deadlines; renewals move the lease deadline but never
+the absolute timeout, and expiry comparisons always use a single server-side
+`now` sample.
 
 ## Machine Lifecycle
 

@@ -653,3 +653,22 @@ func persistRequestInTx(ctx context.Context, tx *sql.Tx, req *model.Request) err
 	}
 	return nil
 }
+
+// DeleteTerminalRequestsBefore removes done/failed requests whose last
+// transition precedes cutoff. Non-terminal rows are never eligible: deleting
+// the row of a pending or running request would orphan work the queue can
+// still recover. Returns the number of rows removed.
+func (s *Store) DeleteTerminalRequestsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	if s == nil {
+		return 0, nil
+	}
+	tag, err := s.db.ExecContext(ctx, `
+		DELETE FROM requests
+		WHERE updated_at < $1 AND status IN ($2,$3)
+	`, cutoff, string(model.RequestStatusDone), string(model.RequestStatusFailed))
+	if err != nil {
+		return 0, fmt.Errorf("delete terminal requests: %w", err)
+	}
+	removed, _ := tag.RowsAffected()
+	return removed, nil
+}

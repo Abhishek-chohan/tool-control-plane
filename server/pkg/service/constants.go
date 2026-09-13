@@ -25,3 +25,11 @@ const maxMachineConcurrentRequests = 4
 // (tasks, synchronous execution) — request-update signals are the primary
 // wake-up; the ticker covers completions made on another replica.
 const waitPollInterval = 250 * time.Millisecond
+
+// requestRetentionAge bounds how long terminal requests are retained;
+// requestCleanupInterval is the retention sweeper cadence.
+const requestRetentionAge = 7 * 24 * time.Hour
+const requestCleanupInterval = 30 * time.Minute
+
+// auditRetentionAge bounds how long audit events are retained.
+const auditRetentionAge = 30 * 24 * time.Hour

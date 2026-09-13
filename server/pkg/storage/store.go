@@ -149,6 +149,12 @@ type Storer interface {
 	AllTasks(ctx context.Context) ([]*model.Task, error)
 	SaveTask(ctx context.Context, task *model.Task) error
 	DeleteTask(ctx context.Context, taskID string) error
+	// Retention. DeleteTerminalRequestsBefore removes done/failed requests
+	// whose last transition precedes the cutoff (non-terminal rows are never
+	// eligible); DeleteAuditEventsBefore removes audit events created before
+	// the cutoff. Both return the number of rows removed.
+	DeleteTerminalRequestsBefore(ctx context.Context, cutoff time.Time) (int64, error)
+	DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error)
 	// GetTaskByIdempotencyKey fetches the task a session created under the
 	// given dedup key (nil when absent); CreateTask uses it to make retries
 	// return the original task without re-executing it.

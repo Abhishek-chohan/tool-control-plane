@@ -948,3 +948,35 @@ func cloneTags(in []string) []string {
 	}
 	return append([]string(nil), in...)
 }
+
+// DeleteTerminalRequestsBefore mirrors the Postgres retention sweep: only
+// done/failed requests past the cutoff are removed.
+func (s *Store) DeleteTerminalRequestsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var removed int64
+	for _, r := range s.requests {
+		if (r.Status == model.RequestStatusDone || r.Status == model.RequestStatusFailed) && r.UpdatedAt.Before(cutoff) {
+			delete(s.requests, r.ID)
+			removed++
+		}
+	}
+	return removed, nil
+}
+
+// DeleteAuditEventsBefore mirrors the Postgres audit retention sweep.
+func (s *Store) DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var removed int64
+	kept := s.auditLog[:0]
+	for _, event := range s.auditLog {
+		if event.CreatedAt.Before(cutoff) {
+			removed++
+			continue
+		}
+		kept = append(kept, event)
+	}
+	s.auditLog = kept
+	return removed, nil
+}

@@ -129,6 +129,11 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_requests_session_status ON requests(session_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_ready ON requests(session_id, status, tool_name, visible_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_dead_letter ON requests(session_id, dead_letter)`,
+		// Reaper indexes: each arm of the expiry predicate gets its own
+		// partial index so the reaper scan touches only reclaimable rows
+		// instead of every leased request in the table.
+		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_lease ON requests (visible_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_timeout ON requests (leased_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_session_status ON tasks(session_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_retry ON tasks(session_id, dead_letter, next_attempt_at)`,
 	}

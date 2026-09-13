@@ -496,3 +496,17 @@ func (s *Store) CancelRequestFenced(ctx context.Context, sessionID, requestID, m
 	}
 	return result, cancelled, nil
 }
+
+// DeleteAuditEventsBefore removes audit events created before the cutoff.
+// Returns the number of rows removed.
+func (s *Store) DeleteAuditEventsBefore(ctx context.Context, cutoff time.Time) (int64, error) {
+	if s == nil {
+		return 0, nil
+	}
+	tag, err := s.db.ExecContext(ctx, `DELETE FROM audit_events WHERE created_at < $1`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("delete audit events: %w", err)
+	}
+	removed, _ := tag.RowsAffected()
+	return removed, nil
+}
