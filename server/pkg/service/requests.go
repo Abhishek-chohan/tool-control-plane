@@ -740,13 +740,13 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 // ClaimPendingRequest finds and claims a pending request for a machine
 func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolNames []string) (*model.Request, error) {
 	if s.machineService.IsMachineDraining(sessionID, machineID) {
-		return nil, fmt.Errorf("machine %s is draining", machineID)
+		return nil, wrapf(ErrMachineDraining, "machine %s is draining", machineID)
 	}
 
 	if machineID != "" {
 		load, capacity := s.machineService.MachineLoadInfo(sessionID, machineID)
 		if load >= capacity {
-			return nil, fmt.Errorf("machine %s at capacity", machineID)
+			return nil, wrapf(ErrMachineAtCapacity, "machine %s at capacity", machineID)
 		}
 	}
 
@@ -758,7 +758,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 			return nil, fmt.Errorf("persist request lease failed: %w", err)
 		}
 		if req == nil {
-			return nil, fmt.Errorf("no pending requests found for the specified tools")
+			return nil, ErrNoPendingRequests
 		}
 		s.ensureRequestDefaults(req)
 		s.requestsMutex.Lock()
@@ -795,6 +795,15 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 			continue
 		}
+		// Empty toolNames matches every tool in the session, mirroring the
+		// ClaimNextRequest contract (and LeasePendingRequest's store path).
+		if len(toolNames) == 0 {
+			if oldestRequest == nil || req.CreatedAt.Before(oldestTime) {
+				oldestRequest = req
+				oldestTime = req.CreatedAt
+			}
+			continue
+		}
 		for _, name := range toolNames {
 			if req.ToolName != name {
 				continue
@@ -808,7 +817,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 	}
 
 	if oldestRequest == nil {
-		return nil, fmt.Errorf("no pending requests found for the specified tools")
+		return nil, ErrNoPendingRequests
 	}
 
 	oldestRequest.SetClaimedBy(machineID)

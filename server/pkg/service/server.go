@@ -578,6 +578,27 @@ func (s *GRPCServer) ClaimRequest(ctx context.Context, req *proto.ClaimRequestRe
 	return convertModelRequestToProto(request), nil
 }
 
+// ClaimNextRequest implements the provider poll primitive: one atomic
+// round-trip that leases the oldest claimable pending request for the given
+// machine and tool set. An idle queue returns claimed=false rather than an
+// error so providers can poll in a tight, allocation-free loop.
+func (s *GRPCServer) ClaimNextRequest(ctx context.Context, req *proto.ClaimNextRequestRequest) (*proto.ClaimNextRequestResponse, error) {
+	request, err := s.requestService.ClaimPendingRequest(req.SessionId, req.MachineId, req.ToolNames)
+	if err != nil {
+		// No pending work is the expected idle outcome for a poll, not an
+		// error condition.
+		if errors.Is(err, ErrNoPendingRequests) {
+			return &proto.ClaimNextRequestResponse{Claimed: false}, nil
+		}
+		return nil, statusFromDomainError("claim next request", err)
+	}
+
+	return &proto.ClaimNextRequestResponse{
+		Request: convertModelRequestToProto(request),
+		Claimed: true,
+	}, nil
+}
+
 // CancelRequest implements the gRPC CancelRequest method
 func (s *GRPCServer) CancelRequest(ctx context.Context, req *proto.CancelRequestRequest) (*proto.CancelRequestResponse, error) {
 	// Cancel request

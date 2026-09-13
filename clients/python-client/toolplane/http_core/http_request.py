@@ -203,50 +203,52 @@ class HTTPRequestManager:
         streaming_tools: set,
         limit: int = 5,
     ):
-        """Poll for requests in a specific session."""
+        """Poll for requests in a specific session.
+
+        Uses the atomic ClaimNextRequest primitive: one round-trip leases the
+        oldest claimable request for this machine, eliminating the
+        list-then-claim race. Claims up to `limit` requests per tick while
+        the queue keeps serving.
+        """
         try:
             self.connection_manager.ensure_connected()
 
-            # Get pending requests
-            payload = {
-                "sessionId": session_id,
-                "status": status_for_wire("pending"),
-                "pageSize": limit,
-            }
+            # No registered tools: with an empty tool filter the server would
+            # match every session tool and we would claim work we cannot
+            # execute.
+            if not tools:
+                return
 
-            response = self.connection_manager.list_requests(payload)
-            requests = response.get("requests", [])
+            claimed_count = 0
+            while claimed_count < limit:
+                response = self.connection_manager.claim_next_request(
+                    {
+                        "sessionId": session_id,
+                        "machineId": machine_id,
+                        "toolNames": list(tools.keys()),
+                    }
+                )
 
-            # Process each request
-            for req in requests:
+                # claimed=false: the queue has nothing claimable right now.
+                if not response.get("claimed"):
+                    break
+
+                req = response.get("request") or {}
                 request_id = req.get("id")
+                if not request_id:
+                    break
 
-                try:
-                    # Claim the request; the response carries the lease grant.
-                    claimed = self.connection_manager.claim_request(
-                        session_id, request_id, machine_id
-                    )
+                # Track the lease grant so the renewal loop keeps it alive.
+                self.register_active_lease(
+                    session_id,
+                    request_id,
+                    req.get("leasedBy", req.get("leased_by", machine_id)) or machine_id,
+                    int(req.get("leaseEpoch", req.get("lease_epoch", 0)) or 0),
+                )
 
-                    # Track the lease grant so the renewal loop keeps it alive.
-                    self.register_active_lease(
-                        session_id,
-                        request_id,
-                        claimed.get("leasedBy", claimed.get("leased_by", machine_id))
-                        or machine_id,
-                        int(
-                            claimed.get("leaseEpoch", claimed.get("lease_epoch", 0))
-                            or 0
-                        ),
-                    )
-
-                    # Execute in thread pool
-                    self.executor.submit(
-                        self._execute_request, claimed, tools, streaming_tools
-                    )
-
-                except Exception:
-                    # Ignore claim errors (request might be claimed by another machine)
-                    pass
+                # Execute in thread pool
+                self.executor.submit(self._execute_request, req, tools, streaming_tools)
+                claimed_count += 1
 
         except Exception as e:
             raise RequestError(f"Failed to poll requests for session {session_id}: {e}")

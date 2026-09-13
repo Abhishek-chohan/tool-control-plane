@@ -1444,6 +1444,7 @@ const (
 	RequestsService_ListRequests_FullMethodName        = "/api.v1.RequestsService/ListRequests"
 	RequestsService_UpdateRequest_FullMethodName       = "/api.v1.RequestsService/UpdateRequest"
 	RequestsService_ClaimRequest_FullMethodName        = "/api.v1.RequestsService/ClaimRequest"
+	RequestsService_ClaimNextRequest_FullMethodName    = "/api.v1.RequestsService/ClaimNextRequest"
 	RequestsService_CancelRequest_FullMethodName       = "/api.v1.RequestsService/CancelRequest"
 	RequestsService_SubmitRequestResult_FullMethodName = "/api.v1.RequestsService/SubmitRequestResult"
 	RequestsService_AppendRequestChunks_FullMethodName = "/api.v1.RequestsService/AppendRequestChunks"
@@ -1465,6 +1466,11 @@ type RequestsServiceClient interface {
 	ListRequests(ctx context.Context, in *ListRequestsRequest, opts ...grpc.CallOption) (*ListRequestsResponse, error)
 	UpdateRequest(ctx context.Context, in *UpdateRequestRequest, opts ...grpc.CallOption) (*Request, error)
 	ClaimRequest(ctx context.Context, in *ClaimRequestRequest, opts ...grpc.CallOption) (*Request, error)
+	// ClaimNextRequest atomically leases the oldest claimable pending request
+	// for the given machine and tool set. This is the provider poll primitive:
+	// one round-trip instead of a list-then-claim race, and an idle queue is a
+	// claimed=false response rather than an error.
+	ClaimNextRequest(ctx context.Context, in *ClaimNextRequestRequest, opts ...grpc.CallOption) (*ClaimNextRequestResponse, error)
 	CancelRequest(ctx context.Context, in *CancelRequestRequest, opts ...grpc.CallOption) (*CancelRequestResponse, error)
 	SubmitRequestResult(ctx context.Context, in *SubmitRequestResultRequest, opts ...grpc.CallOption) (*SubmitRequestResultResponse, error)
 	AppendRequestChunks(ctx context.Context, in *AppendRequestChunksRequest, opts ...grpc.CallOption) (*AppendRequestChunksResponse, error)
@@ -1537,6 +1543,16 @@ func (c *requestsServiceClient) ClaimRequest(ctx context.Context, in *ClaimReque
 	return out, nil
 }
 
+func (c *requestsServiceClient) ClaimNextRequest(ctx context.Context, in *ClaimNextRequestRequest, opts ...grpc.CallOption) (*ClaimNextRequestResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ClaimNextRequestResponse)
+	err := c.cc.Invoke(ctx, RequestsService_ClaimNextRequest_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *requestsServiceClient) CancelRequest(ctx context.Context, in *CancelRequestRequest, opts ...grpc.CallOption) (*CancelRequestResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CancelRequestResponse)
@@ -1601,6 +1617,11 @@ type RequestsServiceServer interface {
 	ListRequests(context.Context, *ListRequestsRequest) (*ListRequestsResponse, error)
 	UpdateRequest(context.Context, *UpdateRequestRequest) (*Request, error)
 	ClaimRequest(context.Context, *ClaimRequestRequest) (*Request, error)
+	// ClaimNextRequest atomically leases the oldest claimable pending request
+	// for the given machine and tool set. This is the provider poll primitive:
+	// one round-trip instead of a list-then-claim race, and an idle queue is a
+	// claimed=false response rather than an error.
+	ClaimNextRequest(context.Context, *ClaimNextRequestRequest) (*ClaimNextRequestResponse, error)
 	CancelRequest(context.Context, *CancelRequestRequest) (*CancelRequestResponse, error)
 	SubmitRequestResult(context.Context, *SubmitRequestResultRequest) (*SubmitRequestResultResponse, error)
 	AppendRequestChunks(context.Context, *AppendRequestChunksRequest) (*AppendRequestChunksResponse, error)
@@ -1637,6 +1658,9 @@ func (UnimplementedRequestsServiceServer) UpdateRequest(context.Context, *Update
 }
 func (UnimplementedRequestsServiceServer) ClaimRequest(context.Context, *ClaimRequestRequest) (*Request, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ClaimRequest not implemented")
+}
+func (UnimplementedRequestsServiceServer) ClaimNextRequest(context.Context, *ClaimNextRequestRequest) (*ClaimNextRequestResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClaimNextRequest not implemented")
 }
 func (UnimplementedRequestsServiceServer) CancelRequest(context.Context, *CancelRequestRequest) (*CancelRequestResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CancelRequest not implemented")
@@ -1764,6 +1788,24 @@ func _RequestsService_ClaimRequest_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RequestsService_ClaimNextRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClaimNextRequestRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RequestsServiceServer).ClaimNextRequest(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RequestsService_ClaimNextRequest_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RequestsServiceServer).ClaimNextRequest(ctx, req.(*ClaimNextRequestRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RequestsService_CancelRequest_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CancelRequestRequest)
 	if err := dec(in); err != nil {
@@ -1880,6 +1922,10 @@ var RequestsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ClaimRequest",
 			Handler:    _RequestsService_ClaimRequest_Handler,
+		},
+		{
+			MethodName: "ClaimNextRequest",
+			Handler:    _RequestsService_ClaimNextRequest_Handler,
 		},
 		{
 			MethodName: "CancelRequest",

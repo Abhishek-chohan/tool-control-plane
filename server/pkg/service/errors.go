@@ -56,6 +56,12 @@ var (
 	// to run it right now.
 	ErrNoProviderAvailable = errors.New("no provider available")
 
+	// ErrNoPendingRequests reports that the provider poll found no claimable
+	// pending request for the requested tools. This is the expected idle
+	// outcome of a poll, not a failure: ClaimNextRequest maps it to
+	// claimed=false.
+	ErrNoPendingRequests = errors.New("no pending requests found for the specified tools")
+
 	// ErrRequestTimeoutOutOfRange reports a timeout_seconds above the
 	// configured maximum.
 	ErrRequestTimeoutOutOfRange = errors.New("request timeout out of range")

@@ -344,6 +344,7 @@ export interface ProviderRuntimeSessionClient {
   ): Promise<Tool>;
   listRequests(options?: RequestListOptions): Promise<Request[]>;
   claimRequest(requestId: string, machineId?: string): Promise<Request>;
+  claimNextRequest(toolNames?: string[]): Promise<{ claimed: boolean; request: Request | null }>;
   updateRequest(requestId: string, update: RequestUpdate): Promise<Request>;
   appendRequestChunks(
     requestId: string,

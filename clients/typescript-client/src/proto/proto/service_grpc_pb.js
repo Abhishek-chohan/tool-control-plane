@@ -110,6 +110,28 @@ function deserialize_api_v1_CancelTaskResponse(buffer_arg) {
   return proto_service_pb.CancelTaskResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
+function serialize_api_v1_ClaimNextRequestRequest(arg) {
+  if (!(arg instanceof proto_service_pb.ClaimNextRequestRequest)) {
+    throw new Error('Expected argument of type api.v1.ClaimNextRequestRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_api_v1_ClaimNextRequestRequest(buffer_arg) {
+  return proto_service_pb.ClaimNextRequestRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_api_v1_ClaimNextRequestResponse(arg) {
+  if (!(arg instanceof proto_service_pb.ClaimNextRequestResponse)) {
+    throw new Error('Expected argument of type api.v1.ClaimNextRequestResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_api_v1_ClaimNextRequestResponse(buffer_arg) {
+  return proto_service_pb.ClaimNextRequestResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
 function serialize_api_v1_ClaimRequestRequest(arg) {
   if (!(arg instanceof proto_service_pb.ClaimRequestRequest)) {
     throw new Error('Expected argument of type api.v1.ClaimRequestRequest');
@@ -1258,6 +1280,21 @@ createRequest: {
     requestDeserialize: deserialize_api_v1_ClaimRequestRequest,
     responseSerialize: serialize_api_v1_Request,
     responseDeserialize: deserialize_api_v1_Request,
+  },
+  // ClaimNextRequest atomically leases the oldest claimable pending request
+// for the given machine and tool set. This is the provider poll primitive:
+// one round-trip instead of a list-then-claim race, and an idle queue is a
+// claimed=false response rather than an error.
+claimNextRequest: {
+    path: '/api.v1.RequestsService/ClaimNextRequest',
+    requestStream: false,
+    responseStream: false,
+    requestType: proto_service_pb.ClaimNextRequestRequest,
+    responseType: proto_service_pb.ClaimNextRequestResponse,
+    requestSerialize: serialize_api_v1_ClaimNextRequestRequest,
+    requestDeserialize: deserialize_api_v1_ClaimNextRequestRequest,
+    responseSerialize: serialize_api_v1_ClaimNextRequestResponse,
+    responseDeserialize: deserialize_api_v1_ClaimNextRequestResponse,
   },
   cancelRequest: {
     path: '/api.v1.RequestsService/CancelRequest',

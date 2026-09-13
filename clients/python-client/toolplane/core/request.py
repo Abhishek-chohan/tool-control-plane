@@ -12,7 +12,7 @@ import grpc
 from toolplane.proto.service_pb2 import (
     AppendRequestChunksRequest,
     CancelRequestRequest,
-    ClaimRequestRequest,
+    ClaimNextRequestRequest,
     CreateRequestRequest,
     GetRequestChunksRequest,
     GetRequestRequest,
@@ -225,76 +225,58 @@ class RequestManager:
         streaming_tools: set,
         limit: int = 5,
     ):
-        """Poll for requests in a specific session."""
+        """Poll for requests in a specific session.
+
+        Uses the atomic ClaimNextRequest primitive: one round-trip leases the
+        oldest claimable request for this machine, eliminating the
+        list-then-claim race entirely. Claims up to `limit` requests per tick
+        while the queue keeps serving; an idle queue returns immediately.
+        """
         try:
             self.connection_manager.ensure_connected()
 
-            # Get pending requests
-            request = ListRequestsRequest(
-                session_id=session_id,
-                status=status_for_wire("pending"),
-                page_size=limit,
-            )
+            # No registered tools: with an empty tool filter the server would
+            # match every session tool and we would claim work we cannot
+            # execute.
+            if not tools:
+                return
 
-            response = self.connection_manager.requests_stub.ListRequests(
-                request, metadata=self.connection_manager.get_metadata()
-            )
+            claimed_count = 0
+            while claimed_count < limit:
+                claim_next = ClaimNextRequestRequest(
+                    session_id=session_id,
+                    machine_id=machine_id,
+                    tool_names=list(tools.keys()),
+                )
 
-            # Process each request
-            for req in response.requests:
                 try:
-                    # Claim the request
-                    claim_request = ClaimRequestRequest(
-                        session_id=session_id,
-                        request_id=req.id,
-                        machine_id=machine_id,
+                    response = self.connection_manager.requests_stub.ClaimNextRequest(
+                        claim_next, metadata=self.connection_manager.get_metadata()
                     )
-
-                    claimed_req = self.connection_manager.requests_stub.ClaimRequest(
-                        claim_request, metadata=self.connection_manager.get_metadata()
-                    )
-
-                    # Track the lease grant so the renewal loop keeps it alive.
-                    self.register_active_lease(
-                        session_id,
-                        claimed_req.id,
-                        claimed_req.leased_by or machine_id,
-                        claimed_req.lease_epoch,
-                    )
-
-                    # Execute in thread pool
-                    self.executor.submit(
-                        self._execute_request, claimed_req, tools, streaming_tools
-                    )
-
                 except grpc.RpcError as rpc_error:
-                    code = rpc_error.code()
-                    if code in (
-                        grpc.StatusCode.FAILED_PRECONDITION,
-                        grpc.StatusCode.NOT_FOUND,
-                    ):
-                        # Lost the claim race (or the request vanished between
-                        # list and claim): expected contention, not an error.
-                        logger.debug(
-                            "Claim race lost for request %s in session %s: %s",
-                            req.id,
-                            session_id,
-                            rpc_error,
-                        )
-                    else:
-                        logger.warning(
-                            "Failed to claim request %s in session %s: %s",
-                            req.id,
-                            session_id,
-                            rpc_error,
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "Failed to claim request %s in session %s: %s",
-                        req.id,
-                        session_id,
-                        e,
-                    )
+                    if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
+                        self.connection_manager.mark_unhealthy()
+                    raise api_error_from_rpc_error(
+                        rpc_error,
+                        context=f"Failed to claim next request for session {session_id}",
+                    ) from rpc_error
+
+                # claimed=false: the queue has nothing claimable right now.
+                if not response.claimed or not response.request.id:
+                    break
+
+                req = response.request
+                # Track the lease grant so the renewal loop keeps it alive.
+                self.register_active_lease(
+                    session_id,
+                    req.id,
+                    req.leased_by or machine_id,
+                    req.lease_epoch,
+                )
+
+                # Execute in thread pool
+                self.executor.submit(self._execute_request, req, tools, streaming_tools)
+                claimed_count += 1
 
         except grpc.RpcError as rpc_error:
             if rpc_error.code() == grpc.StatusCode.UNAVAILABLE:
