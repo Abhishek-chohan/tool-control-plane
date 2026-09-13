@@ -239,8 +239,10 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 		if reclaimed.Status != model.RequestStatusPending {
 			t.Fatalf("after reclaim status=%s want pending", reclaimed.Status)
 		}
-		if reclaimed.Attempts != 2 { // 1 from claim, +1 from reclaim
-			t.Fatalf("after reclaim attempts=%d want 2", reclaimed.Attempts)
+		// The claim counted the attempt; the requeue honors the backoff
+		// without counting it a second time.
+		if reclaimed.Attempts != 1 {
+			t.Fatalf("after reclaim attempts=%d want 1", reclaimed.Attempts)
 		}
 		if reclaimed.LeasedBy != "" || reclaimed.LeasedAt != nil {
 			t.Fatalf("after reclaim lease not cleared: leasedBy=%s leasedAt=%v", reclaimed.LeasedBy, reclaimed.LeasedAt)
@@ -257,8 +259,8 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 		}
 
 		stored, _ := s.GetRequest(ctx, reqID)
-		if stored.Attempts != 2 {
-			t.Fatalf("after second reclaim attempts=%d want 2 (double-increment = bug)", stored.Attempts)
+		if stored.Attempts != 1 {
+			t.Fatalf("after second reclaim attempts=%d want 1 (the claim's count; requeues add nothing)", stored.Attempts)
 		}
 	})
 }

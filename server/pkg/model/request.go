@@ -281,9 +281,10 @@ const (
 	MaxRequestStreamWindowBytes = 8 << 20
 )
 
-// ScheduleRetry computes the next attempt time with linear backoff.
+// ScheduleRetry computes the next attempt time with linear backoff from the
+// attempt count as it stands: the running execution was already counted by
+// the claim that started it, so scheduling must not increment again.
 func (r *Request) ScheduleRetry() time.Time {
-	r.Attempts++
 	backoff := time.Duration(r.BackoffSeconds*r.Attempts) * time.Second
 	next := time.Now().Add(backoff)
 	r.NextAttemptAt = &next
