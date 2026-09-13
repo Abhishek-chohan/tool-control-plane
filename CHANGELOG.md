@@ -29,6 +29,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Request read coherence**: `GetRequestByID` /
+  `GetRequestByIDAnySession` were cache-first with read-through only on
+  a miss, so a replica that had cached a request kept reporting its
+  stale state after another replica claimed, completed, or requeued
+  it. Reads are now store-first on store-backed replicas and overwrite
+  the cache mirror unconditionally; `ExecuteRequest` gained a poll
+  fallback so cross-replica completions are observed without a local
+  signal. A chunk-table gap raced through the trim now maps to
+  `OUT_OF_RANGE` (`RequestStreamExpiredError`) instead of an internal
+  error. See
+  `server/docs/release-notes/2026-09-13-request-read-coherence.md`.
 - **Task execution without self-claim**: tasks claimed their underlying
   request for an advisory machine, holding the lease while they merely
   waited — polling providers never saw the request until lease expiry

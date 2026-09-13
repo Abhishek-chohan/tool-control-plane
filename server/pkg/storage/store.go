@@ -42,6 +42,12 @@ var ErrNotFound = errors.New("storage: not found")
 // surfaces instead of silently overwriting the existing row.
 var ErrRequestExists = errors.New("storage: request already exists")
 
+// ErrChunkWindowGap reports that the retained chunk table does not cover the
+// row's advertised window contiguously — the window bookkeeping raced the
+// trim (cross-replica append/trim interleaving). Stream readers map this to
+// OUT_OF_RANGE: the caller asked for history the window no longer holds.
+var ErrChunkWindowGap = errors.New("storage: chunk window gap")
+
 // Store provides persistence for core server models.
 type Store struct {
 	db     *sql.DB

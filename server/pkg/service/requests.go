@@ -238,10 +238,47 @@ func (s *RequestsService) findRequestByIdempotencyKey(sessionID, idempotencyKey 
 	return found
 }
 
-// GetRequestByID gets a request by ID. On a cache miss it falls back to the
-// store so a request created on another instance is visible here (multi-instance
-// read-through), then populates the local cache.
+// GetRequestByID gets a request by ID. On a store-backed replica the read is
+// store-first — the cached copy can be stale after a cross-replica
+// transition — and the store row refreshes the cache; the cache is the
+// no-store source and the degraded-error fallback.
 func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Request, error) {
+	// Store-first when a store is attached: the cached copy is stale the
+	// moment another replica claims, completes, or requeues the request, and
+	// every lifecycle waiter reads through here. The store row overwrites the
+	// mirror unconditionally — a stale cache entry must never win.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
+		found, err := s.store.GetRequest(ctx, requestID)
+		if err == nil && found != nil {
+			if found.SessionID != sessionID {
+				return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+			}
+			s.ensureRequestDefaults(found)
+			s.requestsMutex.Lock()
+			if _, exists := s.requests[sessionID]; !exists {
+				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			// Mirror regression guard: a local fenced write may have mirrored
+			// a newer row while this store read was in flight. Keep whichever
+			// is newer and hand the newer one back.
+			if existing, ok := s.requests[sessionID][requestID]; ok && existing.UpdatedAt.After(found.UpdatedAt) {
+				s.requestsMutex.Unlock()
+				existing = existing.Clone()
+				s.ensureRequestDefaults(existing)
+				return existing, nil
+			}
+			// Cache a clone: the store-fresh object stays private to this
+			// caller, so returning it below cannot alias the shared cache.
+			s.requests[sessionID][requestID] = found.Clone()
+			s.requestsMutex.Unlock()
+			return found, nil
+		}
+		// Read errors and misses fall through to the cache: a transient store
+		// hiccup degrades to the last-known state instead of a hard miss.
+	}
+
 	s.requestsMutex.RLock()
 	cloned, lookupErr := s.cloneRequestLocked(sessionID, requestID)
 	s.requestsMutex.RUnlock()
@@ -252,67 +289,35 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 		return cloned, nil
 	}
 
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		found, err := s.store.GetRequest(ctx, requestID)
-		if err != nil {
-			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
-		}
-		if found == nil {
-			return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
-		}
-		if found.SessionID != sessionID {
-			return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
-		}
-		s.ensureRequestDefaults(found)
-		s.requestsMutex.Lock()
-		if _, exists := s.requests[sessionID]; !exists {
-			s.requests[sessionID] = make(map[string]*model.Request)
-		}
-		if _, exists := s.requests[sessionID][requestID]; !exists {
-			// Cache a clone: the store-fresh object stays private to this
-			// caller, so returning it below cannot alias the shared cache.
-			s.requests[sessionID][requestID] = found.Clone()
-		}
-		s.requestsMutex.Unlock()
-		return found, nil
-	}
-
 	return nil, wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
 }
 
 // GetRequestByIDAnySession gets a request by ID without requiring a known session ID.
-// On a cache miss it falls back to the store (multi-instance read-through).
+// Store-first on a store-backed replica (same coherence contract as
+// GetRequestByID); the cache is the fallback and the no-store source.
 func (s *RequestsService) GetRequestByIDAnySession(requestID string) (*model.Request, error) {
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+		defer cancel()
+		found, err := s.store.GetRequest(ctx, requestID)
+		if err == nil && found != nil {
+			s.ensureRequestDefaults(found)
+			s.requestsMutex.Lock()
+			if _, exists := s.requests[found.SessionID]; !exists {
+				s.requests[found.SessionID] = make(map[string]*model.Request)
+			}
+			s.requests[found.SessionID][requestID] = found.Clone()
+			s.requestsMutex.Unlock()
+			return found, nil
+		}
+	}
+
 	s.requestsMutex.RLock()
 	cloned, lookupErr := s.cloneRequestAnySessionLocked(requestID)
 	s.requestsMutex.RUnlock()
 	if lookupErr == nil {
 		s.ensureRequestDefaults(cloned)
 		return cloned, nil
-	}
-
-	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		found, err := s.store.GetRequest(ctx, requestID)
-		if err != nil {
-			return nil, fmt.Errorf("request %s lookup failed: %w", requestID, err)
-		}
-		if found == nil {
-			return nil, wrapf(ErrNotFound, "request %s not found", requestID)
-		}
-		s.ensureRequestDefaults(found)
-		s.requestsMutex.Lock()
-		if _, exists := s.requests[found.SessionID]; !exists {
-			s.requests[found.SessionID] = make(map[string]*model.Request)
-		}
-		if _, exists := s.requests[found.SessionID][requestID]; !exists {
-			s.requests[found.SessionID][requestID] = found.Clone()
-		}
-		s.requestsMutex.Unlock()
-		return found, nil
 	}
 
 	return nil, wrapf(ErrNotFound, "request %s not found", requestID)
@@ -1198,6 +1203,18 @@ func (s *RequestsService) requestStreamSnapshot(sessionID, requestID string, las
 		window, windowErr := s.store.GetRequestChunksByRequest(ctx, request.ID, request.StreamStartSeq, request.NextStreamSeq)
 		cancel()
 		if windowErr != nil {
+			// A chunk-table gap means the row's window bookkeeping raced the
+			// retained-window trim (cross-replica append/trim interleaving).
+			// The readable outcome is "asked for history the window no longer
+			// holds" — OUT_OF_RANGE — not an internal error.
+			if errors.Is(windowErr, storage.ErrChunkWindowGap) {
+				return nil, &RequestStreamExpiredError{
+					RequestID: request.ID,
+					LastSeq:   lastSeq,
+					StartSeq:  request.StreamStartSeq,
+					NextSeq:   request.NextStreamSeq,
+				}
+			}
 			return nil, fmt.Errorf("persist request chunk read failed: %w", windowErr)
 		}
 		snapshot.Window = window
@@ -1428,6 +1445,8 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 	}
 
 	watch := s.subscribeRequest(requestID)
+	poll := time.NewTicker(waitPollInterval)
+	defer poll.Stop()
 
 	for {
 		req, err := s.GetRequestByID(sessionID, requestID)
@@ -1455,6 +1474,11 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 
 		select {
 		case <-watch:
+			watch = s.subscribeRequest(requestID)
+		case <-poll.C:
+			// Cross-instance fallback: a provider on another replica completes
+			// the request without any local signal; the store-first read in
+			// GetRequestByID observes it on this ticker.
 			watch = s.subscribeRequest(requestID)
 		case <-ctx.Done():
 			_ = s.CancelRequest(sessionID, requestID)
