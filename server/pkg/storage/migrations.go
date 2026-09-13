@@ -151,7 +151,6 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_lease ON requests (visible_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_timeout ON requests (leased_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_retention ON requests (updated_at) WHERE status IN ('done', 'failed')`,
-		`CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events (created_at)`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS last_error TEXT`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS stream_start_seq INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS next_stream_seq INTEGER NOT NULL DEFAULT 1`,
@@ -189,6 +188,9 @@ func (s *Store) migrate(ctx context.Context) error {
             PRIMARY KEY (request_id, seq)
         )`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_idempotency ON tasks(session_id, idempotency_key) WHERE idempotency_key <> ''`,
+		// The audit-events index sits after every table creation: this table
+		// itself is created above in this pass, and the index needs it.
+		`CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events (created_at)`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS draining BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS token_hash TEXT`,
 	}
