@@ -538,7 +538,7 @@ func (s *RequestsService) UpdateRequest(
 // updateRequestViaStore is the store-backed fenced UpdateRequest path: capacity
 // reservation stays in the service, while the fenced row mutation happens
 // atomically in the store (check lease grant and persist in one transaction).
-// Callers must hold s.requestsMutex.
+// It manages the cache lock itself: callers must NOT hold s.requestsMutex.
 func (s *RequestsService) updateRequestViaStore(
 	sessionID, requestID, machineID string,
 	leaseEpoch int64,
@@ -615,7 +615,8 @@ func (s *RequestsService) updateRequestViaStore(
 
 // mirrorRequest replaces the cached copy of a request after an authoritative
 // store write, acquiring the cache lock itself. Store-mode paths use this so
-// the mutex is never held across a store round-trip.
+// the mutex is never held across a store round-trip. It is cache-lock
+// independent: callers must NOT already hold s.requestsMutex.
 func (s *RequestsService) mirrorRequest(request *model.Request) {
 	s.requestsMutex.Lock()
 	s.mirrorRequestLocked(request)
@@ -623,9 +624,14 @@ func (s *RequestsService) mirrorRequest(request *model.Request) {
 }
 
 // mirrorRequestLocked replaces the cached copy of a request after an
-// authoritative store write. Callers must hold s.requestsMutex.
+// authoritative store write, keeping whichever of (existing, request) has the
+// newer UpdatedAt — with store writes now overlapping, lock-acquisition order
+// does not guarantee commit order. Callers must hold s.requestsMutex.
 func (s *RequestsService) mirrorRequestLocked(request *model.Request) {
 	if request == nil {
+		return
+	}
+	if existing, ok := s.requests[request.SessionID][request.ID]; ok && existing.UpdatedAt.After(request.UpdatedAt) {
 		return
 	}
 	request = request.Clone()
@@ -1069,7 +1075,11 @@ func (s *RequestsService) AppendRequestChunks(
 		return nil
 	}
 
-	// In-memory path (dev/test only when no store is configured).
+	// In-memory path (dev/test only when no store is configured): the cache
+	// mutex is the only serialization here.
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
+
 	request, err := s.getRequestLocked(sessionID, requestID)
 	if err != nil {
 		return err
@@ -1121,7 +1131,11 @@ func (s *RequestsService) RenewRequestLease(
 		return renewed, nil
 	}
 
-	// In-memory path (dev/test only when no store is configured).
+	// In-memory path (dev/test only when no store is configured): the cache
+	// mutex is the only serialization here.
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
+
 	request, err := s.getRequestLocked(sessionID, requestID)
 	if err != nil {
 		return nil, err
