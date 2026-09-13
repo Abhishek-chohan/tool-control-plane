@@ -241,6 +241,7 @@ Public methods parsed from `src/core/toolplane_client.ts`:
 | `async listRequests(options: { status?: string; toolName?: string; limit?: number; /** Opaque cursor from a previous page; omit to start from the first page. */ pageToken?: string; } = {})` | `Promise<RequestModel[]>` |
 | `async updateRequest(requestId: string, update: RequestUpdate)` | `Promise<RequestModel>` |
 | `async claimRequest(requestId: string, machineId: string = '')` | `Promise<RequestModel>` |
+| `async claimNextRequest(toolNames: string[] = [])` | `Promise<{ claimed: boolean; request: RequestModel \| null }>` |
 | `async appendRequestChunks(requestId: string, chunks: unknown[], resultType: string = 'streaming', lease?: LeaseContext)` | `Promise<boolean>` |
 | `async submitRequestResult(requestId: string, result: unknown, resultType: string = 'resolution', meta: Record<string, string> = {}, lease?: LeaseContext)` | `Promise<boolean>` |
 | `async renewRequestLease(requestId: string, machineId: string, leaseEpoch: number)` | `Promise<RequestModel>` |

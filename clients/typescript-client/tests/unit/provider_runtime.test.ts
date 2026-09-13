@@ -158,6 +158,20 @@ class FakeSessionClient implements ProviderRuntimeSessionClient {
     return { ...request };
   }
 
+  async claimNextRequest(toolNames: string[] = []): Promise<{ claimed: boolean; request: Request | null }> {
+    // Mirror the server: lease the oldest claimable pending request whose
+    // tool the provider registered.
+    const nextRequest = this.pendingRequests
+      .filter((request) => request.status === 'pending')
+      .filter((request) => toolNames.length === 0 || toolNames.includes(request.toolName))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0];
+    if (!nextRequest) {
+      return { claimed: false, request: null };
+    }
+    const claimed = await this.claimRequest(nextRequest.id, this.machineId);
+    return { claimed: true, request: claimed };
+  }
+
   async updateRequest(requestId: string, update: RequestUpdate): Promise<Request> {
     const request = this.pendingRequests.find((candidate) => candidate.id === requestId);
     if (!request) {
