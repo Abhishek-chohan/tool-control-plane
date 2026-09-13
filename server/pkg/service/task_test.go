@@ -267,7 +267,6 @@ func TestTasksServiceTaskCompletesViaProvider(t *testing.T) {
 		t.Fatalf("create task: %v", err)
 	}
 	// Generous ceiling: 10s task timeout against 5s of provider work.
-	task.TimeoutSeconds = 30
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 15*time.Second)
 
 	completed, err := tasksService.GetTaskByID(sessionID, task.ID)
