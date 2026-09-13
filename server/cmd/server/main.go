@@ -76,6 +76,32 @@ func run() int {
 		}
 	}
 
+	// Loud posture banner for non-production configurations: enumerate
+	// exactly what is insecure so nobody discovers it from an incident.
+	if cfg.environment != "production" {
+		tlsState := "disabled (plaintext)"
+		if *tlsCertFile != "" {
+			tlsState = "enabled"
+		}
+		storageState := cfg.storageMode
+		if storageState == "" && cfg.databaseURL != "" {
+			storageState = "postgres"
+		}
+		if storageState == "" {
+			storageState = "memory"
+		}
+		authDetail := map[string]string{
+			"disabled": "every caller receives an anonymous all-capabilities principal",
+			"fixed":    "one shared API key for all local callers",
+			"postgres": "per-session API keys",
+		}[cfg.authMode]
+		slog.Warn("INSECURE DEVELOPMENT CONFIGURATION — do not expose this server\n" +
+			"  - auth: " + cfg.authMode + " (" + authDetail + ")\n" +
+			"  - gRPC transport: " + tlsState + "\n" +
+			"  - storage: " + storageState + "\n" +
+			"  Accept the disabled-auth risk only by setting TOOLPLANE_ALLOW_INSECURE_DEV=1.")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -332,6 +332,10 @@ func main() {
 	rateLimiter := NewRateLimiterManager(ctx, rate.Limit(*apiRate), *apiBurst, rate.Limit(*ipRate), *ipBurst)
 	throttleTracker := NewThrottleTracker()
 
+	if *apiRate == 0 && *ipRate == 0 {
+		log.Println("WARNING: rate limiting is disabled (api-rate=0, ip-rate=0); callers share the backend without throttling")
+	}
+
 	transportCredentials, err := backendTransportCredentials(cfg)
 	if err != nil {
 		log.Fatalf("invalid backend TLS configuration: %v", err)
