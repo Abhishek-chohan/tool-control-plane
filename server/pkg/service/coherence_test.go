@@ -265,3 +265,49 @@ func TestDrainFlagVisibleAcrossReplicas(t *testing.T) {
 		t.Fatal("drain flag outlived the drained machine")
 	}
 }
+
+// TestGetRequestByIDSeesOtherReplicaCompletion pins the cache-coherence
+// contract: instance B cached the request as pending, instance A completes
+// it, and B's very next read observes DONE — not the stale cached copy.
+// Under the cache-first getter the stale pending entry won forever and
+// lifecycle waiters on B never saw the terminal state.
+func TestGetRequestByIDSeesOtherReplicaCompletion(t *testing.T) {
+	store, svcA, machA, svcB, _ := newActiveActiveStacks(t)
+	seedSessionForAA(t, store)
+
+	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
+		t.Fatalf("RegisterMachine on A: %v", err)
+	}
+
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0, "")
+	if err != nil {
+		t.Fatalf("CreateRequest on A: %v", err)
+	}
+
+	// B reads the request (caching the pending state) before A executes it.
+	stale, err := svcB.GetRequestByID("sess-aa", req.ID)
+	if err != nil || stale.Status != model.RequestStatusPending {
+		t.Fatalf("B initial read: status=%v err=%v", stale, err)
+	}
+
+	claimed, err := svcA.ClaimRequest("sess-aa", req.ID, "machine-a")
+	if err != nil {
+		t.Fatalf("ClaimRequest on A: %v", err)
+	}
+	if err := svcA.SubmitRequestResult("sess-aa", req.ID, "machine-a", claimed.LeaseEpoch,
+		map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
+		t.Fatalf("SubmitRequestResult on A: %v", err)
+	}
+
+	done, err := svcB.GetRequestByID("sess-aa", req.ID)
+	if err != nil {
+		t.Fatalf("B read after completion: %v", err)
+	}
+	if done.Status != model.RequestStatusDone {
+		t.Fatalf("B read status=%s want done (stale cache won)", done.Status)
+	}
+	if done.Result == nil {
+		t.Fatal("B read lost the delivered result")
+	}
+}
