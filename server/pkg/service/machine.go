@@ -81,7 +81,7 @@ func NewMachinesService(ctx context.Context, toolService *ToolService, tracer tr
 	}
 
 	if store != nil {
-		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, startupLoadTimeout)
 		defer cancel()
 		if machines, err := store.AllMachines(loadCtx); err != nil {
 			log.Printf("machine persistence load failed: %v", err)
