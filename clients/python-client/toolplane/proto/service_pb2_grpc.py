@@ -1488,6 +1488,11 @@ class RequestsServiceStub(object):
                 request_serializer=proto_dot_service__pb2.ClaimRequestRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.Request.FromString,
                 _registered_method=True)
+        self.ClaimNextRequest = channel.unary_unary(
+                '/api.v1.RequestsService/ClaimNextRequest',
+                request_serializer=proto_dot_service__pb2.ClaimNextRequestRequest.SerializeToString,
+                response_deserializer=proto_dot_service__pb2.ClaimNextRequestResponse.FromString,
+                _registered_method=True)
         self.CancelRequest = channel.unary_unary(
                 '/api.v1.RequestsService/CancelRequest',
                 request_serializer=proto_dot_service__pb2.CancelRequestRequest.SerializeToString,
@@ -1548,6 +1553,16 @@ class RequestsServiceServicer(object):
 
     def ClaimRequest(self, request, context):
         """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ClaimNextRequest(self, request, context):
+        """ClaimNextRequest atomically leases the oldest claimable pending request
+        for the given machine and tool set. This is the provider poll primitive:
+        one round-trip instead of a list-then-claim race, and an idle queue is a
+        claimed=false response rather than an error.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -1616,6 +1631,11 @@ def add_RequestsServiceServicer_to_server(servicer, server):
                     servicer.ClaimRequest,
                     request_deserializer=proto_dot_service__pb2.ClaimRequestRequest.FromString,
                     response_serializer=proto_dot_service__pb2.Request.SerializeToString,
+            ),
+            'ClaimNextRequest': grpc.unary_unary_rpc_method_handler(
+                    servicer.ClaimNextRequest,
+                    request_deserializer=proto_dot_service__pb2.ClaimNextRequestRequest.FromString,
+                    response_serializer=proto_dot_service__pb2.ClaimNextRequestResponse.SerializeToString,
             ),
             'CancelRequest': grpc.unary_unary_rpc_method_handler(
                     servicer.CancelRequest,
@@ -1781,6 +1801,33 @@ class RequestsService(object):
             '/api.v1.RequestsService/ClaimRequest',
             proto_dot_service__pb2.ClaimRequestRequest.SerializeToString,
             proto_dot_service__pb2.Request.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ClaimNextRequest(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/api.v1.RequestsService/ClaimNextRequest',
+            proto_dot_service__pb2.ClaimNextRequestRequest.SerializeToString,
+            proto_dot_service__pb2.ClaimNextRequestResponse.FromString,
             options,
             channel_credentials,
             insecure,

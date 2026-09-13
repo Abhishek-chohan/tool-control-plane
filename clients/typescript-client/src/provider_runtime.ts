@@ -449,31 +449,24 @@ export class ProviderRuntime {
 
     await this.ensureMachine(state);
 
-    const pendingRequests = await state.client.listRequests({
-      status: 'pending',
-      limit: 20,
-    });
-
-    const nextRequest = pendingRequests.find((request) => (
-      request.id &&
-      state.tools.has(request.toolName) &&
-      !this.activeRequests.has(request.id)
-    ));
-
-    if (!nextRequest) {
+    // The atomic poll primitive: one round-trip leases the oldest claimable
+    // request for one of this provider's tools, with the lease grant in the
+    // response — no list-then-claim race against other claimants.
+    const poll = await state.client.claimNextRequest(Array.from(state.tools.keys()));
+    const claimedRequest = poll.request;
+    if (!poll.claimed || !claimedRequest?.id || this.activeRequests.has(claimedRequest.id)) {
       return;
     }
 
-    const activeRequest = this.handleRequest(state, nextRequest).finally(() => {
-      this.activeRequests.delete(nextRequest.id);
+    const activeRequest = this.handleRequest(state, claimedRequest).finally(() => {
+      this.activeRequests.delete(claimedRequest.id);
     });
 
-    this.activeRequests.set(nextRequest.id, activeRequest);
+    this.activeRequests.set(claimedRequest.id, activeRequest);
     await activeRequest;
   }
 
-  private async handleRequest(state: ManagedSessionState, request: Request): Promise<void> {
-    const claimedRequest = await state.client.claimRequest(request.id, state.machineId);
+  private async handleRequest(state: ManagedSessionState, claimedRequest: Request): Promise<void> {
     // The claim response carries the lease grant; every fenced provider write
     // below must present it.
     const lease: LeaseContext = {

@@ -412,6 +412,7 @@ var methodPolicies = map[string]MethodPolicy{
 	"/api.v1.RequestsService/ListRequests":        {Capability: model.APIKeyCapabilityRead, BindSession: true},
 	"/api.v1.RequestsService/UpdateRequest":       {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.v1.RequestsService/ClaimRequest":        {Capability: model.APIKeyCapabilityProvide, BindSession: true},
+	"/api.v1.RequestsService/ClaimNextRequest":    {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.v1.RequestsService/CancelRequest":       {Capability: model.APIKeyCapabilityInvoke, BindSession: true},
 	"/api.v1.RequestsService/SubmitRequestResult": {Capability: model.APIKeyCapabilityProvide, BindSession: true},
 	"/api.v1.RequestsService/AppendRequestChunks": {Capability: model.APIKeyCapabilityProvide, BindSession: true},

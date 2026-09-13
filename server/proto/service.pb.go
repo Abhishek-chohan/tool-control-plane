@@ -3694,6 +3694,122 @@ func (x *ClaimRequestRequest) GetMachineId() string {
 	return ""
 }
 
+// ClaimNextRequestRequest: the provider poll primitive. Empty tool_names
+// matches every tool registered in the session.
+type ClaimNextRequestRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	MachineId     string                 `protobuf:"bytes,2,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	ToolNames     []string               `protobuf:"bytes,3,rep,name=tool_names,json=toolNames,proto3" json:"tool_names,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimNextRequestRequest) Reset() {
+	*x = ClaimNextRequestRequest{}
+	mi := &file_proto_service_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimNextRequestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimNextRequestRequest) ProtoMessage() {}
+
+func (x *ClaimNextRequestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimNextRequestRequest.ProtoReflect.Descriptor instead.
+func (*ClaimNextRequestRequest) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *ClaimNextRequestRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ClaimNextRequestRequest) GetMachineId() string {
+	if x != nil {
+		return x.MachineId
+	}
+	return ""
+}
+
+func (x *ClaimNextRequestRequest) GetToolNames() []string {
+	if x != nil {
+		return x.ToolNames
+	}
+	return nil
+}
+
+// ClaimNextRequestResponse: claimed=false with an empty request means the
+// queue has nothing claimable right now — poll again later.
+type ClaimNextRequestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Request       *Request               `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Claimed       bool                   `protobuf:"varint,2,opt,name=claimed,proto3" json:"claimed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClaimNextRequestResponse) Reset() {
+	*x = ClaimNextRequestResponse{}
+	mi := &file_proto_service_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClaimNextRequestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClaimNextRequestResponse) ProtoMessage() {}
+
+func (x *ClaimNextRequestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_service_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClaimNextRequestResponse.ProtoReflect.Descriptor instead.
+func (*ClaimNextRequestResponse) Descriptor() ([]byte, []int) {
+	return file_proto_service_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *ClaimNextRequestResponse) GetRequest() *Request {
+	if x != nil {
+		return x.Request
+	}
+	return nil
+}
+
+func (x *ClaimNextRequestResponse) GetClaimed() bool {
+	if x != nil {
+		return x.Claimed
+	}
+	return false
+}
+
 // CancelRequestRequest
 type CancelRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -3705,7 +3821,7 @@ type CancelRequestRequest struct {
 
 func (x *CancelRequestRequest) Reset() {
 	*x = CancelRequestRequest{}
-	mi := &file_proto_service_proto_msgTypes[57]
+	mi := &file_proto_service_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3717,7 +3833,7 @@ func (x *CancelRequestRequest) String() string {
 func (*CancelRequestRequest) ProtoMessage() {}
 
 func (x *CancelRequestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[57]
+	mi := &file_proto_service_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3730,7 +3846,7 @@ func (x *CancelRequestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRequestRequest.ProtoReflect.Descriptor instead.
 func (*CancelRequestRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{57}
+	return file_proto_service_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *CancelRequestRequest) GetSessionId() string {
@@ -3757,7 +3873,7 @@ type CancelRequestResponse struct {
 
 func (x *CancelRequestResponse) Reset() {
 	*x = CancelRequestResponse{}
-	mi := &file_proto_service_proto_msgTypes[58]
+	mi := &file_proto_service_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3769,7 +3885,7 @@ func (x *CancelRequestResponse) String() string {
 func (*CancelRequestResponse) ProtoMessage() {}
 
 func (x *CancelRequestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[58]
+	mi := &file_proto_service_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3782,7 +3898,7 @@ func (x *CancelRequestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelRequestResponse.ProtoReflect.Descriptor instead.
 func (*CancelRequestResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{58}
+	return file_proto_service_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *CancelRequestResponse) GetSuccess() bool {
@@ -3811,7 +3927,7 @@ type SubmitRequestResultRequest struct {
 
 func (x *SubmitRequestResultRequest) Reset() {
 	*x = SubmitRequestResultRequest{}
-	mi := &file_proto_service_proto_msgTypes[59]
+	mi := &file_proto_service_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3823,7 +3939,7 @@ func (x *SubmitRequestResultRequest) String() string {
 func (*SubmitRequestResultRequest) ProtoMessage() {}
 
 func (x *SubmitRequestResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[59]
+	mi := &file_proto_service_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3836,7 +3952,7 @@ func (x *SubmitRequestResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRequestResultRequest.ProtoReflect.Descriptor instead.
 func (*SubmitRequestResultRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{59}
+	return file_proto_service_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *SubmitRequestResultRequest) GetSessionId() string {
@@ -3898,7 +4014,7 @@ type SubmitRequestResultResponse struct {
 
 func (x *SubmitRequestResultResponse) Reset() {
 	*x = SubmitRequestResultResponse{}
-	mi := &file_proto_service_proto_msgTypes[60]
+	mi := &file_proto_service_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3910,7 +4026,7 @@ func (x *SubmitRequestResultResponse) String() string {
 func (*SubmitRequestResultResponse) ProtoMessage() {}
 
 func (x *SubmitRequestResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[60]
+	mi := &file_proto_service_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3923,7 +4039,7 @@ func (x *SubmitRequestResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitRequestResultResponse.ProtoReflect.Descriptor instead.
 func (*SubmitRequestResultResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{60}
+	return file_proto_service_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *SubmitRequestResultResponse) GetSuccess() bool {
@@ -3950,7 +4066,7 @@ type AppendRequestChunksRequest struct {
 
 func (x *AppendRequestChunksRequest) Reset() {
 	*x = AppendRequestChunksRequest{}
-	mi := &file_proto_service_proto_msgTypes[61]
+	mi := &file_proto_service_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3962,7 +4078,7 @@ func (x *AppendRequestChunksRequest) String() string {
 func (*AppendRequestChunksRequest) ProtoMessage() {}
 
 func (x *AppendRequestChunksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[61]
+	mi := &file_proto_service_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3975,7 +4091,7 @@ func (x *AppendRequestChunksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendRequestChunksRequest.ProtoReflect.Descriptor instead.
 func (*AppendRequestChunksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{61}
+	return file_proto_service_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *AppendRequestChunksRequest) GetSessionId() string {
@@ -4030,7 +4146,7 @@ type AppendRequestChunksResponse struct {
 
 func (x *AppendRequestChunksResponse) Reset() {
 	*x = AppendRequestChunksResponse{}
-	mi := &file_proto_service_proto_msgTypes[62]
+	mi := &file_proto_service_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4042,7 +4158,7 @@ func (x *AppendRequestChunksResponse) String() string {
 func (*AppendRequestChunksResponse) ProtoMessage() {}
 
 func (x *AppendRequestChunksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[62]
+	mi := &file_proto_service_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4055,7 +4171,7 @@ func (x *AppendRequestChunksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppendRequestChunksResponse.ProtoReflect.Descriptor instead.
 func (*AppendRequestChunksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{62}
+	return file_proto_service_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *AppendRequestChunksResponse) GetSuccess() bool {
@@ -4076,7 +4192,7 @@ type GetRequestChunksRequest struct {
 
 func (x *GetRequestChunksRequest) Reset() {
 	*x = GetRequestChunksRequest{}
-	mi := &file_proto_service_proto_msgTypes[63]
+	mi := &file_proto_service_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4088,7 +4204,7 @@ func (x *GetRequestChunksRequest) String() string {
 func (*GetRequestChunksRequest) ProtoMessage() {}
 
 func (x *GetRequestChunksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[63]
+	mi := &file_proto_service_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4101,7 +4217,7 @@ func (x *GetRequestChunksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequestChunksRequest.ProtoReflect.Descriptor instead.
 func (*GetRequestChunksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{63}
+	return file_proto_service_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *GetRequestChunksRequest) GetSessionId() string {
@@ -4130,7 +4246,7 @@ type GetRequestChunksResponse struct {
 
 func (x *GetRequestChunksResponse) Reset() {
 	*x = GetRequestChunksResponse{}
-	mi := &file_proto_service_proto_msgTypes[64]
+	mi := &file_proto_service_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4142,7 +4258,7 @@ func (x *GetRequestChunksResponse) String() string {
 func (*GetRequestChunksResponse) ProtoMessage() {}
 
 func (x *GetRequestChunksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[64]
+	mi := &file_proto_service_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4155,7 +4271,7 @@ func (x *GetRequestChunksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRequestChunksResponse.ProtoReflect.Descriptor instead.
 func (*GetRequestChunksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{64}
+	return file_proto_service_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetRequestChunksResponse) GetChunks() []string {
@@ -4195,7 +4311,7 @@ type RenewRequestLeaseRequest struct {
 
 func (x *RenewRequestLeaseRequest) Reset() {
 	*x = RenewRequestLeaseRequest{}
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4207,7 +4323,7 @@ func (x *RenewRequestLeaseRequest) String() string {
 func (*RenewRequestLeaseRequest) ProtoMessage() {}
 
 func (x *RenewRequestLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[65]
+	mi := &file_proto_service_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4220,7 +4336,7 @@ func (x *RenewRequestLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewRequestLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RenewRequestLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{65}
+	return file_proto_service_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *RenewRequestLeaseRequest) GetSessionId() string {
@@ -4260,7 +4376,7 @@ type HealthCheckRequest struct {
 
 func (x *HealthCheckRequest) Reset() {
 	*x = HealthCheckRequest{}
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4272,7 +4388,7 @@ func (x *HealthCheckRequest) String() string {
 func (*HealthCheckRequest) ProtoMessage() {}
 
 func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[66]
+	mi := &file_proto_service_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4285,7 +4401,7 @@ func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
 func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{66}
+	return file_proto_service_proto_rawDescGZIP(), []int{68}
 }
 
 type HealthCheckResponse struct {
@@ -4298,7 +4414,7 @@ type HealthCheckResponse struct {
 
 func (x *HealthCheckResponse) Reset() {
 	*x = HealthCheckResponse{}
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4310,7 +4426,7 @@ func (x *HealthCheckResponse) String() string {
 func (*HealthCheckResponse) ProtoMessage() {}
 
 func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[67]
+	mi := &file_proto_service_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4323,7 +4439,7 @@ func (x *HealthCheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthCheckResponse.ProtoReflect.Descriptor instead.
 func (*HealthCheckResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{67}
+	return file_proto_service_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *HealthCheckResponse) GetStatus() string {
@@ -4361,7 +4477,7 @@ type Task struct {
 
 func (x *Task) Reset() {
 	*x = Task{}
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4373,7 +4489,7 @@ func (x *Task) String() string {
 func (*Task) ProtoMessage() {}
 
 func (x *Task) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[68]
+	mi := &file_proto_service_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4386,7 +4502,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{68}
+	return file_proto_service_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *Task) GetId() string {
@@ -4489,7 +4605,7 @@ type CreateTaskRequest struct {
 
 func (x *CreateTaskRequest) Reset() {
 	*x = CreateTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4501,7 +4617,7 @@ func (x *CreateTaskRequest) String() string {
 func (*CreateTaskRequest) ProtoMessage() {}
 
 func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[69]
+	mi := &file_proto_service_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4514,7 +4630,7 @@ func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
 func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{69}
+	return file_proto_service_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *CreateTaskRequest) GetSessionId() string {
@@ -4556,7 +4672,7 @@ type GetTaskRequest struct {
 
 func (x *GetTaskRequest) Reset() {
 	*x = GetTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4568,7 +4684,7 @@ func (x *GetTaskRequest) String() string {
 func (*GetTaskRequest) ProtoMessage() {}
 
 func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[70]
+	mi := &file_proto_service_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4581,7 +4697,7 @@ func (x *GetTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{70}
+	return file_proto_service_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *GetTaskRequest) GetSessionId() string {
@@ -4608,7 +4724,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4620,7 +4736,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[71]
+	mi := &file_proto_service_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4633,7 +4749,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{71}
+	return file_proto_service_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListTasksRequest) GetSessionId() string {
@@ -4653,7 +4769,7 @@ type ListTasksResponse struct {
 
 func (x *ListTasksResponse) Reset() {
 	*x = ListTasksResponse{}
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4665,7 +4781,7 @@ func (x *ListTasksResponse) String() string {
 func (*ListTasksResponse) ProtoMessage() {}
 
 func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[72]
+	mi := &file_proto_service_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4678,7 +4794,7 @@ func (x *ListTasksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksResponse.ProtoReflect.Descriptor instead.
 func (*ListTasksResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{72}
+	return file_proto_service_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *ListTasksResponse) GetTasks() []*Task {
@@ -4699,7 +4815,7 @@ type CancelTaskRequest struct {
 
 func (x *CancelTaskRequest) Reset() {
 	*x = CancelTaskRequest{}
-	mi := &file_proto_service_proto_msgTypes[73]
+	mi := &file_proto_service_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4711,7 +4827,7 @@ func (x *CancelTaskRequest) String() string {
 func (*CancelTaskRequest) ProtoMessage() {}
 
 func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[73]
+	mi := &file_proto_service_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4724,7 +4840,7 @@ func (x *CancelTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskRequest.ProtoReflect.Descriptor instead.
 func (*CancelTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{73}
+	return file_proto_service_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *CancelTaskRequest) GetSessionId() string {
@@ -4751,7 +4867,7 @@ type CancelTaskResponse struct {
 
 func (x *CancelTaskResponse) Reset() {
 	*x = CancelTaskResponse{}
-	mi := &file_proto_service_proto_msgTypes[74]
+	mi := &file_proto_service_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4763,7 +4879,7 @@ func (x *CancelTaskResponse) String() string {
 func (*CancelTaskResponse) ProtoMessage() {}
 
 func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_service_proto_msgTypes[74]
+	mi := &file_proto_service_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4776,7 +4892,7 @@ func (x *CancelTaskResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelTaskResponse.ProtoReflect.Descriptor instead.
 func (*CancelTaskResponse) Descriptor() ([]byte, []int) {
-	return file_proto_service_proto_rawDescGZIP(), []int{74}
+	return file_proto_service_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *CancelTaskResponse) GetSuccess() bool {
@@ -5101,7 +5217,17 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x02 \x01(\tR\trequestId\x12\x1d\n" +
 	"\n" +
-	"machine_id\x18\x03 \x01(\tR\tmachineId\"T\n" +
+	"machine_id\x18\x03 \x01(\tR\tmachineId\"v\n" +
+	"\x17ClaimNextRequestRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"machine_id\x18\x02 \x01(\tR\tmachineId\x12\x1d\n" +
+	"\n" +
+	"tool_names\x18\x03 \x03(\tR\ttoolNames\"_\n" +
+	"\x18ClaimNextRequestResponse\x12)\n" +
+	"\arequest\x18\x01 \x01(\v2\x0f.api.v1.RequestR\arequest\x12\x18\n" +
+	"\aclaimed\x18\x02 \x01(\bR\aclaimed\"T\n" +
 	"\x14CancelRequestRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
@@ -5255,14 +5381,16 @@ const file_proto_service_proto_rawDesc = "" +
 	"GetMachine\x12\x19.api.v1.GetMachineRequest\x1a\x0f.api.v1.Machine\">\x82\xd3\xe4\x93\x028:\x01*\"3/api.v1/sessions/{session_id}/machines/{machine_id}\x12l\n" +
 	"\x11UpdateMachinePing\x12 .api.v1.UpdateMachinePingRequest\x1a\x0f.api.v1.Machine\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/UpdateMachinePing\x12~\n" +
 	"\x11UnregisterMachine\x12 .api.v1.UnregisterMachineRequest\x1a!.api.v1.UnregisterMachineResponse\"$\x82\xd3\xe4\x93\x02\x1e:\x01*\"\x19/api.v1/UnregisterMachine\x12j\n" +
-	"\fDrainMachine\x12\x1b.api.v1.DrainMachineRequest\x1a\x1c.api.v1.DrainMachineResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/DrainMachine2\xbb\t\n" +
+	"\fDrainMachine\x12\x1b.api.v1.DrainMachineRequest\x1a\x1c.api.v1.DrainMachineResponse\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/DrainMachine2\xb7\n" +
+	"\n" +
 	"\x0fRequestsService\x12`\n" +
 	"\rCreateRequest\x12\x1c.api.v1.CreateRequestRequest\x1a\x0f.api.v1.Request\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/CreateRequest\x12x\n" +
 	"\n" +
 	"GetRequest\x12\x19.api.v1.GetRequestRequest\x1a\x0f.api.v1.Request\">\x82\xd3\xe4\x93\x028:\x01*\"3/api.v1/sessions/{session_id}/requests/{request_id}\x12|\n" +
 	"\fListRequests\x12\x1b.api.v1.ListRequestsRequest\x1a\x1c.api.v1.ListRequestsResponse\"1\x82\xd3\xe4\x93\x02+:\x01*\"&/api.v1/sessions/{session_id}/requests\x12`\n" +
 	"\rUpdateRequest\x12\x1c.api.v1.UpdateRequestRequest\x1a\x0f.api.v1.Request\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/UpdateRequest\x12]\n" +
-	"\fClaimRequest\x12\x1b.api.v1.ClaimRequestRequest\x1a\x0f.api.v1.Request\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/ClaimRequest\x12n\n" +
+	"\fClaimRequest\x12\x1b.api.v1.ClaimRequestRequest\x1a\x0f.api.v1.Request\"\x1f\x82\xd3\xe4\x93\x02\x19:\x01*\"\x14/api.v1/ClaimRequest\x12z\n" +
+	"\x10ClaimNextRequest\x12\x1f.api.v1.ClaimNextRequestRequest\x1a .api.v1.ClaimNextRequestResponse\"#\x82\xd3\xe4\x93\x02\x1d:\x01*\"\x18/api.v1/ClaimNextRequest\x12n\n" +
 	"\rCancelRequest\x12\x1c.api.v1.CancelRequestRequest\x1a\x1d.api.v1.CancelRequestResponse\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/api.v1/CancelRequest\x12\x86\x01\n" +
 	"\x13SubmitRequestResult\x12\".api.v1.SubmitRequestResultRequest\x1a#.api.v1.SubmitRequestResultResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api.v1/SubmitRequestResult\x12\x86\x01\n" +
 	"\x13AppendRequestChunks\x12\".api.v1.AppendRequestChunksRequest\x1a#.api.v1.AppendRequestChunksResponse\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/api.v1/AppendRequestChunks\x12\x9c\x01\n" +
@@ -5289,7 +5417,7 @@ func file_proto_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 78)
+var file_proto_service_proto_msgTypes = make([]protoimpl.MessageInfo, 80)
 var file_proto_service_proto_goTypes = []any{
 	(RequestStatus)(0),                  // 0: api.v1.RequestStatus
 	(TaskStatus)(0),                     // 1: api.v1.TaskStatus
@@ -5350,43 +5478,45 @@ var file_proto_service_proto_goTypes = []any{
 	(*ListRequestsResponse)(nil),        // 56: api.v1.ListRequestsResponse
 	(*UpdateRequestRequest)(nil),        // 57: api.v1.UpdateRequestRequest
 	(*ClaimRequestRequest)(nil),         // 58: api.v1.ClaimRequestRequest
-	(*CancelRequestRequest)(nil),        // 59: api.v1.CancelRequestRequest
-	(*CancelRequestResponse)(nil),       // 60: api.v1.CancelRequestResponse
-	(*SubmitRequestResultRequest)(nil),  // 61: api.v1.SubmitRequestResultRequest
-	(*SubmitRequestResultResponse)(nil), // 62: api.v1.SubmitRequestResultResponse
-	(*AppendRequestChunksRequest)(nil),  // 63: api.v1.AppendRequestChunksRequest
-	(*AppendRequestChunksResponse)(nil), // 64: api.v1.AppendRequestChunksResponse
-	(*GetRequestChunksRequest)(nil),     // 65: api.v1.GetRequestChunksRequest
-	(*GetRequestChunksResponse)(nil),    // 66: api.v1.GetRequestChunksResponse
-	(*RenewRequestLeaseRequest)(nil),    // 67: api.v1.RenewRequestLeaseRequest
-	(*HealthCheckRequest)(nil),          // 68: api.v1.HealthCheckRequest
-	(*HealthCheckResponse)(nil),         // 69: api.v1.HealthCheckResponse
-	(*Task)(nil),                        // 70: api.v1.Task
-	(*CreateTaskRequest)(nil),           // 71: api.v1.CreateTaskRequest
-	(*GetTaskRequest)(nil),              // 72: api.v1.GetTaskRequest
-	(*ListTasksRequest)(nil),            // 73: api.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),           // 74: api.v1.ListTasksResponse
-	(*CancelTaskRequest)(nil),           // 75: api.v1.CancelTaskRequest
-	(*CancelTaskResponse)(nil),          // 76: api.v1.CancelTaskResponse
-	nil,                                 // 77: api.v1.Tool.ConfigEntry
-	nil,                                 // 78: api.v1.RegisterToolRequest.ConfigEntry
-	nil,                                 // 79: api.v1.SubmitRequestResultRequest.MetaEntry
-	(*timestamppb.Timestamp)(nil),       // 80: google.protobuf.Timestamp
+	(*ClaimNextRequestRequest)(nil),     // 59: api.v1.ClaimNextRequestRequest
+	(*ClaimNextRequestResponse)(nil),    // 60: api.v1.ClaimNextRequestResponse
+	(*CancelRequestRequest)(nil),        // 61: api.v1.CancelRequestRequest
+	(*CancelRequestResponse)(nil),       // 62: api.v1.CancelRequestResponse
+	(*SubmitRequestResultRequest)(nil),  // 63: api.v1.SubmitRequestResultRequest
+	(*SubmitRequestResultResponse)(nil), // 64: api.v1.SubmitRequestResultResponse
+	(*AppendRequestChunksRequest)(nil),  // 65: api.v1.AppendRequestChunksRequest
+	(*AppendRequestChunksResponse)(nil), // 66: api.v1.AppendRequestChunksResponse
+	(*GetRequestChunksRequest)(nil),     // 67: api.v1.GetRequestChunksRequest
+	(*GetRequestChunksResponse)(nil),    // 68: api.v1.GetRequestChunksResponse
+	(*RenewRequestLeaseRequest)(nil),    // 69: api.v1.RenewRequestLeaseRequest
+	(*HealthCheckRequest)(nil),          // 70: api.v1.HealthCheckRequest
+	(*HealthCheckResponse)(nil),         // 71: api.v1.HealthCheckResponse
+	(*Task)(nil),                        // 72: api.v1.Task
+	(*CreateTaskRequest)(nil),           // 73: api.v1.CreateTaskRequest
+	(*GetTaskRequest)(nil),              // 74: api.v1.GetTaskRequest
+	(*ListTasksRequest)(nil),            // 75: api.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),           // 76: api.v1.ListTasksResponse
+	(*CancelTaskRequest)(nil),           // 77: api.v1.CancelTaskRequest
+	(*CancelTaskResponse)(nil),          // 78: api.v1.CancelTaskResponse
+	nil,                                 // 79: api.v1.Tool.ConfigEntry
+	nil,                                 // 80: api.v1.RegisterToolRequest.ConfigEntry
+	nil,                                 // 81: api.v1.SubmitRequestResultRequest.MetaEntry
+	(*timestamppb.Timestamp)(nil),       // 82: google.protobuf.Timestamp
 }
 var file_proto_service_proto_depIdxs = []int32{
-	77, // 0: api.v1.Tool.config:type_name -> api.v1.Tool.ConfigEntry
-	80, // 1: api.v1.Tool.created_at:type_name -> google.protobuf.Timestamp
-	80, // 2: api.v1.Tool.last_ping_at:type_name -> google.protobuf.Timestamp
-	80, // 3: api.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	80, // 4: api.v1.ApiKey.created_at:type_name -> google.protobuf.Timestamp
-	80, // 5: api.v1.ApiKey.revoked_at:type_name -> google.protobuf.Timestamp
-	80, // 6: api.v1.Machine.created_at:type_name -> google.protobuf.Timestamp
-	80, // 7: api.v1.Machine.last_ping_at:type_name -> google.protobuf.Timestamp
+	79, // 0: api.v1.Tool.config:type_name -> api.v1.Tool.ConfigEntry
+	82, // 1: api.v1.Tool.created_at:type_name -> google.protobuf.Timestamp
+	82, // 2: api.v1.Tool.last_ping_at:type_name -> google.protobuf.Timestamp
+	82, // 3: api.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	82, // 4: api.v1.ApiKey.created_at:type_name -> google.protobuf.Timestamp
+	82, // 5: api.v1.ApiKey.revoked_at:type_name -> google.protobuf.Timestamp
+	82, // 6: api.v1.Machine.created_at:type_name -> google.protobuf.Timestamp
+	82, // 7: api.v1.Machine.last_ping_at:type_name -> google.protobuf.Timestamp
 	0,  // 8: api.v1.Request.status:type_name -> api.v1.RequestStatus
-	80, // 9: api.v1.Request.created_at:type_name -> google.protobuf.Timestamp
-	80, // 10: api.v1.Request.updated_at:type_name -> google.protobuf.Timestamp
-	80, // 11: api.v1.Request.lease_expires_at:type_name -> google.protobuf.Timestamp
-	78, // 12: api.v1.RegisterToolRequest.config:type_name -> api.v1.RegisterToolRequest.ConfigEntry
+	82, // 9: api.v1.Request.created_at:type_name -> google.protobuf.Timestamp
+	82, // 10: api.v1.Request.updated_at:type_name -> google.protobuf.Timestamp
+	82, // 11: api.v1.Request.lease_expires_at:type_name -> google.protobuf.Timestamp
+	80, // 12: api.v1.RegisterToolRequest.config:type_name -> api.v1.RegisterToolRequest.ConfigEntry
 	6,  // 13: api.v1.RegisterToolResponse.tool:type_name -> api.v1.Tool
 	6,  // 14: api.v1.ListToolsResponse.tools:type_name -> api.v1.Tool
 	6,  // 15: api.v1.GetToolResponse.tool:type_name -> api.v1.Tool
@@ -5402,105 +5532,108 @@ var file_proto_service_proto_depIdxs = []int32{
 	10, // 25: api.v1.ListRequestsResponse.requests:type_name -> api.v1.Request
 	2,  // 26: api.v1.ListRequestsResponse.page:type_name -> api.v1.ListPage
 	0,  // 27: api.v1.UpdateRequestRequest.status:type_name -> api.v1.RequestStatus
-	79, // 28: api.v1.SubmitRequestResultRequest.meta:type_name -> api.v1.SubmitRequestResultRequest.MetaEntry
-	1,  // 29: api.v1.Task.status:type_name -> api.v1.TaskStatus
-	80, // 30: api.v1.Task.created_at:type_name -> google.protobuf.Timestamp
-	80, // 31: api.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
-	80, // 32: api.v1.Task.completed_at:type_name -> google.protobuf.Timestamp
-	70, // 33: api.v1.ListTasksResponse.tasks:type_name -> api.v1.Task
-	11, // 34: api.v1.ToolService.RegisterTool:input_type -> api.v1.RegisterToolRequest
-	13, // 35: api.v1.ToolService.ListTools:input_type -> api.v1.ListToolsRequest
-	15, // 36: api.v1.ToolService.GetTool:input_type -> api.v1.GetToolRequest
-	16, // 37: api.v1.ToolService.GetToolById:input_type -> api.v1.GetToolByIdRequest
-	17, // 38: api.v1.ToolService.GetToolByName:input_type -> api.v1.GetToolByNameRequest
-	19, // 39: api.v1.ToolService.DeleteTool:input_type -> api.v1.DeleteToolRequest
-	21, // 40: api.v1.ToolService.UpdateToolPing:input_type -> api.v1.UpdateToolPingRequest
-	50, // 41: api.v1.ToolService.StreamExecuteTool:input_type -> api.v1.ExecuteToolRequest
-	3,  // 42: api.v1.ToolService.ResumeStream:input_type -> api.v1.ResumeStreamRequest
-	50, // 43: api.v1.ToolService.InvokeTool:input_type -> api.v1.ExecuteToolRequest
-	50, // 44: api.v1.ToolService.ExecuteTool:input_type -> api.v1.ExecuteToolRequest
-	68, // 45: api.v1.ToolService.HealthCheck:input_type -> api.v1.HealthCheckRequest
-	22, // 46: api.v1.SessionsService.CreateSession:input_type -> api.v1.CreateSessionRequest
-	24, // 47: api.v1.SessionsService.GetSession:input_type -> api.v1.GetSessionRequest
-	25, // 48: api.v1.SessionsService.ListSessions:input_type -> api.v1.ListSessionsRequest
-	35, // 49: api.v1.SessionsService.UpdateSession:input_type -> api.v1.UpdateSessionRequest
-	36, // 50: api.v1.SessionsService.DeleteSession:input_type -> api.v1.DeleteSessionRequest
-	27, // 51: api.v1.SessionsService.ListUserSessions:input_type -> api.v1.ListUserSessionsRequest
-	29, // 52: api.v1.SessionsService.BulkDeleteSessions:input_type -> api.v1.BulkDeleteSessionsRequest
-	31, // 53: api.v1.SessionsService.GetSessionStats:input_type -> api.v1.GetSessionStatsRequest
-	33, // 54: api.v1.SessionsService.InvalidateSession:input_type -> api.v1.InvalidateSessionRequest
-	38, // 55: api.v1.SessionsService.CreateApiKey:input_type -> api.v1.CreateApiKeyRequest
-	39, // 56: api.v1.SessionsService.ListApiKeys:input_type -> api.v1.ListApiKeysRequest
-	41, // 57: api.v1.SessionsService.RevokeApiKey:input_type -> api.v1.RevokeApiKeyRequest
-	43, // 58: api.v1.MachinesService.RegisterMachine:input_type -> api.v1.RegisterMachineRequest
-	44, // 59: api.v1.MachinesService.ListMachines:input_type -> api.v1.ListMachinesRequest
-	46, // 60: api.v1.MachinesService.GetMachine:input_type -> api.v1.GetMachineRequest
-	47, // 61: api.v1.MachinesService.UpdateMachinePing:input_type -> api.v1.UpdateMachinePingRequest
-	48, // 62: api.v1.MachinesService.UnregisterMachine:input_type -> api.v1.UnregisterMachineRequest
-	4,  // 63: api.v1.MachinesService.DrainMachine:input_type -> api.v1.DrainMachineRequest
-	53, // 64: api.v1.RequestsService.CreateRequest:input_type -> api.v1.CreateRequestRequest
-	54, // 65: api.v1.RequestsService.GetRequest:input_type -> api.v1.GetRequestRequest
-	55, // 66: api.v1.RequestsService.ListRequests:input_type -> api.v1.ListRequestsRequest
-	57, // 67: api.v1.RequestsService.UpdateRequest:input_type -> api.v1.UpdateRequestRequest
-	58, // 68: api.v1.RequestsService.ClaimRequest:input_type -> api.v1.ClaimRequestRequest
-	59, // 69: api.v1.RequestsService.CancelRequest:input_type -> api.v1.CancelRequestRequest
-	61, // 70: api.v1.RequestsService.SubmitRequestResult:input_type -> api.v1.SubmitRequestResultRequest
-	63, // 71: api.v1.RequestsService.AppendRequestChunks:input_type -> api.v1.AppendRequestChunksRequest
-	65, // 72: api.v1.RequestsService.GetRequestChunks:input_type -> api.v1.GetRequestChunksRequest
-	67, // 73: api.v1.RequestsService.RenewRequestLease:input_type -> api.v1.RenewRequestLeaseRequest
-	71, // 74: api.v1.TasksService.CreateTask:input_type -> api.v1.CreateTaskRequest
-	72, // 75: api.v1.TasksService.GetTask:input_type -> api.v1.GetTaskRequest
-	73, // 76: api.v1.TasksService.ListTasks:input_type -> api.v1.ListTasksRequest
-	75, // 77: api.v1.TasksService.CancelTask:input_type -> api.v1.CancelTaskRequest
-	12, // 78: api.v1.ToolService.RegisterTool:output_type -> api.v1.RegisterToolResponse
-	14, // 79: api.v1.ToolService.ListTools:output_type -> api.v1.ListToolsResponse
-	18, // 80: api.v1.ToolService.GetTool:output_type -> api.v1.GetToolResponse
-	18, // 81: api.v1.ToolService.GetToolById:output_type -> api.v1.GetToolResponse
-	18, // 82: api.v1.ToolService.GetToolByName:output_type -> api.v1.GetToolResponse
-	20, // 83: api.v1.ToolService.DeleteTool:output_type -> api.v1.DeleteToolResponse
-	6,  // 84: api.v1.ToolService.UpdateToolPing:output_type -> api.v1.Tool
-	52, // 85: api.v1.ToolService.StreamExecuteTool:output_type -> api.v1.ExecuteToolChunk
-	52, // 86: api.v1.ToolService.ResumeStream:output_type -> api.v1.ExecuteToolChunk
-	51, // 87: api.v1.ToolService.InvokeTool:output_type -> api.v1.ExecuteToolResponse
-	51, // 88: api.v1.ToolService.ExecuteTool:output_type -> api.v1.ExecuteToolResponse
-	69, // 89: api.v1.ToolService.HealthCheck:output_type -> api.v1.HealthCheckResponse
-	23, // 90: api.v1.SessionsService.CreateSession:output_type -> api.v1.CreateSessionResponse
-	7,  // 91: api.v1.SessionsService.GetSession:output_type -> api.v1.Session
-	26, // 92: api.v1.SessionsService.ListSessions:output_type -> api.v1.ListSessionsResponse
-	7,  // 93: api.v1.SessionsService.UpdateSession:output_type -> api.v1.Session
-	37, // 94: api.v1.SessionsService.DeleteSession:output_type -> api.v1.DeleteSessionResponse
-	28, // 95: api.v1.SessionsService.ListUserSessions:output_type -> api.v1.ListUserSessionsResponse
-	30, // 96: api.v1.SessionsService.BulkDeleteSessions:output_type -> api.v1.BulkDeleteSessionsResponse
-	32, // 97: api.v1.SessionsService.GetSessionStats:output_type -> api.v1.GetSessionStatsResponse
-	34, // 98: api.v1.SessionsService.InvalidateSession:output_type -> api.v1.InvalidateSessionResponse
-	8,  // 99: api.v1.SessionsService.CreateApiKey:output_type -> api.v1.ApiKey
-	40, // 100: api.v1.SessionsService.ListApiKeys:output_type -> api.v1.ListApiKeysResponse
-	42, // 101: api.v1.SessionsService.RevokeApiKey:output_type -> api.v1.RevokeApiKeyResponse
-	9,  // 102: api.v1.MachinesService.RegisterMachine:output_type -> api.v1.Machine
-	45, // 103: api.v1.MachinesService.ListMachines:output_type -> api.v1.ListMachinesResponse
-	9,  // 104: api.v1.MachinesService.GetMachine:output_type -> api.v1.Machine
-	9,  // 105: api.v1.MachinesService.UpdateMachinePing:output_type -> api.v1.Machine
-	49, // 106: api.v1.MachinesService.UnregisterMachine:output_type -> api.v1.UnregisterMachineResponse
-	5,  // 107: api.v1.MachinesService.DrainMachine:output_type -> api.v1.DrainMachineResponse
-	10, // 108: api.v1.RequestsService.CreateRequest:output_type -> api.v1.Request
-	10, // 109: api.v1.RequestsService.GetRequest:output_type -> api.v1.Request
-	56, // 110: api.v1.RequestsService.ListRequests:output_type -> api.v1.ListRequestsResponse
-	10, // 111: api.v1.RequestsService.UpdateRequest:output_type -> api.v1.Request
-	10, // 112: api.v1.RequestsService.ClaimRequest:output_type -> api.v1.Request
-	60, // 113: api.v1.RequestsService.CancelRequest:output_type -> api.v1.CancelRequestResponse
-	62, // 114: api.v1.RequestsService.SubmitRequestResult:output_type -> api.v1.SubmitRequestResultResponse
-	64, // 115: api.v1.RequestsService.AppendRequestChunks:output_type -> api.v1.AppendRequestChunksResponse
-	66, // 116: api.v1.RequestsService.GetRequestChunks:output_type -> api.v1.GetRequestChunksResponse
-	10, // 117: api.v1.RequestsService.RenewRequestLease:output_type -> api.v1.Request
-	70, // 118: api.v1.TasksService.CreateTask:output_type -> api.v1.Task
-	70, // 119: api.v1.TasksService.GetTask:output_type -> api.v1.Task
-	74, // 120: api.v1.TasksService.ListTasks:output_type -> api.v1.ListTasksResponse
-	76, // 121: api.v1.TasksService.CancelTask:output_type -> api.v1.CancelTaskResponse
-	78, // [78:122] is the sub-list for method output_type
-	34, // [34:78] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	10, // 28: api.v1.ClaimNextRequestResponse.request:type_name -> api.v1.Request
+	81, // 29: api.v1.SubmitRequestResultRequest.meta:type_name -> api.v1.SubmitRequestResultRequest.MetaEntry
+	1,  // 30: api.v1.Task.status:type_name -> api.v1.TaskStatus
+	82, // 31: api.v1.Task.created_at:type_name -> google.protobuf.Timestamp
+	82, // 32: api.v1.Task.updated_at:type_name -> google.protobuf.Timestamp
+	82, // 33: api.v1.Task.completed_at:type_name -> google.protobuf.Timestamp
+	72, // 34: api.v1.ListTasksResponse.tasks:type_name -> api.v1.Task
+	11, // 35: api.v1.ToolService.RegisterTool:input_type -> api.v1.RegisterToolRequest
+	13, // 36: api.v1.ToolService.ListTools:input_type -> api.v1.ListToolsRequest
+	15, // 37: api.v1.ToolService.GetTool:input_type -> api.v1.GetToolRequest
+	16, // 38: api.v1.ToolService.GetToolById:input_type -> api.v1.GetToolByIdRequest
+	17, // 39: api.v1.ToolService.GetToolByName:input_type -> api.v1.GetToolByNameRequest
+	19, // 40: api.v1.ToolService.DeleteTool:input_type -> api.v1.DeleteToolRequest
+	21, // 41: api.v1.ToolService.UpdateToolPing:input_type -> api.v1.UpdateToolPingRequest
+	50, // 42: api.v1.ToolService.StreamExecuteTool:input_type -> api.v1.ExecuteToolRequest
+	3,  // 43: api.v1.ToolService.ResumeStream:input_type -> api.v1.ResumeStreamRequest
+	50, // 44: api.v1.ToolService.InvokeTool:input_type -> api.v1.ExecuteToolRequest
+	50, // 45: api.v1.ToolService.ExecuteTool:input_type -> api.v1.ExecuteToolRequest
+	70, // 46: api.v1.ToolService.HealthCheck:input_type -> api.v1.HealthCheckRequest
+	22, // 47: api.v1.SessionsService.CreateSession:input_type -> api.v1.CreateSessionRequest
+	24, // 48: api.v1.SessionsService.GetSession:input_type -> api.v1.GetSessionRequest
+	25, // 49: api.v1.SessionsService.ListSessions:input_type -> api.v1.ListSessionsRequest
+	35, // 50: api.v1.SessionsService.UpdateSession:input_type -> api.v1.UpdateSessionRequest
+	36, // 51: api.v1.SessionsService.DeleteSession:input_type -> api.v1.DeleteSessionRequest
+	27, // 52: api.v1.SessionsService.ListUserSessions:input_type -> api.v1.ListUserSessionsRequest
+	29, // 53: api.v1.SessionsService.BulkDeleteSessions:input_type -> api.v1.BulkDeleteSessionsRequest
+	31, // 54: api.v1.SessionsService.GetSessionStats:input_type -> api.v1.GetSessionStatsRequest
+	33, // 55: api.v1.SessionsService.InvalidateSession:input_type -> api.v1.InvalidateSessionRequest
+	38, // 56: api.v1.SessionsService.CreateApiKey:input_type -> api.v1.CreateApiKeyRequest
+	39, // 57: api.v1.SessionsService.ListApiKeys:input_type -> api.v1.ListApiKeysRequest
+	41, // 58: api.v1.SessionsService.RevokeApiKey:input_type -> api.v1.RevokeApiKeyRequest
+	43, // 59: api.v1.MachinesService.RegisterMachine:input_type -> api.v1.RegisterMachineRequest
+	44, // 60: api.v1.MachinesService.ListMachines:input_type -> api.v1.ListMachinesRequest
+	46, // 61: api.v1.MachinesService.GetMachine:input_type -> api.v1.GetMachineRequest
+	47, // 62: api.v1.MachinesService.UpdateMachinePing:input_type -> api.v1.UpdateMachinePingRequest
+	48, // 63: api.v1.MachinesService.UnregisterMachine:input_type -> api.v1.UnregisterMachineRequest
+	4,  // 64: api.v1.MachinesService.DrainMachine:input_type -> api.v1.DrainMachineRequest
+	53, // 65: api.v1.RequestsService.CreateRequest:input_type -> api.v1.CreateRequestRequest
+	54, // 66: api.v1.RequestsService.GetRequest:input_type -> api.v1.GetRequestRequest
+	55, // 67: api.v1.RequestsService.ListRequests:input_type -> api.v1.ListRequestsRequest
+	57, // 68: api.v1.RequestsService.UpdateRequest:input_type -> api.v1.UpdateRequestRequest
+	58, // 69: api.v1.RequestsService.ClaimRequest:input_type -> api.v1.ClaimRequestRequest
+	59, // 70: api.v1.RequestsService.ClaimNextRequest:input_type -> api.v1.ClaimNextRequestRequest
+	61, // 71: api.v1.RequestsService.CancelRequest:input_type -> api.v1.CancelRequestRequest
+	63, // 72: api.v1.RequestsService.SubmitRequestResult:input_type -> api.v1.SubmitRequestResultRequest
+	65, // 73: api.v1.RequestsService.AppendRequestChunks:input_type -> api.v1.AppendRequestChunksRequest
+	67, // 74: api.v1.RequestsService.GetRequestChunks:input_type -> api.v1.GetRequestChunksRequest
+	69, // 75: api.v1.RequestsService.RenewRequestLease:input_type -> api.v1.RenewRequestLeaseRequest
+	73, // 76: api.v1.TasksService.CreateTask:input_type -> api.v1.CreateTaskRequest
+	74, // 77: api.v1.TasksService.GetTask:input_type -> api.v1.GetTaskRequest
+	75, // 78: api.v1.TasksService.ListTasks:input_type -> api.v1.ListTasksRequest
+	77, // 79: api.v1.TasksService.CancelTask:input_type -> api.v1.CancelTaskRequest
+	12, // 80: api.v1.ToolService.RegisterTool:output_type -> api.v1.RegisterToolResponse
+	14, // 81: api.v1.ToolService.ListTools:output_type -> api.v1.ListToolsResponse
+	18, // 82: api.v1.ToolService.GetTool:output_type -> api.v1.GetToolResponse
+	18, // 83: api.v1.ToolService.GetToolById:output_type -> api.v1.GetToolResponse
+	18, // 84: api.v1.ToolService.GetToolByName:output_type -> api.v1.GetToolResponse
+	20, // 85: api.v1.ToolService.DeleteTool:output_type -> api.v1.DeleteToolResponse
+	6,  // 86: api.v1.ToolService.UpdateToolPing:output_type -> api.v1.Tool
+	52, // 87: api.v1.ToolService.StreamExecuteTool:output_type -> api.v1.ExecuteToolChunk
+	52, // 88: api.v1.ToolService.ResumeStream:output_type -> api.v1.ExecuteToolChunk
+	51, // 89: api.v1.ToolService.InvokeTool:output_type -> api.v1.ExecuteToolResponse
+	51, // 90: api.v1.ToolService.ExecuteTool:output_type -> api.v1.ExecuteToolResponse
+	71, // 91: api.v1.ToolService.HealthCheck:output_type -> api.v1.HealthCheckResponse
+	23, // 92: api.v1.SessionsService.CreateSession:output_type -> api.v1.CreateSessionResponse
+	7,  // 93: api.v1.SessionsService.GetSession:output_type -> api.v1.Session
+	26, // 94: api.v1.SessionsService.ListSessions:output_type -> api.v1.ListSessionsResponse
+	7,  // 95: api.v1.SessionsService.UpdateSession:output_type -> api.v1.Session
+	37, // 96: api.v1.SessionsService.DeleteSession:output_type -> api.v1.DeleteSessionResponse
+	28, // 97: api.v1.SessionsService.ListUserSessions:output_type -> api.v1.ListUserSessionsResponse
+	30, // 98: api.v1.SessionsService.BulkDeleteSessions:output_type -> api.v1.BulkDeleteSessionsResponse
+	32, // 99: api.v1.SessionsService.GetSessionStats:output_type -> api.v1.GetSessionStatsResponse
+	34, // 100: api.v1.SessionsService.InvalidateSession:output_type -> api.v1.InvalidateSessionResponse
+	8,  // 101: api.v1.SessionsService.CreateApiKey:output_type -> api.v1.ApiKey
+	40, // 102: api.v1.SessionsService.ListApiKeys:output_type -> api.v1.ListApiKeysResponse
+	42, // 103: api.v1.SessionsService.RevokeApiKey:output_type -> api.v1.RevokeApiKeyResponse
+	9,  // 104: api.v1.MachinesService.RegisterMachine:output_type -> api.v1.Machine
+	45, // 105: api.v1.MachinesService.ListMachines:output_type -> api.v1.ListMachinesResponse
+	9,  // 106: api.v1.MachinesService.GetMachine:output_type -> api.v1.Machine
+	9,  // 107: api.v1.MachinesService.UpdateMachinePing:output_type -> api.v1.Machine
+	49, // 108: api.v1.MachinesService.UnregisterMachine:output_type -> api.v1.UnregisterMachineResponse
+	5,  // 109: api.v1.MachinesService.DrainMachine:output_type -> api.v1.DrainMachineResponse
+	10, // 110: api.v1.RequestsService.CreateRequest:output_type -> api.v1.Request
+	10, // 111: api.v1.RequestsService.GetRequest:output_type -> api.v1.Request
+	56, // 112: api.v1.RequestsService.ListRequests:output_type -> api.v1.ListRequestsResponse
+	10, // 113: api.v1.RequestsService.UpdateRequest:output_type -> api.v1.Request
+	10, // 114: api.v1.RequestsService.ClaimRequest:output_type -> api.v1.Request
+	60, // 115: api.v1.RequestsService.ClaimNextRequest:output_type -> api.v1.ClaimNextRequestResponse
+	62, // 116: api.v1.RequestsService.CancelRequest:output_type -> api.v1.CancelRequestResponse
+	64, // 117: api.v1.RequestsService.SubmitRequestResult:output_type -> api.v1.SubmitRequestResultResponse
+	66, // 118: api.v1.RequestsService.AppendRequestChunks:output_type -> api.v1.AppendRequestChunksResponse
+	68, // 119: api.v1.RequestsService.GetRequestChunks:output_type -> api.v1.GetRequestChunksResponse
+	10, // 120: api.v1.RequestsService.RenewRequestLease:output_type -> api.v1.Request
+	72, // 121: api.v1.TasksService.CreateTask:output_type -> api.v1.Task
+	72, // 122: api.v1.TasksService.GetTask:output_type -> api.v1.Task
+	76, // 123: api.v1.TasksService.ListTasks:output_type -> api.v1.ListTasksResponse
+	78, // 124: api.v1.TasksService.CancelTask:output_type -> api.v1.CancelTaskResponse
+	80, // [80:125] is the sub-list for method output_type
+	35, // [35:80] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_proto_service_proto_init() }
@@ -5514,7 +5647,7 @@ func file_proto_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_service_proto_rawDesc), len(file_proto_service_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   78,
+			NumMessages:   80,
 			NumExtensions: 0,
 			NumServices:   5,
 		},

@@ -327,6 +327,16 @@ service RequestsService {
       body: "*";
     };
   }
+  // ClaimNextRequest atomically leases the oldest claimable pending request
+  // for the given machine and tool set. This is the provider poll primitive:
+  // one round-trip instead of a list-then-claim race, and an idle queue is a
+  // claimed=false response rather than an error.
+  rpc ClaimNextRequest(ClaimNextRequestRequest) returns (ClaimNextRequestResponse) {
+    option (google.api.http) = {
+      post: "/api.v1/ClaimNextRequest";
+      body: "*";
+    };
+  }
   rpc CancelRequest(CancelRequestRequest) returns (CancelRequestResponse) {
     option (google.api.http) = {
       post: "/api.v1/CancelRequest";
@@ -813,6 +823,21 @@ message ClaimRequestRequest {
   string session_id = 1;
   string request_id = 2;
   string machine_id = 3;
+}
+
+// ClaimNextRequestRequest: the provider poll primitive. Empty tool_names
+// matches every tool registered in the session.
+message ClaimNextRequestRequest {
+  string session_id = 1;
+  string machine_id = 2;
+  repeated string tool_names = 3;
+}
+
+// ClaimNextRequestResponse: claimed=false with an empty request means the
+// queue has nothing claimable right now — poll again later.
+message ClaimNextRequestResponse {
+  Request request = 1;
+  bool claimed = 2;
 }
 
 // CancelRequestRequest

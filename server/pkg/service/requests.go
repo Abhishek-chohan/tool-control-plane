@@ -758,7 +758,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 			return nil, fmt.Errorf("persist request lease failed: %w", err)
 		}
 		if req == nil {
-			return nil, fmt.Errorf("no pending requests found for the specified tools")
+			return nil, ErrNoPendingRequests
 		}
 		s.ensureRequestDefaults(req)
 		s.requestsMutex.Lock()
@@ -808,7 +808,7 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 	}
 
 	if oldestRequest == nil {
-		return nil, fmt.Errorf("no pending requests found for the specified tools")
+		return nil, ErrNoPendingRequests
 	}
 
 	oldestRequest.SetClaimedBy(machineID)

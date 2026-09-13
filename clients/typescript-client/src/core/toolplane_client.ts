@@ -45,6 +45,8 @@ import {
   CancelRequestRequest as CancelRequestMessage,
   CancelRequestResponse as CancelRequestResponseMessage,
   ClaimRequestRequest as ClaimRequestMessage,
+  ClaimNextRequestRequest as ClaimNextRequestMessage,
+  ClaimNextRequestResponse as ClaimNextRequestResponseMessage,
   CancelTaskRequest as CancelTaskMessage,
   CancelTaskResponse as CancelTaskResponseMessage,
   CreateApiKeyRequest as CreateApiKeyMessage,
@@ -918,6 +920,32 @@ export class ToolplaneClient {
     );
 
     return this.normalizeRequest(response);
+  }
+
+  /**
+   * Atomically leases the oldest claimable pending request for this machine.
+   * The provider poll primitive: one round-trip instead of a list-then-claim
+   * race. Returns claimed=false when the queue has nothing claimable.
+   */
+  async claimNextRequest(toolNames: string[] = []): Promise<{ claimed: boolean; request: RequestModel | null }> {
+    this.ensureGRPCConnected('claim next request');
+
+    const machineId = this.getRequiredMachineId('claim next request');
+    const request = new ClaimNextRequestMessage();
+    request.setSessionId(this.getRequiredSessionId('claim next request'));
+    request.setMachineId(machineId);
+    request.setToolNamesList(toolNames);
+
+    const response = await this.invokeGRPCUnary<ClaimNextRequestResponseMessage>(
+      (metadata, options, callback) => this.requestsClient!.claimNextRequest(request, metadata, options, callback),
+      'failed to claim next request',
+    );
+
+    if (!response.getClaimed()) {
+      return { claimed: false, request: null };
+    }
+    const claimed = response.getRequest();
+    return { claimed: true, request: claimed ? this.normalizeRequest(claimed) : null };
   }
 
   async appendRequestChunks(

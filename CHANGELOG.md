@@ -8,6 +8,13 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **Atomic provider claim**: new `ClaimNextRequest` RPC — one round-trip
+  leases the oldest claimable pending request for a machine and tool set,
+  replacing the list-then-claim race the Python and TypeScript provider
+  runtimes used for polling. An idle queue is `claimed=false`, not an
+  error. Both provider runtimes now poll through it. See
+  `server/docs/release-notes/2026-09-13-atomic-claim.md`.
+
 - **v1 contract**: the protobuf package is now `api.v1` with every RPC
   under `/api.v1.*`. Request/task statuses are enums
   (`REQUEST_STATUS_DONE`, `TASK_STATUS_COMPLETED`, …), every entity time

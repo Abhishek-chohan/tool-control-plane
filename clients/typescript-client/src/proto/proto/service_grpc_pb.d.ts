@@ -568,6 +568,7 @@ interface IRequestsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
     listRequests: IRequestsServiceService_IListRequests;
     updateRequest: IRequestsServiceService_IUpdateRequest;
     claimRequest: IRequestsServiceService_IClaimRequest;
+    claimNextRequest: IRequestsServiceService_IClaimNextRequest;
     cancelRequest: IRequestsServiceService_ICancelRequest;
     submitRequestResult: IRequestsServiceService_ISubmitRequestResult;
     appendRequestChunks: IRequestsServiceService_IAppendRequestChunks;
@@ -619,6 +620,15 @@ interface IRequestsServiceService_IClaimRequest extends grpc.MethodDefinition<pr
     requestDeserialize: grpc.deserialize<proto_service_pb.ClaimRequestRequest>;
     responseSerialize: grpc.serialize<proto_service_pb.Request>;
     responseDeserialize: grpc.deserialize<proto_service_pb.Request>;
+}
+interface IRequestsServiceService_IClaimNextRequest extends grpc.MethodDefinition<proto_service_pb.ClaimNextRequestRequest, proto_service_pb.ClaimNextRequestResponse> {
+    path: "/api.v1.RequestsService/ClaimNextRequest";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<proto_service_pb.ClaimNextRequestRequest>;
+    requestDeserialize: grpc.deserialize<proto_service_pb.ClaimNextRequestRequest>;
+    responseSerialize: grpc.serialize<proto_service_pb.ClaimNextRequestResponse>;
+    responseDeserialize: grpc.deserialize<proto_service_pb.ClaimNextRequestResponse>;
 }
 interface IRequestsServiceService_ICancelRequest extends grpc.MethodDefinition<proto_service_pb.CancelRequestRequest, proto_service_pb.CancelRequestResponse> {
     path: "/api.v1.RequestsService/CancelRequest";
@@ -674,6 +684,7 @@ export interface IRequestsServiceServer extends grpc.UntypedServiceImplementatio
     listRequests: grpc.handleUnaryCall<proto_service_pb.ListRequestsRequest, proto_service_pb.ListRequestsResponse>;
     updateRequest: grpc.handleUnaryCall<proto_service_pb.UpdateRequestRequest, proto_service_pb.Request>;
     claimRequest: grpc.handleUnaryCall<proto_service_pb.ClaimRequestRequest, proto_service_pb.Request>;
+    claimNextRequest: grpc.handleUnaryCall<proto_service_pb.ClaimNextRequestRequest, proto_service_pb.ClaimNextRequestResponse>;
     cancelRequest: grpc.handleUnaryCall<proto_service_pb.CancelRequestRequest, proto_service_pb.CancelRequestResponse>;
     submitRequestResult: grpc.handleUnaryCall<proto_service_pb.SubmitRequestResultRequest, proto_service_pb.SubmitRequestResultResponse>;
     appendRequestChunks: grpc.handleUnaryCall<proto_service_pb.AppendRequestChunksRequest, proto_service_pb.AppendRequestChunksResponse>;
@@ -697,6 +708,9 @@ export interface IRequestsServiceClient {
     claimRequest(request: proto_service_pb.ClaimRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
     claimRequest(request: proto_service_pb.ClaimRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
     claimRequest(request: proto_service_pb.ClaimRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
+    claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
+    claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
     cancelRequest(request: proto_service_pb.CancelRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;
     cancelRequest(request: proto_service_pb.CancelRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;
     cancelRequest(request: proto_service_pb.CancelRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;
@@ -731,6 +745,9 @@ export class RequestsServiceClient extends grpc.Client implements IRequestsServi
     public claimRequest(request: proto_service_pb.ClaimRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
     public claimRequest(request: proto_service_pb.ClaimRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
     public claimRequest(request: proto_service_pb.ClaimRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.Request) => void): grpc.ClientUnaryCall;
+    public claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
+    public claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
+    public claimNextRequest(request: proto_service_pb.ClaimNextRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ClaimNextRequestResponse) => void): grpc.ClientUnaryCall;
     public cancelRequest(request: proto_service_pb.CancelRequestRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;
     public cancelRequest(request: proto_service_pb.CancelRequestRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;
     public cancelRequest(request: proto_service_pb.CancelRequestRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.CancelRequestResponse) => void): grpc.ClientUnaryCall;

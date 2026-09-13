@@ -1576,6 +1576,60 @@ export namespace ClaimRequestRequest {
     }
 }
 
+export class ClaimNextRequestRequest extends jspb.Message { 
+    getSessionId(): string;
+    setSessionId(value: string): ClaimNextRequestRequest;
+    getMachineId(): string;
+    setMachineId(value: string): ClaimNextRequestRequest;
+    clearToolNamesList(): void;
+    getToolNamesList(): Array<string>;
+    setToolNamesList(value: Array<string>): ClaimNextRequestRequest;
+    addToolNames(value: string, index?: number): string;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): ClaimNextRequestRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: ClaimNextRequestRequest): ClaimNextRequestRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: ClaimNextRequestRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): ClaimNextRequestRequest;
+    static deserializeBinaryFromReader(message: ClaimNextRequestRequest, reader: jspb.BinaryReader): ClaimNextRequestRequest;
+}
+
+export namespace ClaimNextRequestRequest {
+    export type AsObject = {
+        sessionId: string,
+        machineId: string,
+        toolNamesList: Array<string>,
+    }
+}
+
+export class ClaimNextRequestResponse extends jspb.Message { 
+
+    hasRequest(): boolean;
+    clearRequest(): void;
+    getRequest(): Request | undefined;
+    setRequest(value?: Request): ClaimNextRequestResponse;
+    getClaimed(): boolean;
+    setClaimed(value: boolean): ClaimNextRequestResponse;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): ClaimNextRequestResponse.AsObject;
+    static toObject(includeInstance: boolean, msg: ClaimNextRequestResponse): ClaimNextRequestResponse.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: ClaimNextRequestResponse, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): ClaimNextRequestResponse;
+    static deserializeBinaryFromReader(message: ClaimNextRequestResponse, reader: jspb.BinaryReader): ClaimNextRequestResponse;
+}
+
+export namespace ClaimNextRequestResponse {
+    export type AsObject = {
+        request?: Request.AsObject,
+        claimed: boolean,
+    }
+}
+
 export class CancelRequestRequest extends jspb.Message { 
     getSessionId(): string;
     setSessionId(value: string): CancelRequestRequest;
