@@ -43,6 +43,12 @@ func loadServerConfig() (serverConfig, error) {
 		if cfg.environment == "production" {
 			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=disabled is not allowed when TOOLPLANE_ENV_MODE=production")
 		}
+		// Fail-secure gate: disabled auth serves every request with an
+		// anonymous all-capabilities principal. Require the explicit opt-in
+		// instead of failing open silently on an unset environment.
+		if !boolEnv("TOOLPLANE_ALLOW_INSECURE_DEV", false) {
+			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=disabled serves every request with full capabilities; set TOOLPLANE_AUTH_MODE=fixed with TOOLPLANE_AUTH_FIXED_API_KEY for local work, or set TOOLPLANE_ALLOW_INSECURE_DEV=1 to accept the risk explicitly")
+		}
 	case "fixed":
 		if cfg.fixedAPIKey == "" {
 			return serverConfig{}, fmt.Errorf("TOOLPLANE_AUTH_MODE=fixed requires TOOLPLANE_AUTH_FIXED_API_KEY")

@@ -86,10 +86,12 @@ func run() int {
 
 	pgStore, err := storage.OpenFromEnv(ctx, log.Default())
 	var store storage.Storer
+	storageState := ""
 	if err != nil {
 		switch {
 		case errors.Is(err, storage.ErrExplicitInMemoryMode):
 			store = memory.New()
+			storageState = "memory (explicit, non-durable)"
 			slog.Info("storage mode: explicit in-memory")
 		case errors.Is(err, storage.ErrConfigMissing):
 			slog.Error("storage configuration error", slog.Any("err", err))
@@ -100,6 +102,27 @@ func run() int {
 		}
 	} else {
 		store = pgStore
+		storageState = "postgres (durable)"
+	}
+
+	// Loud posture banner for non-production configurations: enumerate
+	// exactly what is insecure so nobody discovers it from an incident.
+	// Runs after storage resolution so the banner reports the resolved mode.
+	if cfg.environment != "production" {
+		tlsState := "disabled (plaintext)"
+		if *tlsCertFile != "" {
+			tlsState = "enabled"
+		}
+		authDetail := map[string]string{
+			"disabled": "every caller receives an anonymous all-capabilities principal",
+			"fixed":    "one shared API key for all local callers",
+			"postgres": "per-session API keys",
+		}[cfg.authMode]
+		slog.Warn("INSECURE DEVELOPMENT CONFIGURATION — do not expose this server\n" +
+			"  - auth: " + cfg.authMode + " (" + authDetail + ")\n" +
+			"  - gRPC transport: " + tlsState + "\n" +
+			"  - storage: " + storageState + "\n" +
+			"  Accept the disabled-auth risk only by setting TOOLPLANE_ALLOW_INSECURE_DEV=1.")
 	}
 	defer func() {
 		if cerr := storeClose(store); cerr != nil {

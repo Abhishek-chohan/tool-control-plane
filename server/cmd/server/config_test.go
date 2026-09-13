@@ -45,3 +45,18 @@ func TestLoadServerConfigRejectsPostgresAuthWithoutPostgresStorage(t *testing.T)
 		t.Fatal("expected postgres auth without postgres storage to fail")
 	}
 }
+
+func TestLoadServerConfigRejectsDisabledAuthWithoutInsecureOptIn(t *testing.T) {
+	t.Setenv("TOOLPLANE_ENV_MODE", "development")
+	t.Setenv("TOOLPLANE_AUTH_MODE", "disabled")
+	t.Setenv("TOOLPLANE_ALLOW_INSECURE_DEV", "")
+
+	if _, err := loadServerConfig(); err == nil {
+		t.Fatal("expected disabled auth without the explicit insecure-dev opt-in to fail")
+	}
+
+	t.Setenv("TOOLPLANE_ALLOW_INSECURE_DEV", "1")
+	if _, err := loadServerConfig(); err != nil {
+		t.Fatalf("disabled auth with TOOLPLANE_ALLOW_INSECURE_DEV=1: %v", err)
+	}
+}
