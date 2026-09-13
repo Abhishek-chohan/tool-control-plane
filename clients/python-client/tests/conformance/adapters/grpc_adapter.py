@@ -425,10 +425,8 @@ class GrpcConformanceAdapter:
 
     def invoke(self, session_id: str, tool_name: str, params: Dict[str, Any]) -> Any:
         self.start_provider_runtime(session_id)
-        result = self.client.invoke(tool_name=tool_name, session_id=session_id, **params)
-        if isinstance(result, dict) and "result" in result:
-            return result["result"]
-        return result
+        # invoke returns the unwrapped tool result value.
+        return self.client.invoke(tool_name=tool_name, session_id=session_id, **params)
 
     def stream(self, session_id: str, tool_name: str, params: Dict[str, Any]) -> Tuple[List[Any], bool]:
         callback_chunks: List[Any] = []

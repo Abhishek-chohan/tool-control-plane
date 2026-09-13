@@ -9,8 +9,10 @@ from toolplane.utils.schema import generate_schema_from_function
 
 from .connection import ConnectionManager
 from .errors import (
+    ToolplaneAPIError,
     ToolplaneError,
     ToolplaneInvalidArgumentError,
+    ToolplaneTimeoutError,
     normalize_status_name,
 )
 from .machine import MachineManager
@@ -89,20 +91,45 @@ class SessionContext:
                 f"Failed to register tool {name} for session {self.session_id}: {e}"
             )
 
-    def invoke(self, tool_name: str, **params) -> Any:
-        """Invoke a tool in this session."""
+    def invoke(
+        self,
+        tool_name: str,
+        timeout_seconds: int = 0,
+        wait_timeout: Optional[int] = None,
+        **params,
+    ) -> Any:
+        """Invoke a tool in this session and return the tool's result value.
+
+        timeout_seconds sets the request's absolute per-attempt execution
+        timeout on the wire (0 keeps the server default). The local wait ends
+        after wait_timeout seconds (default: timeout_seconds + 15, else 60).
+        """
         try:
             request_id = self.tool_manager.execute_tool(
-                self.session_id, tool_name, params
+                self.session_id, tool_name, params, timeout_seconds=timeout_seconds
             )
 
             # Poll for completion
-            return self._wait_for_completion(request_id)
+            if wait_timeout is None:
+                wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
+            else:
+                wait_for = wait_timeout
+            status = self._wait_for_completion(request_id, timeout=wait_for)
 
-        except Exception as e:
-            raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}")
+            # Unwrap: callers want the tool's return value, not the envelope.
+            return status.get("result")
 
-    async def ainvoke(self, tool_name: str, **params) -> str:
+        except ToolplaneTimeoutError:
+            raise
+        except ToolplaneAPIError as e:
+            raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}") from e
+
+    async def ainvoke(
+        self,
+        tool_name: str,
+        timeout_seconds: int = 0,
+        **params,
+    ) -> str:
         """Submit a tool invocation without blocking the caller.
 
         Returns the request ID once the server accepts the work; poll
@@ -112,7 +139,11 @@ class SessionContext:
         """
         try:
             return await asyncio.to_thread(
-                self.tool_manager.execute_tool, self.session_id, tool_name, params
+                self.tool_manager.execute_tool,
+                self.session_id,
+                tool_name,
+                params,
+                timeout_seconds=timeout_seconds,
             )
         except Exception as e:
             raise ToolplaneError(f"Failed to async invoke tool {tool_name}: {e}")
@@ -124,7 +155,13 @@ class SessionContext:
         thread and resolves with the collected chunks."""
         return await asyncio.to_thread(self.stream, tool_name, callback, **params)
 
-    def stream(self, tool_name: str, callback: Callable[[Any, bool], None], **params):
+    def stream(
+        self,
+        tool_name: str,
+        callback: Callable[[Any, bool], None],
+        timeout_seconds: int = 0,
+        **params,
+    ):
         """Stream tool execution.
 
         The stream is resumable: if the direct stream fails mid-flight, the
@@ -141,7 +178,11 @@ class SessionContext:
         try:
             try:
                 for chunk in self.tool_manager.stream_tool(
-                    self.session_id, tool_name, params, idempotency_key
+                    self.session_id,
+                    tool_name,
+                    params,
+                    idempotency_key,
+                    timeout_seconds=timeout_seconds,
                 ):
                     if chunk.request_id:
                         request_id = chunk.request_id
@@ -328,9 +369,11 @@ class SessionContext:
         import time
 
         start_time = time.time()
+        last_status: Dict[str, Any] = {}
 
         while time.time() - start_time < timeout:
             status = self.get_request_status(request_id)
+            last_status = status
 
             if normalize_status_name(status["status"]) == "done":
                 # Ensure result is JSON-parsed if possible (RequestManager already attempts this)
@@ -343,7 +386,10 @@ class SessionContext:
 
             time.sleep(0.5)
 
-        raise ToolplaneError("Tool execution timed out")
+        raise ToolplaneTimeoutError(
+            f"Tool execution timed out after {timeout}s (request_id={request_id}, "
+            f"status={last_status.get('status', 'unknown')})"
+        )
 
     def cleanup(self):
         """Cleanup this session."""
