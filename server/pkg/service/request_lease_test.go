@@ -178,6 +178,11 @@ func TestFencedWritesAfterReclaim(t *testing.T) {
 	if err != nil || requeued.Status != model.RequestStatusPending {
 		t.Fatalf("reclaim: status=%v err=%v", requeued, err)
 	}
+	// The requeue scheduled a retry backoff; expire it so the second claim
+	// tests lease fencing rather than backoff gating.
+	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
+		r.VisibleAt = time.Now().Add(-time.Second)
+	})
 
 	secondClaim, err := requestService.ClaimRequest(sessionID, request.ID, machineB)
 	if err != nil {
@@ -262,6 +267,12 @@ func TestActiveActiveFencedWritesAcrossInstances(t *testing.T) {
 	requeued, err := store.GetRequest(context.Background(), req.ID)
 	if err != nil || requeued.Status != model.RequestStatusPending {
 		t.Fatalf("reclaim: status=%v err=%v", requeued, err)
+	}
+	// The requeue scheduled a retry backoff; expire it so the cross-instance
+	// claim tests lease fencing rather than backoff gating.
+	requeued.VisibleAt = time.Now().Add(-time.Second)
+	if err := store.SaveRequest(context.Background(), requeued); err != nil {
+		t.Fatalf("expire backoff: %v", err)
 	}
 	claimedB, err := svcB.ClaimRequest("sess-aa", req.ID, "machine-b")
 	if err != nil {

@@ -679,10 +679,18 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 		return nil, wrapf(ErrRequestNotClaimable, "request %s is already in state %s", requestID, request.Status)
 	}
 
+	// Backoff: a queued retry is not claimable until its backoff elapses.
+	now := time.Now()
+	if !request.VisibleAt.IsZero() && request.VisibleAt.After(now) {
+		return nil, wrapf(ErrRequestNotClaimable, "request %s retry backoff has not elapsed", requestID)
+	}
+	if request.MaxAttempts > 0 && request.Attempts >= request.MaxAttempts {
+		return nil, wrapf(ErrRequestNotClaimable, "request %s has exhausted its attempts", requestID)
+	}
+
 	// Mark request as claimed
 	request.SetClaimedBy(machineID)
 	s.ensureRequestDefaults(request)
-	now := time.Now()
 	if request.Attempts < request.MaxAttempts {
 		request.Attempts++
 	}
@@ -748,8 +756,18 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 
 	var oldestRequest *model.Request
 	var oldestTime time.Time
+	now := time.Now()
 	for _, req := range sessionRequests {
-		if req.Status != model.RequestStatusPending {
+		if req.Status != model.RequestStatusPending || req.DeadLetter {
+			continue
+		}
+		// Backoff and attempt budget: a queued retry is not dispatchable
+		// until its backoff elapses, and an exhausted request is only
+		// reachable by the reaper.
+		if !req.VisibleAt.IsZero() && req.VisibleAt.After(now) {
+			continue
+		}
+		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 			continue
 		}
 		for _, name := range toolNames {
@@ -770,7 +788,6 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 
 	oldestRequest.SetClaimedBy(machineID)
 	s.ensureRequestDefaults(oldestRequest)
-	now := time.Now()
 	if oldestRequest.Attempts < oldestRequest.MaxAttempts {
 		oldestRequest.Attempts++
 	}
@@ -1485,9 +1502,9 @@ func (s *RequestsService) ensureRequestDefaults(req *model.Request) {
 	if req.BackoffSeconds <= 0 {
 		req.BackoffSeconds = int(s.retryBackoff.Seconds())
 	}
-	if req.MaxAttempts <= 0 {
-		req.MaxAttempts = 3
-	}
+	// MaxAttempts is left untouched: NewRequest defaults it to 3, and a
+	// non-positive value is the explicit "uncapped" sentinel — the claim and
+	// reaper paths both treat it as such.
 	if req.VisibleAt.IsZero() {
 		req.VisibleAt = time.Now()
 	}
@@ -1673,7 +1690,7 @@ func (s *RequestsService) handleExpiredRequest(req *model.Request) {
 	s.recordRequestEvent(req, trace.EventRequestLeaseExpired, machineID, map[string]any{
 		"visibleAt": req.VisibleAt,
 	})
-	if req.Attempts >= req.MaxAttempts {
+	if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 		req.MarkDeadLetter(message)
 		req.Error = message
 		req.ResultType = model.ResultTypeRejection

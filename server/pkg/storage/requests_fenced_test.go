@@ -186,6 +186,10 @@ func TestFencedWritesRejectStaleHolderAfterReclaim(t *testing.T) {
 			t.Fatalf("reclaim status: got %s want pending", requeued.Status)
 		}
 
+		// The requeue scheduled a retry backoff; let it elapse before the
+		// second claim (claims now honor a not-yet-elapsed backoff).
+		time.Sleep(5 * time.Millisecond)
+
 		secondClaim, ok, err := s.ClaimRequest(ctx, sess, reqID, machB, 30*time.Second)
 		if err != nil || !ok {
 			t.Fatalf("claim B: ok=%v err=%v", ok, err)
@@ -480,6 +484,167 @@ func TestInsertRequestRejectsDuplicate(t *testing.T) {
 		// silently overwriting the row (insert-only create contract).
 		if err := s.InsertRequest(ctx, req); err == nil {
 			t.Fatal("InsertRequest on an existing id should fail")
+		}
+	})
+}
+
+func TestClaimRequestRejectsFutureVisibleAt(t *testing.T) {
+	runAgainstBoth(t, "claim future visible_at", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, "mach-"+uid(t), time.Now())
+		req := seedPendingRequest(t, s, sess, reqID, "tool")
+
+		// A queued retry whose backoff has not elapsed is not claimable.
+		req.VisibleAt = time.Now().Add(time.Hour)
+		if err := s.SaveRequest(ctx, req); err != nil {
+			t.Fatalf("persist future visible_at: %v", err)
+		}
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-1", 30*time.Second); err != nil || ok {
+			t.Fatalf("claim with future visible_at: ok=%v err=%v, want ok=false", ok, err)
+		}
+
+		// Once the backoff elapses the same request claims normally.
+		req.VisibleAt = time.Now().Add(-time.Second)
+		if err := s.SaveRequest(ctx, req); err != nil {
+			t.Fatalf("persist past visible_at: %v", err)
+		}
+		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-1", 30*time.Second)
+		if err != nil || !ok {
+			t.Fatalf("claim after backoff: ok=%v err=%v", ok, err)
+		}
+		if claimed.Attempts != 1 {
+			t.Fatalf("first claim attempts=%d want 1", claimed.Attempts)
+		}
+	})
+}
+
+func TestClaimRequestRejectsExhaustedAttempts(t *testing.T) {
+	runAgainstBoth(t, "claim exhausted", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		req := seedPendingRequest(t, s, sess, reqID, "tool")
+		req.MaxAttempts = 2
+		req.Attempts = 2
+		if err := s.SaveRequest(ctx, req); err != nil {
+			t.Fatalf("persist exhausted request: %v", err)
+		}
+
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-1", 30*time.Second); err != nil || ok {
+			t.Fatalf("claim of an exhausted request: ok=%v err=%v, want ok=false", ok, err)
+		}
+	})
+}
+
+func TestRequeueDoesNotDoubleCountAttempts(t *testing.T) {
+	runAgainstBoth(t, "requeue attempts", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		seedPendingRequest(t, s, sess, reqID, "tool")
+
+		// First execution: the claim counts the attempt.
+		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-1", 30*time.Second)
+		if err != nil || !ok {
+			t.Fatalf("claim: ok=%v err=%v", ok, err)
+		}
+		if claimed.Attempts != 1 {
+			t.Fatalf("claimed attempts=%d want 1", claimed.Attempts)
+		}
+
+		// The lease expires and the reaper requeues. The attempt was already
+		// counted by the claim: the requeue must not bump it to 2, or the
+		// request dead-letters one execution early.
+		stored, err := s.GetRequest(ctx, reqID)
+		if err != nil {
+			t.Fatalf("get claimed request: %v", err)
+		}
+		past := time.Now().Add(-time.Hour)
+		stored.LeasedAt = &past
+		stored.VisibleAt = past.Add(30 * time.Second)
+		if err := s.SaveRequest(ctx, stored); err != nil {
+			t.Fatalf("forge expired lease: %v", err)
+		}
+		requeued, ok, err := s.ReclaimExpiredRequest(ctx, reqID, time.Now(), 30*time.Second, 3, 5*time.Second)
+		if err != nil || !ok {
+			t.Fatalf("reclaim: ok=%v err=%v", ok, err)
+		}
+		if requeued.Status != model.RequestStatusPending {
+			t.Fatalf("requeued status=%s want pending", requeued.Status)
+		}
+		if requeued.Attempts != 1 {
+			t.Fatalf("requeued attempts=%d want 1 (double-increment = bug)", requeued.Attempts)
+		}
+		if !requeued.VisibleAt.After(time.Now()) {
+			t.Fatalf("requeued visible_at %v must honor the backoff", requeued.VisibleAt)
+		}
+
+		// While the backoff holds, the requeued request is not claimable.
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-2", 30*time.Second); err != nil || ok {
+			t.Fatalf("claim during backoff: ok=%v err=%v, want ok=false", ok, err)
+		}
+	})
+}
+
+func TestDeadLetterAfterExactlyMaxAttemptsExecutions(t *testing.T) {
+	runAgainstBoth(t, "dead-letter attempts", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		req := seedPendingRequest(t, s, sess, reqID, "tool")
+		req.MaxAttempts = 2
+		if err := s.SaveRequest(ctx, req); err != nil {
+			t.Fatalf("persist request: %v", err)
+		}
+
+		// Execution 1: claim, expire, requeue (still within budget).
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-1", 30*time.Second); err != nil || !ok {
+			t.Fatalf("claim 1: ok=%v err=%v", ok, err)
+		}
+		stored, err := s.GetRequest(ctx, reqID)
+		if err != nil {
+			t.Fatalf("get claimed request: %v", err)
+		}
+		past := time.Now().Add(-time.Hour)
+		stored.LeasedAt = &past
+		stored.VisibleAt = past.Add(30 * time.Second)
+		if err := s.SaveRequest(ctx, stored); err != nil {
+			t.Fatalf("forge expired lease: %v", err)
+		}
+		requeued, ok, err := s.ReclaimExpiredRequest(ctx, reqID, time.Now(), 30*time.Second, 2, 0)
+		if err != nil || !ok || requeued.Status != model.RequestStatusPending {
+			t.Fatalf("reclaim 1: ok=%v status=%s err=%v", ok, requeued.Status, err)
+		}
+
+		// Execution 2: the second claim exhausts the budget of 2.
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-2", 30*time.Second); err != nil || !ok {
+			t.Fatalf("claim 2: ok=%v err=%v", ok, err)
+		}
+		stored2, err := s.GetRequest(ctx, reqID)
+		if err != nil {
+			t.Fatalf("get claimed request 2: %v", err)
+		}
+		past2 := time.Now().Add(-time.Hour)
+		stored2.LeasedAt = &past2
+		stored2.VisibleAt = past2.Add(30 * time.Second)
+		if err := s.SaveRequest(ctx, stored2); err != nil {
+			t.Fatalf("forge expired lease 2: %v", err)
+		}
+		dead, ok, err := s.ReclaimExpiredRequest(ctx, reqID, time.Now(), 30*time.Second, 2, 0)
+		if err != nil || !ok {
+			t.Fatalf("reclaim 2: ok=%v err=%v", ok, err)
+		}
+		if dead.Status != model.RequestStatusFailed || !dead.DeadLetter {
+			t.Fatalf("final status=%s deadLetter=%v, want failed+dead-letter", dead.Status, dead.DeadLetter)
+		}
+		if dead.Attempts != 2 {
+			t.Fatalf("final attempts=%d want 2 (exactly MaxAttempts executions)", dead.Attempts)
 		}
 	})
 }

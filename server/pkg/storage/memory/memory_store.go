@@ -166,6 +166,10 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 		if r.SessionID != sessionID || r.Status != model.RequestStatusPending || r.DeadLetter {
 			continue
 		}
+		// Attempt budget: an exhausted request is only reachable by the reaper.
+		if r.MaxAttempts > 0 && r.Attempts >= r.MaxAttempts {
+			continue
+		}
 		if !r.VisibleAt.IsZero() && r.VisibleAt.After(now) {
 			continue
 		}
@@ -246,6 +250,14 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 	if r.SessionID != sessionID || r.Status != model.RequestStatusPending || r.DeadLetter {
 		return nil, false, nil
 	}
+	// Backoff: a queued retry is not claimable until its backoff elapses.
+	if !r.VisibleAt.IsZero() && r.VisibleAt.After(time.Now()) {
+		return nil, false, nil
+	}
+	// Attempt budget: an exhausted request is only reachable by the reaper.
+	if r.MaxAttempts > 0 && r.Attempts >= r.MaxAttempts {
+		return nil, false, nil
+	}
 	now := time.Now()
 	visible := now.Add(leaseDuration)
 	r.Status = model.RequestStatusClaimed
@@ -279,15 +291,18 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 	r.LeasedAt = nil
 	r.NextAttemptAt = nil
 	r.UpdatedAt = now
-	if r.Attempts >= maxAttempts {
+	// A non-positive maxAttempts is the "uncapped" sentinel, matching the
+	// claim paths: dead-letter only applies to a positive budget.
+	if maxAttempts > 0 && r.Attempts >= maxAttempts {
 		r.DeadLetter = true
 		r.Status = model.RequestStatusFailed
 		r.LastError = "request timed out: max attempts reached"
 		r.Error = r.LastError
 		r.VisibleAt = now
 	} else {
+		// The attempt was already counted by the claim that started this
+		// execution — requeue must not count it twice.
 		r.Status = model.RequestStatusPending
-		r.Attempts++
 		r.LastError = "request lease expired"
 		retryAt := now.Add(backoff)
 		r.VisibleAt = retryAt

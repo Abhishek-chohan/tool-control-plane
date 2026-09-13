@@ -194,10 +194,12 @@ func TestActiveActive_NoDoubleRequeue(t *testing.T) {
 	if final.Status != model.RequestStatusPending {
 		t.Fatalf("after double reaper status=%s want pending", final.Status)
 	}
-	// Claim added 1 attempt; a single requeue adds 1 more. Two requeues would
-	// land at 3. Asserting exactly 2 proves no double-requeue.
-	if final.Attempts != 2 {
-		t.Fatalf("after double reaper attempts=%d want 2 (double-requeue = bug)", final.Attempts)
+	// The claim counted the attempt, and requeues no longer increment it
+	// (attempt accounting fix): a single reaper pass and two passes both land
+	// at 1. Double-requeue safety now comes from the guarded reclaim — the
+	// second pass finds a pending row that is not reclaimable.
+	if final.Attempts != 1 {
+		t.Fatalf("after double reaper attempts=%d want 1", final.Attempts)
 	}
 	if final.LeasedBy != "" {
 		t.Fatalf("after reaper leasedBy=%s want empty", final.LeasedBy)

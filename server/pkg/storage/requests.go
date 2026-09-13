@@ -126,7 +126,7 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
 		queryBuilder := strings.Builder{}
 		args := []interface{}{sessionID, string(model.RequestStatusPending)}
-		queryBuilder.WriteString(`SELECT ` + requestColumns + ` FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW()`)
+		queryBuilder.WriteString(`SELECT ` + requestColumns + ` FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW() AND (max_attempts <= 0 OR attempts < max_attempts)`)
 
 		if len(toolNames) > 0 {
 			queryBuilder.WriteString(" AND tool_name IN (")
@@ -440,6 +440,15 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 			// Not claimable by this caller; report as not-claimed without error.
 			return nil
 		}
+		// Backoff: a queued retry is not claimable until its backoff elapses.
+		if !req.VisibleAt.IsZero() && req.VisibleAt.After(time.Now()) {
+			return nil
+		}
+		// Attempt budget: a request that already burned its attempts is only
+		// reachable by the reaper (into dead-letter), never a new execution.
+		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
+			return nil
+		}
 		now := time.Now()
 		visible := now.Add(leaseDuration)
 		attempts := req.Attempts + 1
@@ -546,7 +555,9 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 		updated.NextAttemptAt = nil
 		updated.UpdatedAt = now
 
-		if req.Attempts >= maxAttempts {
+		// A non-positive max_attempts is the "uncapped" sentinel, matching the
+		// claim paths: dead-letter only applies to a positive budget.
+		if maxAttempts > 0 && req.Attempts >= maxAttempts {
 			// Exhausted: dead-letter and mark terminal-failed.
 			updated.DeadLetter = true
 			updated.Status = model.RequestStatusFailed
@@ -554,9 +565,11 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 			updated.Error = updated.LastError
 			updated.VisibleAt = now
 		} else {
-			// Requeue to pending with linear backoff.
+			// Requeue to pending with linear backoff. The attempt was already
+			// counted by the claim that started this execution — requeue must
+			// not count it twice (double-increment dead-lettered requests one
+			// execution early).
 			updated.Status = model.RequestStatusPending
-			updated.Attempts = req.Attempts + 1
 			updated.LastError = "request lease expired"
 			retryAt := now.Add(backoff)
 			updated.VisibleAt = retryAt
