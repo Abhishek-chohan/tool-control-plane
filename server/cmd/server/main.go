@@ -76,19 +76,42 @@ func run() int {
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	metricsCollector := observability.NewRuntimeMetricsCollector()
+	var tracers []trace.SessionTracer
+	tracers = append(tracers, metricsCollector)
+	var tracer trace.SessionTracer = metricsCollector
+
+	pgStore, err := storage.OpenFromEnv(ctx, log.Default())
+	var store storage.Storer
+	storageState := ""
+	if err != nil {
+		switch {
+		case errors.Is(err, storage.ErrExplicitInMemoryMode):
+			store = memory.New()
+			storageState = "memory (explicit, non-durable)"
+			slog.Info("storage mode: explicit in-memory")
+		case errors.Is(err, storage.ErrConfigMissing):
+			slog.Error("storage configuration error", slog.Any("err", err))
+			return 1
+		default:
+			slog.Error("failed to initialize storage", slog.Any("err", err))
+			return 1
+		}
+	} else {
+		store = pgStore
+		storageState = "postgres (durable)"
+	}
+
 	// Loud posture banner for non-production configurations: enumerate
 	// exactly what is insecure so nobody discovers it from an incident.
+	// Runs after storage resolution so the banner reports the resolved mode.
 	if cfg.environment != "production" {
 		tlsState := "disabled (plaintext)"
 		if *tlsCertFile != "" {
 			tlsState = "enabled"
-		}
-		storageState := cfg.storageMode
-		if storageState == "" && cfg.databaseURL != "" {
-			storageState = "postgres"
-		}
-		if storageState == "" {
-			storageState = "memory"
 		}
 		authDetail := map[string]string{
 			"disabled": "every caller receives an anonymous all-capabilities principal",
@@ -100,32 +123,6 @@ func run() int {
 			"  - gRPC transport: " + tlsState + "\n" +
 			"  - storage: " + storageState + "\n" +
 			"  Accept the disabled-auth risk only by setting TOOLPLANE_ALLOW_INSECURE_DEV=1.")
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	metricsCollector := observability.NewRuntimeMetricsCollector()
-	var tracers []trace.SessionTracer
-	tracers = append(tracers, metricsCollector)
-	var tracer trace.SessionTracer = metricsCollector
-
-	pgStore, err := storage.OpenFromEnv(ctx, log.Default())
-	var store storage.Storer
-	if err != nil {
-		switch {
-		case errors.Is(err, storage.ErrExplicitInMemoryMode):
-			store = memory.New()
-			slog.Info("storage mode: explicit in-memory")
-		case errors.Is(err, storage.ErrConfigMissing):
-			slog.Error("storage configuration error", slog.Any("err", err))
-			return 1
-		default:
-			slog.Error("failed to initialize storage", slog.Any("err", err))
-			return 1
-		}
-	} else {
-		store = pgStore
 	}
 	defer func() {
 		if cerr := storeClose(store); cerr != nil {

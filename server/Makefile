@@ -49,7 +49,7 @@ build:
 	go build -o bin/toolplane-server ./cmd/server
 
 run:
-	./bin/toolplane-server
+	TOOLPLANE_ENV_MODE=$(TOOLPLANE_ENV_MODE) TOOLPLANE_AUTH_MODE=$(TOOLPLANE_AUTH_MODE) TOOLPLANE_AUTH_FIXED_API_KEY=$(TOOLPLANE_AUTH_FIXED_API_KEY) TOOLPLANE_STORAGE_MODE=$(TOOLPLANE_STORAGE_MODE) ./bin/toolplane-server
 
 # Clean commands
 clean:

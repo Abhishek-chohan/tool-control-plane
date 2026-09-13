@@ -332,8 +332,15 @@ func main() {
 	rateLimiter := NewRateLimiterManager(ctx, rate.Limit(*apiRate), *apiBurst, rate.Limit(*ipRate), *ipBurst)
 	throttleTracker := NewThrottleTracker()
 
-	if *apiRate == 0 && *ipRate == 0 {
-		log.Println("WARNING: rate limiting is disabled (api-rate=0, ip-rate=0); callers share the backend without throttling")
+	apiDisabled := *apiRate <= 0 || *apiBurst <= 0
+	ipDisabled := *ipRate <= 0 || *ipBurst <= 0
+	switch {
+	case apiDisabled && ipDisabled:
+		log.Println("WARNING: rate limiting is disabled for every dimension (rate or burst set to 0); callers share the backend without throttling")
+	case apiDisabled:
+		log.Println("WARNING: per-API-key rate limiting is disabled (api-rate or api-burst is 0)")
+	case ipDisabled:
+		log.Println("WARNING: per-IP rate limiting is disabled (ip-rate or ip-burst is 0)")
 	}
 
 	transportCredentials, err := backendTransportCredentials(cfg)
