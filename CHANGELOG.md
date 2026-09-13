@@ -29,6 +29,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Guarded cancel**: request cancellation now goes through a row-locked
+  store primitive (`CancelRequestFenced`) instead of a stale-cache read
+  plus blind upsert, so a cancel racing a result submission can no longer
+  overwrite a delivered terminal outcome — the cancel is refused with
+  `REQUEST_NOT_CANCELLABLE` and the result survives. Task persistence
+  gained the same terminal guard: `SaveTask` drops stale snapshots that
+  would rewrite a completed/failed/cancelled task, and request creation
+  is insert-only (`InsertRequest`) so a colliding insert fails instead of
+  rewriting history. See
+  `server/docs/release-notes/2026-09-13-guarded-cancel.md`.
 - `UpdateRequest` cast the v1 status enum's numeric value into the
   model's string status, storing `"3"` instead of `"running"`: requests
   read back as `UNSPECIFIED` from claim until result submission and were

@@ -18,7 +18,7 @@ import (
 func (s *Store) lookupFenced(sessionID, requestID string) (*model.Request, error) {
 	r, ok := s.requests[requestID]
 	if !ok || r.SessionID != sessionID {
-		return nil, fmt.Errorf("request %s not found in session %s", requestID, sessionID)
+		return nil, fmt.Errorf("%w: request %s not found in session %s", storage.ErrNotFound, requestID, sessionID)
 	}
 	return r, nil
 }
@@ -195,4 +195,23 @@ func (s *Store) RequeueRequestFenced(ctx context.Context, sessionID, requestID, 
 	req.LastError = reason
 	req.UpdatedAt = now
 	return cloneRequest(req), nil
+}
+
+// CancelRequestFenced mirrors the Postgres guarded cancel: terminal requests
+// are returned untouched with cancelled=false, and a successful cancel
+// applies the rejection result and dead_letter under the store lock.
+func (s *Store) CancelRequestFenced(ctx context.Context, sessionID, requestID, message string) (*model.Request, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	req, err := s.lookupFenced(sessionID, requestID)
+	if err != nil {
+		return nil, false, err
+	}
+	if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
+		return cloneRequest(req), false, nil
+	}
+	req.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, message)
+	req.LastError = message
+	req.DeadLetter = true
+	return cloneRequest(req), true, nil
 }

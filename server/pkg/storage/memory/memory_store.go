@@ -14,6 +14,7 @@ package memory
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -124,6 +125,21 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.requests[req.ID] = cloneRequest(req)
+	return nil
+}
+
+// InsertRequest mirrors the Postgres insert-only create: an id that is
+// already persisted fails instead of overwriting the row.
+func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
+	if req == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.requests[req.ID]; exists {
+		return fmt.Errorf("insert request %s: %w", req.ID, storage.ErrRequestExists)
+	}
 	s.requests[req.ID] = cloneRequest(req)
 	return nil
 }
@@ -423,6 +439,15 @@ func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Terminal guard, mirroring the Postgres SaveTask: a task that already
+	// reached a terminal state is final, and stale snapshots re-persisted
+	// after the terminal write are dropped.
+	if existing, ok := s.tasks[task.ID]; ok {
+		switch existing.Status {
+		case model.StatusCompleted, model.StatusFailed, model.StatusCancelled:
+			return nil
+		}
+	}
 	s.tasks[task.ID] = cloneTask(task)
 	return nil
 }

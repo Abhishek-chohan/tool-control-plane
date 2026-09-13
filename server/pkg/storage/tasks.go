@@ -63,6 +63,11 @@ func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at,
             completed_at = EXCLUDED.completed_at
+        -- Terminal guard: a persisted terminal task (completed, failed, or
+        -- cancelled) is final. Stale snapshots re-persisted after the terminal
+        -- write — e.g. a late updateTaskWithError racing a CancelTask — are
+        -- dropped here instead of rewriting the outcome.
+        WHERE tasks.status NOT IN ('completed', 'failed', 'cancelled')
     `, task.ID, task.SessionID, task.ToolName, string(task.Status), task.Input, nullString(task.Result), nullString(task.ResultType), nullString(task.Error), task.Attempts, task.MaxAttempts, task.BackoffSeconds, nullableTime(task.NextAttemptAt), task.TimeoutSeconds, task.DeadLetter, nullString(task.LastError), nullString(task.CurrentRequestID), nullString(task.IdempotencyKey), task.CreatedAt, task.UpdatedAt, nullableTime(task.CompletedAt))
 	if err != nil {
 		return fmt.Errorf("upsert task: %w", err)

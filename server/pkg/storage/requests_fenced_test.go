@@ -381,3 +381,105 @@ func TestRequeueRequestFenced(t *testing.T) {
 		}
 	})
 }
+
+func TestCancelRequestFencedCancelsNonTerminal(t *testing.T) {
+	runAgainstBoth(t, "cancel pending", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		seedPendingRequest(t, s, sess, reqID, "tool")
+
+		cancelled, ok, err := s.CancelRequestFenced(ctx, sess, reqID, "Request was cancelled")
+		if err != nil || !ok {
+			t.Fatalf("cancel: ok=%v err=%v", ok, err)
+		}
+		if cancelled.Status != model.RequestStatusFailed {
+			t.Fatalf("cancel status: got %s want failed", cancelled.Status)
+		}
+		if !cancelled.DeadLetter {
+			t.Fatal("cancel should mark dead_letter")
+		}
+		if cancelled.LastError != "Request was cancelled" {
+			t.Fatalf("cancel lastError: %q", cancelled.LastError)
+		}
+		if cancelled.LeasedBy != "" || cancelled.LeasedAt != nil {
+			t.Fatalf("cancel should release the lease: leasedBy=%q leasedAt=%v", cancelled.LeasedBy, cancelled.LeasedAt)
+		}
+
+		// The cancel is durable: a re-read sees the terminal state.
+		stored, err := s.GetRequest(ctx, reqID)
+		if err != nil {
+			t.Fatalf("get after cancel: %v", err)
+		}
+		if stored.Status != model.RequestStatusFailed || !stored.DeadLetter {
+			t.Fatalf("stored after cancel: status=%s deadLetter=%v", stored.Status, stored.DeadLetter)
+		}
+	})
+}
+
+func TestCancelRequestFencedRefusesTerminal(t *testing.T) {
+	runAgainstBoth(t, "cancel terminal", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		req := seedPendingRequest(t, s, sess, reqID, "tool")
+
+		// Complete the request first: the terminal outcome must win.
+		req.SetResult(map[string]string{"answer": "42"}, model.ResultTypeResolution, "")
+		if err := s.SaveRequest(ctx, req); err != nil {
+			t.Fatalf("persist completed request: %v", err)
+		}
+
+		terminal, ok, err := s.CancelRequestFenced(ctx, sess, reqID, "Request was cancelled")
+		if err != nil {
+			t.Fatalf("cancel terminal: %v", err)
+		}
+		if ok {
+			t.Fatal("cancel of a terminal request must return cancelled=false")
+		}
+		if terminal.Status != model.RequestStatusDone {
+			t.Fatalf("terminal status: got %s want done", terminal.Status)
+		}
+
+		// The result survived untouched.
+		stored, err := s.GetRequest(ctx, reqID)
+		if err != nil {
+			t.Fatalf("get after refused cancel: %v", err)
+		}
+		if stored.Status != model.RequestStatusDone {
+			t.Fatalf("stored status after refused cancel: %s want done", stored.Status)
+		}
+		if stored.Result == nil {
+			t.Fatal("terminal result was clobbered by the refused cancel")
+		}
+	})
+}
+
+func TestCancelRequestFencedMissingRequest(t *testing.T) {
+	runAgainstBoth(t, "cancel missing", func(t *testing.T, s storage.Storer) {
+		sess := "sess-" + uid(t)
+		seedSession(t, s, sess)
+		_, _, err := s.CancelRequestFenced(context.Background(), sess, "req-does-not-exist", "Request was cancelled")
+		if !errors.Is(err, storage.ErrNotFound) {
+			t.Fatalf("cancel missing request: want ErrNotFound, got %v", err)
+		}
+	})
+}
+
+func TestInsertRequestRejectsDuplicate(t *testing.T) {
+	runAgainstBoth(t, "insert duplicate", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		reqID := "req-" + uid(t)
+		seedSession(t, s, sess)
+		req := seedPendingRequest(t, s, sess, reqID, "tool")
+
+		// InsertRequest on an already-persisted id must fail instead of
+		// silently overwriting the row (insert-only create contract).
+		if err := s.InsertRequest(ctx, req); err == nil {
+			t.Fatal("InsertRequest on an existing id should fail")
+		}
+	})
+}

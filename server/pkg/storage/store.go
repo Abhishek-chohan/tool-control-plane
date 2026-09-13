@@ -37,6 +37,11 @@ var ErrRequestTerminal = errors.New("storage: request is already in a terminal s
 // missing entity from a lease rejection without parsing messages.
 var ErrNotFound = errors.New("storage: not found")
 
+// ErrRequestExists reports that a non-upsert insert targeted a request id
+// that is already persisted. Request creation is insert-only, so this error
+// surfaces instead of silently overwriting the existing row.
+var ErrRequestExists = errors.New("storage: request already exists")
+
 // Store provides persistence for core server models.
 type Store struct {
 	db     *sql.DB
@@ -105,6 +110,18 @@ type Storer interface {
 	AppendRequestChunksFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, chunks []string) (*model.Request, error)
 	UpdateRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, status model.RequestStatus, result interface{}, resultType model.ResultType, leaseDuration time.Duration) (*model.Request, error)
 	RequeueRequestFenced(ctx context.Context, sessionID, requestID, machineID string, leaseEpoch int64, reason string, backoff time.Duration) (*model.Request, error)
+	// CancelRequestFenced cancels a request under the row lock. It returns
+	// (request, false, nil) when the request is already terminal — carrying
+	// the authoritative terminal row so the caller reports reality instead of
+	// overwriting it — and otherwise applies the cancellation (rejection
+	// result, dead_letter, lease release) and persists it in the same
+	// transaction. A cancel racing a result submission therefore serializes:
+	// exactly one of the two writes the terminal state.
+	CancelRequestFenced(ctx context.Context, sessionID, requestID, message string) (*model.Request, bool, error)
+	// InsertRequest writes a brand-new request row without an upsert clause:
+	// a colliding insert (same id, or the idempotency-key partial unique
+	// index) fails instead of overwriting the persisted row.
+	InsertRequest(ctx context.Context, req *model.Request) error
 
 	// Machines
 	AllMachines(ctx context.Context) ([]*model.Machine, error)

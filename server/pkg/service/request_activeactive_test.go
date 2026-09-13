@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -200,5 +201,57 @@ func TestActiveActive_NoDoubleRequeue(t *testing.T) {
 	}
 	if final.LeasedBy != "" {
 		t.Fatalf("after reaper leasedBy=%s want empty", final.LeasedBy)
+	}
+}
+
+// TestActiveActive_CancelCannotClobberTerminalResult asserts the guarded
+// cancel: instance A completes a claimed request while instance B cancels it,
+// and the delivered result survives. Before the fenced cancel, B's cancel
+// read only its (stale) cache, terminal-checked that copy, and persisted the
+// cancellation through an unconditional upsert — overwriting DONE with a
+// rejection.
+func TestActiveActive_CancelCannotClobberTerminalResult(t *testing.T) {
+	store, svcA, machA, svcB, _ := newActiveActiveStacks(t)
+	ctx := context.Background()
+	seedSessionForAA(t, store)
+
+	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
+		t.Fatalf("RegisterMachine on A: %v", err)
+	}
+
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0, "")
+	if err != nil {
+		t.Fatalf("CreateRequest on A: %v", err)
+	}
+
+	// A claims and submits the result: the request reaches DONE on the store.
+	claimed, err := svcA.ClaimRequest("sess-aa", req.ID, "machine-a")
+	if err != nil {
+		t.Fatalf("ClaimRequest on A: %v", err)
+	}
+	if err := svcA.SubmitRequestResult("sess-aa", req.ID, "machine-a", claimed.LeaseEpoch,
+		map[string]string{"echo": "done"}, model.ResultTypeResolution, nil); err != nil {
+		t.Fatalf("SubmitRequestResult on A: %v", err)
+	}
+
+	// B's cache never saw the completion. Its cancel must be refused against
+	// the authoritative row instead of clobbering the result.
+	if err := svcB.CancelRequest("sess-aa", req.ID); err == nil {
+		t.Fatal("CancelRequest on B succeeded against a DONE request — should have been refused")
+	} else if !errors.Is(err, ErrRequestNotCancellable) {
+		t.Fatalf("CancelRequest on B: want ErrRequestNotCancellable, got %v", err)
+	}
+
+	// The terminal outcome survived: DONE with the delivered result intact.
+	final, err := store.GetRequest(ctx, req.ID)
+	if err != nil {
+		t.Fatalf("store.GetRequest: %v", err)
+	}
+	if final.Status != model.RequestStatusDone {
+		t.Fatalf("final status=%s want done (cancel clobbered the result)", final.Status)
+	}
+	if final.Result == nil {
+		t.Fatal("final result is nil — the cancel clobbered the delivered result")
 	}
 }
