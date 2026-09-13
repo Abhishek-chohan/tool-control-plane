@@ -242,15 +242,12 @@ class HTTPRequestManager:
                 self.register_active_lease(
                     session_id,
                     request_id,
-                    req.get("leasedBy", req.get("leased_by", machine_id))
-                    or machine_id,
+                    req.get("leasedBy", req.get("leased_by", machine_id)) or machine_id,
                     int(req.get("leaseEpoch", req.get("lease_epoch", 0)) or 0),
                 )
 
                 # Execute in thread pool
-                self.executor.submit(
-                    self._execute_request, req, tools, streaming_tools
-                )
+                self.executor.submit(self._execute_request, req, tools, streaming_tools)
                 claimed_count += 1
 
         except Exception as e:
