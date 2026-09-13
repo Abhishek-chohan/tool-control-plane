@@ -29,6 +29,15 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **ListRequests pagination trailer**: the response never carried its
+  `ListPage` — the trailer was built and dropped, so clients had no
+  `next_page_token` or `total_size`. The trailer is now attached, the
+  full-page heuristic matches `ListUserSessions` exactly (shared helper:
+  emit a token only when `offset+returned < total`, so a full final page
+  no longer sends clients chasing an empty extra page), and the shared
+  conformance fixtures gained a `request_list` pagination case exercised
+  over both gRPC and HTTP by the Python and TypeScript harnesses. See
+  `server/docs/release-notes/2026-09-13-request-list-pagination.md`.
 - **Guarded cancel**: request cancellation now goes through a row-locked
   store primitive (`CancelRequestFenced`) instead of a stale-cache read
   plus blind upsert, so a cancel racing a result submission can no longer

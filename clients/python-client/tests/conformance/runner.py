@@ -65,6 +65,7 @@ SUPPORTED_FEATURES = {
     "tool_discovery",
     "session_update",
     "request_create",
+    "request_list",
     "request_recovery",
     "api_key_lifecycle",
     "machine_lifecycle",
@@ -777,6 +778,57 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
             if expected.get("listed_request_present", False):
                 assert_request_list_contains(
                     listed_requests, request_id, case_id, transport
+                )
+            return
+
+        if feature == "request_list":
+            page_size = int(request.get("page_size", 3))
+            extra_requests = int(request.get("extra_requests", 2))
+            total_created = page_size + extra_requests
+            expected_first = int(expected.get("first_page_size", page_size))
+            expected_last = int(expected.get("last_page_size", extra_requests))
+            tool_name = request["tool_name"]
+            adapter.register_unary_echo_tool(
+                session_id=session_id,
+                tool_name=tool_name,
+                description=request.get("tool_description", "conformance request tool"),
+            )
+            for index in range(total_created):
+                adapter.create_request(session_id, tool_name, {"index": index})
+
+            first_page = adapter.list_requests_page(session_id, {"page_size": page_size})
+            if len(first_page.get("requests", [])) != expected_first:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: first page returned "
+                    f"{len(first_page.get('requests', []))} requests, want {expected_first}"
+                )
+            if first_page.get("total_size") != total_created:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: first page total_size "
+                    f"{first_page.get('total_size')!r}, want {total_created}"
+                )
+            if not first_page.get("next_page_token"):
+                raise AssertionError(
+                    f"[{transport}] {case_id}: first page must carry a next_page_token"
+                )
+
+            second_page = adapter.list_requests_page(
+                session_id,
+                {"page_size": page_size, "page_token": first_page["next_page_token"]},
+            )
+            if len(second_page.get("requests", [])) != expected_last:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: last page returned "
+                    f"{len(second_page.get('requests', []))} requests, want {expected_last}"
+                )
+            if second_page.get("total_size") != total_created:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: last page total_size "
+                    f"{second_page.get('total_size')!r}, want {total_created}"
+                )
+            if second_page.get("next_page_token"):
+                raise AssertionError(
+                    f"[{transport}] {case_id}: last page must not carry a next_page_token"
                 )
             return
 

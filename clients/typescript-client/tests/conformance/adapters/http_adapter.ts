@@ -557,6 +557,30 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       .map((entry) => this.normalizeRequest(entry));
   }
 
+  async listRequestsPage(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const payload: Record<string, unknown> = {
+      sessionId,
+      toolName: String(request.list_tool_name ?? ''),
+      pageSize: numberValue(request.page_size, 10),
+      pageToken: String(request.page_token ?? ''),
+    };
+    const status = statusNameForWire(request.list_status);
+    if (status) {
+      payload.status = status;
+    }
+
+    const response = await this.post<Record<string, unknown>>(`api.v1/sessions/${sessionId}/requests`, payload);
+    const requests = Array.isArray(response.requests) ? response.requests : [];
+    const page = (typeof response.page === 'object' && response.page !== null ? response.page : {}) as Record<string, unknown>;
+    return {
+      requests: requests
+        .filter((entry): entry is Record<string, unknown> => typeof entry === 'object' && entry !== null)
+        .map((entry) => this.normalizeRequest(entry)),
+      nextPageToken: typeof page.nextPageToken === 'string' ? page.nextPageToken : '',
+      totalSize: typeof page.totalSize === 'number' ? page.totalSize : 0,
+    };
+  }
+
   async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
     const response = await this.post<Record<string, unknown>>('api.v1/CreateApiKey', {
       sessionId,

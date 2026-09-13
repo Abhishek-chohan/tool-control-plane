@@ -8,6 +8,7 @@ export type SupportedFeature =
   | 'tool_discovery'
   | 'session_update'
   | 'request_create'
+  | 'request_list'
   | 'request_recovery'
   | 'api_key_lifecycle'
   | 'machine_lifecycle'
@@ -46,6 +47,7 @@ export interface ConformanceAdapter {
   resumeStream(requestId: string, lastSeq: number): Promise<Record<string, unknown>>;
   waitForRequestCompletion(sessionId: string, requestId: string): Promise<Record<string, unknown>>;
   listRequests(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>[]>;
+  listRequestsPage(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>>;
   getProviderMachineId(sessionId: string): Promise<string>;
   claimRequestForFencing(sessionId: string, requestId: string, machineId: string): Promise<Record<string, unknown>>;
   submitFencedResult(
