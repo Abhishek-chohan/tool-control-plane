@@ -13,7 +13,6 @@ from toolplane.proto.service_pb2 import (
     AppendRequestChunksRequest,
     CancelRequestRequest,
     ClaimNextRequestRequest,
-    ClaimRequestRequest,
     CreateRequestRequest,
     GetRequestChunksRequest,
     GetRequestRequest,

@@ -75,6 +75,10 @@ func (s *requestsServiceClientStub) ClaimRequest(ctx context.Context, in *pb.Cla
 	return nil, unexpectedRequestCall("ClaimRequest")
 }
 
+func (s *requestsServiceClientStub) ClaimNextRequest(ctx context.Context, in *pb.ClaimNextRequestRequest, opts ...grpc.CallOption) (*pb.ClaimNextRequestResponse, error) {
+	return nil, unexpectedRequestCall("ClaimNextRequest")
+}
+
 func (s *requestsServiceClientStub) CancelRequest(ctx context.Context, in *pb.CancelRequestRequest, opts ...grpc.CallOption) (*pb.CancelRequestResponse, error) {
 	if s.cancelRequestFunc != nil {
 		return s.cancelRequestFunc(ctx, in, opts...)
