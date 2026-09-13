@@ -1463,6 +1463,90 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 	}
 }
 
+// WaitForRequestTerminal waits for an existing request to reach a terminal
+// state without claiming it. Pending requests are executed by provider
+// machines that poll and claim; a synchronous waiter that claimed the request
+// itself would hold the lease and block every polling provider until the
+// lease expired. Wake-ups arrive on local request updates, with a poll ticker
+// as the fallback for completions that happen on another replica.
+func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID, requestID string) (*model.ToolResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeoutCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		defer cancel()
+		ctx = timeoutCtx
+	}
+
+	watch := s.subscribeRequest(requestID)
+	poll := time.NewTicker(waitPollInterval)
+	defer poll.Stop()
+
+	for {
+		// Store-first read when a store is attached: the waiter's local cache
+		// may hold the request as pending while a provider on another replica
+		// claimed and completed it — no local signal fires for that. The
+		// cache-only path (no store) is single-instance by construction.
+		req, readErr := s.waitForRequestState(ctx, sessionID, requestID)
+		if readErr != nil {
+			return nil, readErr
+		}
+
+		switch req.Status {
+		case model.RequestStatusDone:
+			s.releaseRequestSignal(req.ID)
+			return &model.ToolResult{
+				RequestID:  req.ID,
+				Result:     fmt.Sprintf("%v", req.Result),
+				ResultType: string(req.ResultType),
+			}, nil
+		case model.RequestStatusFailed:
+			s.releaseRequestSignal(req.ID)
+			if req.Error != "" {
+				return nil, fmt.Errorf("tool execution failed: %s", req.Error)
+			}
+			return nil, fmt.Errorf("tool execution failed")
+		case model.RequestStatusStalled:
+			return nil, fmt.Errorf("tool execution stalled")
+		}
+
+		select {
+		case <-watch:
+			watch = s.subscribeRequest(requestID)
+		case <-poll.C:
+			watch = s.subscribeRequest(requestID)
+		case <-ctx.Done():
+			_ = s.CancelRequest(sessionID, requestID)
+			return nil, ctx.Err()
+		}
+	}
+}
+
+// waitForRequestState returns the request's authoritative state for a
+// non-claiming waiter: store-first (mirroring the row into the local cache)
+// when a store is attached, cache-only otherwise.
+func (s *RequestsService) waitForRequestState(ctx context.Context, sessionID, requestID string) (*model.Request, error) {
+	if s.store != nil {
+		readCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		stored, err := s.store.GetRequest(readCtx, requestID)
+		cancel()
+		if err == nil && stored != nil {
+			s.requestsMutex.Lock()
+			if _, ok := s.requests[sessionID]; !ok {
+				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			s.requests[sessionID][stored.ID] = stored
+			s.requestsMutex.Unlock()
+			return stored, nil
+		}
+		// A failed or empty store read falls through to the cache: it knows
+		// the request was created here, and the waiter retries on its ticker.
+	}
+	return s.GetRequestByID(sessionID, requestID)
+}
+
 type requestSignal struct {
 	mu sync.Mutex
 	ch chan struct{}

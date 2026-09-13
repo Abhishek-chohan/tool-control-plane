@@ -626,3 +626,32 @@ func TestSaveTaskTerminalGuard(t *testing.T) {
 		}
 	})
 }
+
+// TestClaimTaskForAdoptionRejectsTerminal pins the adoption gate: a task that
+// already reached a terminal state is never adopted for re-execution, while
+// non-terminal tasks remain adoptable.
+func TestClaimTaskForAdoptionRejectsTerminal(t *testing.T) {
+	runAgainstBoth(t, "adopt terminal task", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		seedSession(t, s, sess)
+
+		done := model.NewTask(sess, "echo", `{}`)
+		done.Status = model.StatusCompleted
+		if err := s.SaveTask(ctx, done); err != nil {
+			t.Fatalf("save completed task: %v", err)
+		}
+		if _, ok, err := s.ClaimTaskForAdoption(ctx, done.ID, "instance-1", 30*time.Second); err != nil || ok {
+			t.Fatalf("adopt terminal task: ok=%v err=%v, want ok=false", ok, err)
+		}
+
+		live := model.NewTask(sess, "echo", `{}`)
+		live.Status = model.StatusPending
+		if err := s.SaveTask(ctx, live); err != nil {
+			t.Fatalf("save pending task: %v", err)
+		}
+		if _, ok, err := s.ClaimTaskForAdoption(ctx, live.ID, "instance-1", 30*time.Second); err != nil || !ok {
+			t.Fatalf("adopt pending task: ok=%v err=%v, want ok=true", ok, err)
+		}
+	})
+}

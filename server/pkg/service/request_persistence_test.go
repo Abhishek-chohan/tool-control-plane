@@ -139,11 +139,36 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 		t.Fatal("expected retry to be scheduled after persisted lease expiry")
 	}
 
-	for _, eventType := range []trace.SessionEventType{
+	// The requeue may be won by the restarted instance's background sweep
+	// racing the loop above: its trace events land right after the store flip
+	// the loop observes. Wait for them instead of asserting immediately.
+	waitForTraceEvents(t, restartedTracer, []trace.SessionEventType{
 		trace.EventRequestLeaseExpired,
 		trace.EventRequestRequeued,
-	} {
-		if !restartedTracer.hasEvent(eventType) {
+	}, 5*time.Second)
+}
+
+// waitForTraceEvents asserts all event types within a bounded window. The
+// producer of a lifecycle event may be a background reaper finishing just
+// after the state change became visible, so a single immediate check races.
+func waitForTraceEvents(t *testing.T, tr *recordingTracer, events []trace.SessionEventType, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		all := true
+		for _, eventType := range events {
+			if !tr.hasEvent(eventType) {
+				all = false
+				break
+			}
+		}
+		if all {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, eventType := range events {
+		if !tr.hasEvent(eventType) {
 			t.Fatalf("expected trace event %q to be recorded", eventType)
 		}
 	}

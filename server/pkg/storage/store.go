@@ -334,9 +334,16 @@ func IsUniqueViolation(err error) bool {
 
 // (serialization_failure). pgx errors expose the SQLState method.
 func isSerializationFailure(err error) bool {
+	// 40001 (serialization_failure) and 40P01 (deadlock_detected) are both
+	// "the system aborted your transaction, retry it" outcomes: Postgres
+	// picks a victim in a write-write conflict and the caller is expected
+	// to run the transaction again.
 	var sqlStater interface{ SQLState() string }
 	if errors.As(err, &sqlStater) {
-		return sqlStater.SQLState() == "40001"
+		switch sqlStater.SQLState() {
+		case "40001", "40P01":
+			return true
+		}
 	}
 	return false
 }

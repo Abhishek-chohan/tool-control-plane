@@ -20,3 +20,8 @@ const requestTimeout = 45 * time.Second
 const maxRequestTimeout = time.Hour
 const requestBackoff = 5 * time.Second
 const maxMachineConcurrentRequests = 4
+
+// waitPollInterval is the fallback poll cadence for non-claiming waiters
+// (tasks, synchronous execution) — request-update signals are the primary
+// wake-up; the ticker covers completions made on another replica.
+const waitPollInterval = 250 * time.Millisecond

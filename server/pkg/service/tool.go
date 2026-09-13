@@ -35,7 +35,7 @@ func NewToolService(tracer trace.SessionTracer, store storage.Storer) *ToolServi
 		store:          store,
 	}
 	if store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), startupLoadTimeout)
 		defer cancel()
 		if tools, err := store.AllTools(ctx); err != nil {
 			log.Printf("tool persistence load failed: %v", err)

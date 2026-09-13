@@ -29,6 +29,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Task execution without self-claim**: tasks claimed their underlying
+  request for an advisory machine, holding the lease while they merely
+  waited — polling providers never saw the request until lease expiry
+  (~30s dead time per attempt, attempts burned without execution, tools
+  slower than the remaining budget never completed). Tasks now leave
+  the request pending for providers to claim and observe it through the
+  new non-claiming wait; task adoption refuses terminal tasks. Storage
+  hardening: migration passes serialize behind an advisory lock and
+  retry deadlocks; fenced writes retry deadlock victims (`40P01`);
+  startup cache hydration gets a 30s bound. See
+  `server/docs/release-notes/2026-09-13-task-execution-without-self-claim.md`.
 - **ListRequests pagination trailer**: the response never carried its
   `ListPage` — the trailer was built and dropped, so clients had no
   `next_page_token` or `total_size`. The trailer is now attached, the

@@ -35,7 +35,7 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 	}
 
 	requestID := waitForActiveTaskRequestID(t, tasksService, task.ID, time.Second)
-	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusRunning, time.Second)
+	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusPending, time.Second)
 
 	if err := tasksService.CancelTask(sessionID, task.ID); err != nil {
 		t.Fatalf("cancel task: %v", err)
@@ -124,7 +124,7 @@ func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
 	go tasksService.executeTask(task)
 
 	requestID := waitForActiveTaskRequestID(t, tasksService, task.ID, time.Second)
-	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusRunning, time.Second)
+	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusPending, time.Second)
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusFailed, 3*time.Second)
 	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusFailed, time.Second)
 
@@ -214,4 +214,122 @@ func waitForActiveTaskRequestID(t *testing.T, tasksService *TasksService, taskID
 	}
 	t.Fatalf("timed out waiting for active request for task %s", taskID)
 	return ""
+}
+
+// TestTasksServiceTaskCompletesViaProvider pins the corrected execution
+// shape: the task leaves its request pending, an independent provider claims
+// and executes it, and the task completes with the task-level attempt counter
+// 1:1 against the request-level claim. Under the old self-claim the task held
+// the lease itself, the provider never saw the request, and the task timed out.
+func TestTasksServiceTaskCompletesViaProvider(t *testing.T) {
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	tracer := &recordingTracer{}
+	toolService := NewToolService(tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
+	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
+
+	const sessionID = "session-task-provider"
+	const machineID = "machine-task-provider"
+
+	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "slow", "slow tool", `{"type":"object"}`, nil, nil),
+	}, "")
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	// Independent provider: poll-claim, mark running, execute (5s of work),
+	// and submit the result — the same shape as the SDK provider runtime.
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"slow"})
+			if err != nil || claimed == nil {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			if _, err := requestService.UpdateRequest(sessionID, claimed.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
+				t.Errorf("provider running update: %v", err)
+				return
+			}
+			time.Sleep(5 * time.Second)
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, machineID, claimed.LeaseEpoch,
+				map[string]string{"done": "true"}, model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+
+	task, err := tasksService.CreateTask(sessionID, "slow", `{"message":"work"}`, "")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	// Generous ceiling: 10s task timeout against 5s of provider work.
+	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 15*time.Second)
+
+	completed, err := tasksService.GetTaskByID(sessionID, task.ID)
+	if err != nil {
+		t.Fatalf("get completed task: %v", err)
+	}
+	if completed.Attempts != 1 {
+		t.Fatalf("task attempts=%d want 1 (task and request counters must stay 1:1)", completed.Attempts)
+	}
+	requests, _, err := requestService.ListRequests(sessionID, "", "slow", 10, 0)
+	if err != nil {
+		t.Fatalf("list requests: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("request count=%d want 1", len(requests))
+	}
+	if requests[0].Attempts != 1 {
+		t.Fatalf("request attempts=%d want 1", requests[0].Attempts)
+	}
+}
+
+// TestTasksServiceDoesNotClaimRequest asserts the task path leaves a fresh
+// request pending when no provider exists: under the old self-claim the task
+// grabbed the lease itself, starving every polling provider until lease expiry.
+func TestTasksServiceDoesNotClaimRequest(t *testing.T) {
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	tracer := &recordingTracer{}
+	toolService := NewToolService(tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
+	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
+
+	const sessionID = "session-task-pending"
+	const machineID = "machine-task-pending"
+
+	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
+	}, "")
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	task, err := tasksService.CreateTask(sessionID, "echo", `{"message":"nobody home"}`, "")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	requestID := waitForActiveTaskRequestID(t, tasksService, task.ID, 2*time.Second)
+	request, err := requestService.GetRequestByID(sessionID, requestID)
+	if err != nil {
+		t.Fatalf("get task request: %v", err)
+	}
+	if request.Status != model.RequestStatusPending {
+		t.Fatalf("task request status=%s want pending (self-claim = bug)", request.Status)
+	}
+	if request.LeasedBy != "" {
+		t.Fatalf("task request leasedBy=%q want empty (no provider has claimed it)", request.LeasedBy)
+	}
+	// A provider must still be able to claim it: the task never held the lease.
+	claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"echo"})
+	if err != nil || claimed == nil || claimed.ID != requestID {
+		t.Fatalf("provider claim after task create: claimed=%v err=%v", claimed, err)
+	}
 }

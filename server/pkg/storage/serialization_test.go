@@ -22,6 +22,7 @@ func TestIsSerializationFailure(t *testing.T) {
 		want bool
 	}{
 		{&sqlStateError{state: "40001"}, true},
+		{&sqlStateError{state: "40P01"}, true},
 		{&sqlStateError{state: "40000"}, false},
 		{&sqlStateError{state: "23505"}, false},
 		{errors.New("plain error"), false},

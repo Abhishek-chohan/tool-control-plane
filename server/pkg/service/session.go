@@ -61,7 +61,7 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 		store:         store,
 	}
 	if store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), startupLoadTimeout)
 		defer cancel()
 
 		if sessions, err := store.AllSessions(ctx); err != nil {

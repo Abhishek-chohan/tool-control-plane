@@ -2,8 +2,20 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+// migrationAdvisoryLockKey serializes migration passes across processes.
+// Concurrent passes (parallel test binaries, several server replicas booting
+// at once) interleave per-statement ACCESS EXCLUSIVE locks with each other
+// and with concurrent DML, and deadlock; one database-scoped advisory lock
+// makes every pass atomic with respect to all others.
+const migrationAdvisoryLockKey = 0x746F6F6C // "tool"
 
 func (s *Store) migrate(ctx context.Context) error {
 	if s == nil {
@@ -173,7 +185,45 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS token_hash TEXT`,
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migration advisory lock conn: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationAdvisoryLockKey); err != nil {
+		return fmt.Errorf("migration advisory lock: %w", err)
+	}
+	defer func() {
+		// Session-scoped lock: release on the same connection, even when the
+		// migration tx below fails.
+		_, _ = conn.ExecContext(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock($1)`, migrationAdvisoryLockKey)
+	}()
+
+	// The advisory lock serializes this pass against other migrations, but a
+	// migration tx still interleaves table locks with concurrent DML (provider
+	// writes landing mid-boot) and can be chosen as the deadlock victim. Retry
+	// those; every other error fails immediately.
+	for attempt := 0; attempt < 3; attempt++ {
+		err = s.runMigrationStatements(ctx, conn, stmts, alterStatements)
+		if err == nil {
+			return nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "40P01" {
+			time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+			continue
+		}
+		return err
+	}
+	return fmt.Errorf("migration tx: %w (retried after repeated deadlocks)", err)
+}
+
+// runMigrationStatements executes the migration transaction on the SAME
+// connection that holds the advisory lock: pg_advisory_lock is session-scoped,
+// so taking it on conn while the tx ran on a pool connection would leave the
+// pass unprotected (and could starve a one-connection pool waiting on itself).
+func (s *Store) runMigrationStatements(ctx context.Context, conn *sql.Conn, stmts, alterStatements []string) error {
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migration tx: %w", err)
 	}

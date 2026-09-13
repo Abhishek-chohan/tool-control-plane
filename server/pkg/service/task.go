@@ -401,9 +401,11 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	}
 
 	requestID, cancel := s.taskExecutionSnapshot(taskID)
+	s.tasksMutex.RLock()
 	s.recordTaskEvent(task, trace.EventTaskCancelled, map[string]any{
 		"requestID": requestID,
 	})
+	s.tasksMutex.RUnlock()
 	if requestID != "" {
 		_ = s.requestsService.CancelRequest(sessionID, requestID)
 	}
@@ -548,9 +550,11 @@ func (s *TasksService) executeTask(task *model.Task) {
 				// task re-runs from attempt one after a restart.
 				log.Printf("task %s dead-letter not durable; may re-adopt after restart: %v", task.ID, err)
 			}
+			s.tasksMutex.RLock()
 			s.recordTaskEvent(task, trace.EventTaskDeadLettered, map[string]any{
 				"reason": err.Error(),
 			})
+			s.tasksMutex.RUnlock()
 			return
 		}
 
@@ -568,10 +572,12 @@ func (s *TasksService) executeTask(task *model.Task) {
 			// backoff and the sweep adopts the task immediately.
 			log.Printf("task %s retry state not durable; backoff may be lost: %v", task.ID, err)
 		}
+		s.tasksMutex.RLock()
 		s.recordTaskEvent(task, trace.EventTaskRetryScheduled, map[string]any{
 			"reason":        err.Error(),
 			"nextAttemptAt": next,
 		})
+		s.tasksMutex.RUnlock()
 
 		if s.store != nil {
 			// The retry is scheduled durably; release ownership so any
@@ -622,8 +628,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		log.Printf("task %s attempt-start state not durable: %v", task.ID, err)
 	}
 
-	machine, err := s.selectMachine(task.SessionID, task.ToolName)
-	if err != nil {
+	// Advisory preflight: fail fast when no machine can serve the tool. The
+	// selected machine is NOT used to claim the request — claiming here would
+	// hold the lease and block every polling provider until lease expiry
+	// (30s of dead time per attempt, attempts burned without execution).
+	if _, err := s.selectMachine(task.SessionID, task.ToolName); err != nil {
 		return err
 	}
 	if err := taskCtx.Err(); err != nil {
@@ -646,10 +655,13 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		s.setTaskRequestID(task.ID, "")
 		s.setCurrentRequestID(task, "")
 	}()
+	// recordTaskEvent reads task fields: hold the read lock so concurrent
+	// writers (CancelTask, attempt transitions) cannot race the snapshot.
+	s.tasksMutex.RLock()
 	s.recordTaskEvent(task, trace.EventTaskExecutionStarted, map[string]any{
-		"machineID": machine.ID,
 		"requestID": request.ID,
 	})
+	s.tasksMutex.RUnlock()
 
 	attemptCtx := taskCtx
 	cancel := func() {}
@@ -658,7 +670,10 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	}
 	defer cancel()
 
-	result, err := s.requestsService.ExecuteRequest(attemptCtx, task.SessionID, machine.ID, request.ID)
+	// The task stays a synchronous observer: the request remains pending until
+	// a provider machine claims and executes it, and the task-level attempt
+	// counter stays 1:1 with the request-level attempt a provider's claim adds.
+	result, err := s.requestsService.WaitForRequestTerminal(attemptCtx, task.SessionID, request.ID)
 	if err != nil {
 		if s.isTaskCancelled(task.ID) {
 			return errTaskCancelled
@@ -693,10 +708,12 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		// re-executes the task.
 		log.Printf("task %s completion not durable; may re-execute after restart: %v", task.ID, err)
 	}
+	s.tasksMutex.RLock()
 	s.recordTaskEvent(task, trace.EventTaskExecutionCompleted, map[string]any{
 		"requestID":  request.ID,
 		"resultType": result.ResultType,
 	})
+	s.tasksMutex.RUnlock()
 	return nil
 }
 
