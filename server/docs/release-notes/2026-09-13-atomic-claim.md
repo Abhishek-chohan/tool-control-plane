@@ -27,7 +27,7 @@ round-trip.
   on Postgres), so cross-replica "exactly one winner" is preserved.
 - The Python and TypeScript provider runtimes now poll through it: the
   claim response carries the lease grant the fenced provider writes
-  present. The TypeScript runtime's `handleRequest` no longer claims —
+  present. The TypeScript runtime's `handleRequest` no longer claims, and both runtimes skip polling when no tools are registered —
   the lease arrives with the poll.
 
 ## Tests

@@ -311,6 +311,10 @@ class HTTPConnectionManager:
             {"sessionId": session_id, "requestId": request_id, "machineId": machine_id},
         )
 
+    def claim_next_request(self, payload: Dict):
+        """Atomically lease the oldest claimable pending request (provider poll)."""
+        return self._post("api.v1/ClaimNextRequest", payload)
+
     def cancel_request(self, session_id: str, request_id: str):
         """Cancel request."""
         return self._post(

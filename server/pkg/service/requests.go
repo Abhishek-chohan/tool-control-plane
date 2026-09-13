@@ -740,13 +740,13 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 // ClaimPendingRequest finds and claims a pending request for a machine
 func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolNames []string) (*model.Request, error) {
 	if s.machineService.IsMachineDraining(sessionID, machineID) {
-		return nil, fmt.Errorf("machine %s is draining", machineID)
+		return nil, wrapf(ErrMachineDraining, "machine %s is draining", machineID)
 	}
 
 	if machineID != "" {
 		load, capacity := s.machineService.MachineLoadInfo(sessionID, machineID)
 		if load >= capacity {
-			return nil, fmt.Errorf("machine %s at capacity", machineID)
+			return nil, wrapf(ErrMachineAtCapacity, "machine %s at capacity", machineID)
 		}
 	}
 
@@ -793,6 +793,15 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 			continue
 		}
 		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
+			continue
+		}
+		// Empty toolNames matches every tool in the session, mirroring the
+		// ClaimNextRequest contract (and LeasePendingRequest's store path).
+		if len(toolNames) == 0 {
+			if oldestRequest == nil || req.CreatedAt.Before(oldestTime) {
+				oldestRequest = req
+				oldestTime = req.CreatedAt
+			}
 			continue
 		}
 		for _, name := range toolNames {
