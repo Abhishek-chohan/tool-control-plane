@@ -387,10 +387,10 @@ Public methods parsed from `toolplane/toolplane_client.py`:
 | `list_api_keys(session_id: str) -> List[Dict[str, Any]]` | List active API keys for a session. |
 | `revoke_api_key(session_id: str, key_id: str) -> bool` | Revoke an API key for a session. |
 | `tool(session_id: str, name: Optional[str]=None, description: Optional[str]=None, stream: bool=False, tags: Optional[List[str]]=None) -> Callable[[Callable], Callable]` | Decorator to register a tool for a session. |
-| `invoke(tool_name: str, session_id: str, **params) -> Any` | Invoke a tool in a session. |
-| `async ainvoke(tool_name: str, session_id: str, **params) -> str` | Submit a tool invocation without blocking; awaits the request ID. |
-| `stream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, **params) -> List[Any]` | Stream tool execution. |
-| `async astream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, **params) -> List[Any]` | Awaitable stream: resolves with the collected chunks. |
+| `invoke(tool_name: str, session_id: str, timeout_seconds: int=0, wait_timeout: Optional[int]=None, **params) -> Any` | Invoke a tool in a session and return the tool result value. |
+| `async ainvoke(tool_name: str, session_id: str, timeout_seconds: int=0, **params) -> str` | Submit a tool invocation without blocking; awaits the request ID. |
+| `stream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, timeout_seconds: int=0, **params) -> List[Any]` | Stream tool execution. |
+| `async astream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, timeout_seconds: int=0, **params) -> List[Any]` | Awaitable stream: resolves with the collected chunks. |
 | `get_available_tools(session_id: str) -> Dict[str, Any]` | Get available tools for a session. |
 | `list_tools(session_id: str) -> List[Dict[str, Any]]` | List tools for a session. |
 | `get_tool_by_id(session_id: str, tool_id: str) -> Dict[str, Any]` | Get a tool by ID. |
@@ -415,7 +415,7 @@ Public methods parsed from `toolplane/toolplane_http_client.py`:
 | `list_sessions() -> List[HTTPSessionContext]` | List all session contexts. |
 | `get_primary_session_context() -> Optional[HTTPSessionContext]` | Get primary session context. |
 | `tool(session_id: str, name: Optional[str]=None, description: Optional[str]=None, stream: bool=False, tags: Optional[List[str]]=None)` | Decorator to register a tool for a session. |
-| `invoke(tool_name: str, session_id: str, **params) -> Any` | Invoke a tool in a session. |
+| `invoke(tool_name: str, session_id: str, timeout_seconds: int=0, wait_timeout: Optional[int]=None, **params) -> Any` | Invoke a tool in a session and return the tool result value. |
 | `async ainvoke(tool_name: str, session_id: str, **params) -> str` | Submit a tool invocation without blocking; awaits the request ID. |
 | `stream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, **params) -> List[Any]` | Stream tool execution. |
 | `async astream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, **params) -> List[Any]` | Awaitable stream: resolves with the collected chunks. |

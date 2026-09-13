@@ -8,6 +8,15 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **SDK timeout cliff closed (Python)**: `invoke`/`stream`/`ainvoke`/
+  `astream` accept `timeout_seconds`, wired through to the request's
+  absolute per-attempt timeout on the wire. `invoke` now returns the
+  tool's result value (previously the full status envelope, which
+  contradicted the documented contract), typed server errors keep their
+  identity instead of being flattened, and a lapsed local wait raises
+  `ToolplaneTimeoutError` carrying the request ID and last status. See
+  `server/docs/release-notes/2026-09-13-sdk-timeout-cliff.md`.
+
 - **Atomic provider claim**: new `ClaimNextRequest` RPC — one round-trip
   leases the oldest claimable pending request for a machine and tool set,
   replacing the list-then-claim race the Python and TypeScript provider
