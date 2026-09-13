@@ -247,14 +247,9 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 		protoSessions = append(protoSessions, convertPublicSessionToProto(session))
 	}
 
-	page := &proto.ListPage{TotalSize: int32(totalCount)}
-	nextStart := offset + len(sessions)
-	if len(sessions) > 0 && nextStart < totalCount {
-		token, tokErr := encodePageOffset(nextStart)
-		if tokErr != nil {
-			return nil, status.Errorf(codes.Internal, "page token: %v", tokErr)
-		}
-		page.NextPageToken = token
+	page, err := buildListPage(offset, len(protoSessions), totalCount)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "page token: %v", err)
 	}
 
 	return &proto.ListUserSessionsResponse{
@@ -533,17 +528,14 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 		protoRequests = append(protoRequests, convertModelRequestToProto(request))
 	}
 
-	page := &proto.ListPage{TotalSize: int32(totalCount)}
-	if len(protoRequests) == pageSize && len(protoRequests) > 0 {
-		token, tokErr := encodePageOffset(offset + len(protoRequests))
-		if tokErr != nil {
-			return nil, status.Errorf(codes.Internal, "page token: %v", tokErr)
-		}
-		page.NextPageToken = token
+	page, err := buildListPage(offset, len(protoRequests), totalCount)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "page token: %v", err)
 	}
 
 	return &proto.ListRequestsResponse{
 		Requests: protoRequests,
+		Page:     page,
 	}, nil
 }
 
@@ -950,6 +942,23 @@ func encodePageOffset(offset int) (string, error) {
 // offset. Empty means "from the start".
 func decodePageOffset(token string) (int, error) {
 	return pageTokenCodec.Decode(token)
+}
+
+// buildListPage assembles the shared ListPage trailer for offset-based
+// listings. A next-page token is emitted only when the current page is
+// non-empty and rows remain (offset+returned < total) — a full page with
+// nothing behind it must not send the client chasing an empty page.
+func buildListPage(offset, returned, totalCount int) (*proto.ListPage, error) {
+	page := &proto.ListPage{TotalSize: int32(totalCount)}
+	nextStart := offset + returned
+	if returned > 0 && nextStart < totalCount {
+		token, err := encodePageOffset(nextStart)
+		if err != nil {
+			return nil, err
+		}
+		page.NextPageToken = token
+	}
+	return page, nil
 }
 
 // InvokeTool is the v1 name for synchronous tool invocation; ExecuteTool is

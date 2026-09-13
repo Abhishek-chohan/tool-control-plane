@@ -49,6 +49,7 @@ export const SUPPORTED_FEATURES = new Set<SupportedFeature>([
   'tool_discovery',
   'session_update',
   'request_create',
+  'request_list',
   'request_recovery',
   'api_key_lifecycle',
   'machine_lifecycle',
@@ -439,6 +440,49 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
       const listedRequests = await adapter.listRequests(sessionId, request);
       if (expected.listed_request_present === true) {
         assertRequestListContains(listedRequests, requestId, caseId, transport);
+      }
+      return;
+    }
+
+    if (feature === 'request_list') {
+      const pageSize = Number(request.page_size ?? 3);
+      const extraRequests = Number(request.extra_requests ?? 2);
+      const totalCreated = pageSize + extraRequests;
+      const toolName = String(request.tool_name ?? '');
+      await adapter.registerUnaryEchoTool(
+        sessionId,
+        toolName,
+        String(request.tool_description ?? 'conformance request tool'),
+      );
+      for (let index = 0; index < totalCreated; index += 1) {
+        await adapter.createRequest(sessionId, toolName, { index });
+      }
+
+      const firstPage = await adapter.listRequestsPage(sessionId, { page_size: pageSize });
+      const firstRows = Array.isArray(firstPage.requests) ? firstPage.requests.length : -1;
+      if (firstRows !== pageSize) {
+        throw new Error(`[${transport}] ${caseId}: first page returned ${firstRows} requests, want ${pageSize}`);
+      }
+      if (firstPage.totalSize !== totalCreated) {
+        throw new Error(`[${transport}] ${caseId}: first page total_size ${firstPage.totalSize}, want ${totalCreated}`);
+      }
+      if (typeof firstPage.nextPageToken !== 'string' || firstPage.nextPageToken === '') {
+        throw new Error(`[${transport}] ${caseId}: first page must carry a next_page_token`);
+      }
+
+      const secondPage = await adapter.listRequestsPage(sessionId, {
+        page_size: pageSize,
+        page_token: String(firstPage.nextPageToken),
+      });
+      const secondRows = Array.isArray(secondPage.requests) ? secondPage.requests.length : -1;
+      if (secondRows !== extraRequests) {
+        throw new Error(`[${transport}] ${caseId}: last page returned ${secondRows} requests, want ${extraRequests}`);
+      }
+      if (secondPage.totalSize !== totalCreated) {
+        throw new Error(`[${transport}] ${caseId}: last page total_size ${secondPage.totalSize}, want ${totalCreated}`);
+      }
+      if (secondPage.nextPageToken !== '') {
+        throw new Error(`[${transport}] ${caseId}: last page must not carry a next_page_token`);
       }
       return;
     }

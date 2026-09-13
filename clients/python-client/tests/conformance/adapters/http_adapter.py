@@ -282,6 +282,20 @@ class HttpConformanceAdapter:
             page_token=str(request.get("page_token", "") or ""),
         )
 
+    def list_requests_page(self, session_id: str, request: Dict[str, Any]) -> Dict[str, Any]:
+        page = self.client.list_requests_page(
+            session_id=session_id,
+            status=request.get("list_status", ""),
+            tool_name=request.get("list_tool_name", ""),
+            limit=request.get("page_size", 10),
+            page_token=str(request.get("page_token", "") or ""),
+        )
+        return {
+            "requests": page.get("requests", []),
+            "next_page_token": page.get("next_page_token", ""),
+            "total_size": page.get("total_size", 0),
+        }
+
     # ---------------- Fenced provider primitives ----------------
 
     # grpc-gateway renders FAILED_PRECONDITION as HTTP 400 and NOT_FOUND as 404.

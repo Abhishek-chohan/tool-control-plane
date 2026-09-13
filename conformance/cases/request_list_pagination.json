@@ -1,0 +1,15 @@
+{
+  "id": "request_list_pagination",
+  "feature": "request_list",
+  "description": "Create a full page plus a remainder of requests and walk the listing: total_size is the filtered total, the first page carries a next_page_token, and the last page is the remainder with no token.",
+  "request": {
+    "tool_name": "conformance-list-echo",
+    "page_size": 3,
+    "extra_requests": 2
+  },
+  "expected": {
+    "first_page_size": 3,
+    "last_page_size": 2
+  },
+  "tags": ["core", "request", "pagination"]
+}

@@ -535,6 +535,26 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     return response.getRequestsList().map((item) => this.normalizeRequest(item));
   }
 
+  async listRequestsPage(sessionId: string, request: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const message = new ListRequestsRequest();
+    message.setSessionId(sessionId);
+    message.setStatus(requestStatusForWire(request.list_status));
+    message.setToolName(String(request.list_tool_name ?? ''));
+    message.setPageSize(numberValue(request.page_size, 10));
+    message.setPageToken(String(request.page_token ?? ''));
+
+    const response = await this.callUnary(
+      (metadata, options, callback) => this.requestsClient.listRequests(message, metadata, options, callback),
+      `failed to list requests for session ${sessionId}`,
+    );
+    const page = response.getPage();
+    return {
+      requests: response.getRequestsList().map((item) => this.normalizeRequest(item)),
+      nextPageToken: page ? page.getNextPageToken() : '',
+      totalSize: page ? page.getTotalSize() : 0,
+    };
+  }
+
   async createApiKey(sessionId: string, name: string, capabilities: string[] = []): Promise<Record<string, unknown>> {
     const request = new CreateApiKeyRequest();
     request.setSessionId(sessionId);

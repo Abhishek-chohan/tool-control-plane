@@ -19,6 +19,7 @@
         "tool_discovery",
         "session_update",
         "request_create",
+        "request_list",
         "request_recovery",
         "api_key_lifecycle",
         "machine_lifecycle",
