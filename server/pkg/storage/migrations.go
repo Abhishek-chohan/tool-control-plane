@@ -129,11 +129,6 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_requests_session_status ON requests(session_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_ready ON requests(session_id, status, tool_name, visible_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_requests_dead_letter ON requests(session_id, dead_letter)`,
-		// Reaper indexes: each arm of the expiry predicate gets its own
-		// partial index so the reaper scan touches only reclaimable rows
-		// instead of every leased request in the table.
-		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_lease ON requests (visible_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_timeout ON requests (leased_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_session_status ON tasks(session_id, status)`,
 		`CREATE INDEX IF NOT EXISTS idx_tasks_retry ON tasks(session_id, dead_letter, next_attempt_at)`,
 	}
@@ -149,6 +144,14 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS lease_epoch BIGINT NOT NULL DEFAULT 0`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS timeout_seconds INTEGER NOT NULL DEFAULT 45`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS dead_letter BOOLEAN NOT NULL DEFAULT FALSE`,
+		// Reaper and retention indexes. These live in the alter pass because
+		// they reference columns older schemas only gain above: running them
+		// before the ALTERs would fail direct upgrades and roll back the
+		// whole migration.
+		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_lease ON requests (visible_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_requests_reaper_timeout ON requests (leased_at) WHERE dead_letter = false AND leased_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_requests_retention ON requests (updated_at) WHERE status IN ('done', 'failed')`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events (created_at)`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS last_error TEXT`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS stream_start_seq INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS next_stream_seq INTEGER NOT NULL DEFAULT 1`,

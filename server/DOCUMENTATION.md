@@ -238,10 +238,12 @@ The current runtime constants come from `server/pkg/service/constants.go` and th
 
 **Clock domain.** Every lease and visibility deadline — `leased_at`,
 `visible_at`, `next_attempt_at`, and the absolute per-attempt timeout — is
-computed server-side from the control plane's wall clock at transition time.
-Providers never supply deadlines; renewals move the lease deadline but never
-the absolute timeout, and expiry comparisons always use a single server-side
-`now` sample.
+computed server-side from wall clocks at transition time. Providers never
+supply deadlines. Expiry detection samples two clocks: the database server's
+`NOW()` in the reaper's candidate query, then each replica's Go wall clock for
+the guarded recheck before an actual reclaim. Deployments should therefore
+keep database and application clocks synchronized (NTP); skew between the two
+shifts reclaim boundaries by the skew amount.
 
 ## Machine Lifecycle
 
