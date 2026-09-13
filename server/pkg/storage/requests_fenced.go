@@ -448,3 +448,42 @@ func (s *Store) RequeueRequestFenced(ctx context.Context, sessionID, requestID, 
 	}
 	return requeued, nil
 }
+
+// CancelRequestFenced cancels a request under the row lock. It returns
+// (request, false, nil) when the request is already terminal — carrying the
+// authoritative terminal row so the caller reports reality instead of
+// overwriting it — and otherwise applies the cancellation (rejection result,
+// dead_letter, lease release) and persists the row in the same transaction.
+// A cancel racing a result submission therefore serializes here: exactly one
+// of the two writes the terminal state, so a late cancel can never clobber a
+// delivered result (the historical blind upsert did).
+func (s *Store) CancelRequestFenced(ctx context.Context, sessionID, requestID, message string) (*model.Request, bool, error) {
+	if s == nil {
+		return nil, false, fmt.Errorf("%w: request %s not found in session %s", ErrNotFound, requestID, sessionID)
+	}
+	var result *model.Request
+	cancelled := false
+	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		req, err := selectRequestForUpdate(ctx, tx, sessionID, requestID)
+		if err != nil {
+			return err
+		}
+		if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
+			result = req
+			return nil
+		}
+		req.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, message)
+		req.LastError = message
+		req.DeadLetter = true
+		if err := persistRequestInTx(ctx, tx, req); err != nil {
+			return err
+		}
+		result = req
+		cancelled = true
+		return nil
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return result, cancelled, nil
+}

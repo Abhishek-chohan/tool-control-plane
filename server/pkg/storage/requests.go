@@ -33,10 +33,14 @@ func (s *Store) AllRequests(ctx context.Context) ([]*model.Request, error) {
 	return requests, rows.Err()
 }
 
-func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
-	if s == nil || req == nil {
-		return nil
-	}
+// requestInsertColumns and requestInsertPlaceholders define the positional
+// INSERT shape shared by SaveRequest and InsertRequest; requestRowArgs
+// encodes the model into that argument order.
+const requestInsertColumns = `id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, idempotency_key, created_at, updated_at`
+
+const requestInsertPlaceholders = `$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27`
+
+func requestRowArgs(req *model.Request) []interface{} {
 	metaBytes := toJSON(req.Meta)
 	if req.Meta == nil {
 		metaBytes = []byte("{}")
@@ -51,9 +55,16 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 	}
 	leasedAtVal := nullableTime(req.LeasedAt)
 	nextAttempt := nullableTime(req.NextAttemptAt)
+	return []interface{}{req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), nullString(req.IdempotencyKey), req.CreatedAt, req.UpdatedAt}
+}
+
+func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
+	if s == nil || req == nil {
+		return nil
+	}
 	_, err := s.db.ExecContext(ctx, `
-	INSERT INTO requests (id, session_id, tool_name, status, input, result, result_type, error, executing_machine_id, meta, stream_results, stream_start_seq, next_stream_seq, attempts, max_attempts, backoff_seconds, visible_at, next_attempt_at, leased_by, leased_at, lease_epoch, timeout_seconds, dead_letter, last_error, idempotency_key, created_at, updated_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+	INSERT INTO requests (`+requestInsertColumns+`)
+	VALUES (`+requestInsertPlaceholders+`)
         ON CONFLICT (id) DO UPDATE SET
             session_id = EXCLUDED.session_id,
             tool_name = EXCLUDED.tool_name,
@@ -81,9 +92,27 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
             idempotency_key = EXCLUDED.idempotency_key,
             created_at = EXCLUDED.created_at,
             updated_at = EXCLUDED.updated_at
-	`, req.ID, req.SessionID, req.ToolName, string(req.Status), req.Input, resultBytes, nullString(string(req.ResultType)), nullString(req.Error), nullString(req.ExecutingMachineID), metaBytes, streamBytes, req.StreamStartSeq, req.NextStreamSeq, req.Attempts, req.MaxAttempts, req.BackoffSeconds, req.VisibleAt, nextAttempt, nullString(req.LeasedBy), leasedAtVal, req.LeaseEpoch, req.TimeoutSeconds, req.DeadLetter, nullString(req.LastError), nullString(req.IdempotencyKey), req.CreatedAt, req.UpdatedAt)
+	`, requestRowArgs(req)...)
 	if err != nil {
 		return fmt.Errorf("upsert request: %w", err)
+	}
+	return nil
+}
+
+// InsertRequest writes a brand-new request row without an upsert clause: a
+// colliding insert (same id, or the idempotency-key partial unique index)
+// fails instead of overwriting the persisted row. Request creation goes
+// through here so a create can never rewrite an existing row's history.
+func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
+	if s == nil || req == nil {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `
+	INSERT INTO requests (`+requestInsertColumns+`)
+	VALUES (`+requestInsertPlaceholders+`)
+	`, requestRowArgs(req)...)
+	if err != nil {
+		return fmt.Errorf("insert request: %w", err)
 	}
 	return nil
 }

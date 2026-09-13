@@ -158,25 +158,21 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	request.IdempotencyKey = idempotencyKey
 	request.VisibleAt = time.Now()
 
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
-	// Initialize requests map for this session if not exists
-	if _, ok := s.requests[sessionID]; !ok {
-		s.requests[sessionID] = make(map[string]*model.Request)
-	}
-
-	// Store request: persist-first so the store is authoritative. On a persist
-	// failure, surface the error instead of leaving the local cache divergent.
-	// Derive from s.ctx so store operations participate in graceful shutdown.
+	// Store request: persist-first so the store is authoritative. The store
+	// call runs without the cache lock — the collision lookup below takes
+	// cache read locks of its own and would deadlock against a held write
+	// lock. On a persist failure, surface the error instead of leaving the
+	// local cache divergent. Derive from s.ctx so store operations
+	// participate in graceful shutdown.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
+		if err := s.store.InsertRequest(ctx, request); err != nil {
 			// A concurrent replica inserted the same (session, key) first: the
-			// unique partial index rejects this insert and the retry returns the
+			// unique partial index — or the memory store's contract-equivalent
+			// conflict — rejects this insert and the retry returns the
 			// winner's request.
-			if idempotencyKey != "" && storage.IsUniqueViolation(err) {
+			if idempotencyKey != "" && (storage.IsUniqueViolation(err) || errors.Is(err, storage.ErrRequestExists)) {
 				if existing := s.findRequestByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
 					return existing, nil
 				}
@@ -185,8 +181,13 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		}
 	}
 
-	// Mirror into the local cache after a successful persist.
+	// Mirror into the local cache after a successful (or store-less) create.
+	s.requestsMutex.Lock()
+	if _, ok := s.requests[sessionID]; !ok {
+		s.requests[sessionID] = make(map[string]*model.Request)
+	}
 	s.requests[sessionID][request.ID] = request
+	s.requestsMutex.Unlock()
 
 	s.recordRequestEvent(request, trace.EventRequestCreated, "", map[string]any{
 		"toolName":       toolName,
@@ -909,38 +910,75 @@ func (s *RequestsService) recordSubmitEvents(request *model.Request, resultType 
 	}
 }
 
-// CancelRequest cancels a request
+// CancelRequest cancels a request. With a store attached, the cancel goes
+// through the store's row-locked guarded path: the authoritative row decides
+// cancellability, so a cancel racing a result submission can never clobber
+// the terminal outcome (the store returns the terminal row and cancelled=
+// false instead). The winner is mirrored into the local cache. Without a
+// store, the request cache is the only state and the same checks run under
+// the cache lock.
 func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
-	// Check if session exists
-	if _, ok := s.requests[sessionID]; !ok {
-		return wrapf(ErrNotFound, "no requests found for session %s", sessionID)
-	}
-
-	// Get request
-	request, ok := s.requests[sessionID][requestID]
-	if !ok {
-		return wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
-	}
-
-	// Check if request can be cancelled
-	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
-		return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, request.Status)
-	}
-
-	// Cancel request
-	request.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, "Request was cancelled")
-	request.LastError = "Request was cancelled"
-	request.DeadLetter = true
+	var request *model.Request
 
 	if s.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		defer cancel()
-		if err := s.store.SaveRequest(ctx, request); err != nil {
+		stored, ok, err := s.store.CancelRequestFenced(ctx, sessionID, requestID, "Request was cancelled")
+		if err != nil {
+			if errors.Is(err, storage.ErrNotFound) {
+				return wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+			}
 			return fmt.Errorf("persist request cancel failed: %w", err)
 		}
+		if !ok {
+			// Mirror the authoritative terminal row before refusing: this
+			// replica's cache may still hold a stale pending/claimed entry,
+			// and GetRequestByID is cache-first.
+			s.requestsMutex.Lock()
+			if _, ok := s.requests[sessionID]; !ok {
+				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			s.requests[sessionID][requestID] = stored
+			s.requestsMutex.Unlock()
+			return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, stored.Status)
+		}
+		request = stored
+
+		s.requestsMutex.Lock()
+		if _, ok := s.requests[sessionID]; !ok {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		s.requests[sessionID][requestID] = request
+		s.requestsMutex.Unlock()
+	} else {
+		s.requestsMutex.Lock()
+
+		// Check if session exists
+		if _, ok := s.requests[sessionID]; !ok {
+			s.requestsMutex.Unlock()
+			return wrapf(ErrNotFound, "no requests found for session %s", sessionID)
+		}
+
+		// Get request
+		cached, ok := s.requests[sessionID][requestID]
+		if !ok {
+			s.requestsMutex.Unlock()
+			return wrapf(ErrNotFound, "request %s not found in session %s", requestID, sessionID)
+		}
+
+		// Check if request can be cancelled
+		if cached.Status == model.RequestStatusDone || cached.Status == model.RequestStatusFailed {
+			s.requestsMutex.Unlock()
+			return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, cached.Status)
+		}
+
+		// Cancel request
+		cached.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, "Request was cancelled")
+		cached.LastError = "Request was cancelled"
+		cached.DeadLetter = true
+		s.requestsMutex.Unlock()
+
+		request = cached
 	}
 
 	s.recordRequestEvent(request, trace.EventRequestCancelled, request.ExecutingMachineID, nil)
