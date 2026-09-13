@@ -378,7 +378,16 @@ func (s *Store) GetRequestChunksByRequest(ctx context.Context, requestID string,
 		}
 		window.Chunks = append(window.Chunks, chunk)
 	}
-	return window, rows.Err()
+	if rows.Err() != nil {
+		return model.RequestChunkWindow{}, rows.Err()
+	}
+	// A missing FIRST row (or an entirely trimmed range) never trips the
+	// out-of-sequence check above: validate the row count against the
+	// advertised span so every missing sequence becomes a gap error.
+	if expected := nextSeq - startSeq; expected > 0 && int32(len(window.Chunks)) != expected {
+		return model.RequestChunkWindow{}, fmt.Errorf("%w: chunk table gap for request %s: advertised %d rows, found %d", ErrChunkWindowGap, requestID, expected, len(window.Chunks))
+	}
+	return window, nil
 }
 
 func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]*model.Request, error) {

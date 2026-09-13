@@ -238,9 +238,10 @@ func (s *RequestsService) findRequestByIdempotencyKey(sessionID, idempotencyKey 
 	return found
 }
 
-// GetRequestByID gets a request by ID. On a cache miss it falls back to the
-// store so a request created on another instance is visible here (multi-instance
-// read-through), then populates the local cache.
+// GetRequestByID gets a request by ID. On a store-backed replica the read is
+// store-first — the cached copy can be stale after a cross-replica
+// transition — and the store row refreshes the cache; the cache is the
+// no-store source and the degraded-error fallback.
 func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Request, error) {
 	// Store-first when a store is attached: the cached copy is stale the
 	// moment another replica claims, completes, or requeues the request, and
@@ -258,6 +259,15 @@ func (s *RequestsService) GetRequestByID(sessionID, requestID string) (*model.Re
 			s.requestsMutex.Lock()
 			if _, exists := s.requests[sessionID]; !exists {
 				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			// Mirror regression guard: a local fenced write may have mirrored
+			// a newer row while this store read was in flight. Keep whichever
+			// is newer and hand the newer one back.
+			if existing, ok := s.requests[sessionID][requestID]; ok && existing.UpdatedAt.After(found.UpdatedAt) {
+				s.requestsMutex.Unlock()
+				existing = existing.Clone()
+				s.ensureRequestDefaults(existing)
+				return existing, nil
 			}
 			// Cache a clone: the store-fresh object stays private to this
 			// caller, so returning it below cannot alias the shared cache.
@@ -1200,6 +1210,7 @@ func (s *RequestsService) requestStreamSnapshot(sessionID, requestID string, las
 			if errors.Is(windowErr, storage.ErrChunkWindowGap) {
 				return nil, &RequestStreamExpiredError{
 					RequestID: request.ID,
+					LastSeq:   lastSeq,
 					StartSeq:  request.StreamStartSeq,
 					NextSeq:   request.NextStreamSeq,
 				}

@@ -311,3 +311,56 @@ func TestGetRequestByIDSeesOtherReplicaCompletion(t *testing.T) {
 		t.Fatal("B read lost the delivered result")
 	}
 }
+
+// TestWaitForRequestTerminalObservesCrossReplicaCompletion drives the
+// waiter's ticker path: replica B waits on the request while replica A
+// completes it — no local signal fires on B, so only the store-first poll
+// observes the terminal state.
+func TestWaitForRequestTerminalObservesCrossReplicaCompletion(t *testing.T) {
+	store, svcA, machA, svcB, _ := newActiveActiveStacks(t)
+	seedSessionForAA(t, store)
+
+	echoTool := model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil)
+	if _, err := machA.RegisterMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1", []*model.Tool{echoTool}, ""); err != nil {
+		t.Fatalf("RegisterMachine on A: %v", err)
+	}
+
+	req, err := svcA.CreateRequest("sess-aa", "echo", `{"x":1}`, 0, "")
+	if err != nil {
+		t.Fatalf("CreateRequest on A: %v", err)
+	}
+
+	resultCh := make(chan *model.ToolResult, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		result, err := svcB.WaitForRequestTerminal(context.Background(), "sess-aa", req.ID)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		resultCh <- result
+	}()
+
+	// Let B enter its wait, then complete the request on A. B has no local
+	// signal for this; only the store-first poll observes it.
+	time.Sleep(300 * time.Millisecond)
+	claimed, err := svcA.ClaimRequest("sess-aa", req.ID, "machine-a")
+	if err != nil {
+		t.Fatalf("ClaimRequest on A: %v", err)
+	}
+	if err := svcA.SubmitRequestResult("sess-aa", req.ID, "machine-a", claimed.LeaseEpoch,
+		map[string]string{"echo": "cross-replica"}, model.ResultTypeResolution, nil); err != nil {
+		t.Fatalf("SubmitRequestResult on A: %v", err)
+	}
+
+	select {
+	case result := <-resultCh:
+		if result == nil || result.RequestID != req.ID {
+			t.Fatalf("waiter result=%+v want request %s", result, req.ID)
+		}
+	case err := <-errCh:
+		t.Fatalf("waiter failed: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("waiter did not observe the cross-replica completion within 5s")
+	}
+}
