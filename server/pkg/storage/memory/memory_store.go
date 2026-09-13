@@ -130,7 +130,9 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 }
 
 // InsertRequest mirrors the Postgres insert-only create: an id that is
-// already persisted fails instead of overwriting the row.
+// already persisted fails instead of overwriting the row, and so does a
+// duplicate (session_id, idempotency_key) pair — the contract the Postgres
+// partial unique index enforces.
 func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 	if req == nil {
 		return nil
@@ -139,6 +141,13 @@ func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 	defer s.mu.Unlock()
 	if _, exists := s.requests[req.ID]; exists {
 		return fmt.Errorf("insert request %s: %w", req.ID, storage.ErrRequestExists)
+	}
+	if req.IdempotencyKey != "" {
+		for _, existing := range s.requests {
+			if existing.SessionID == req.SessionID && existing.IdempotencyKey == req.IdempotencyKey {
+				return fmt.Errorf("insert request %s: idempotency key already used in session: %w", req.ID, storage.ErrRequestExists)
+			}
+		}
 	}
 	s.requests[req.ID] = cloneRequest(req)
 	return nil

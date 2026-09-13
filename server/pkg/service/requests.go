@@ -158,27 +158,21 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	request.IdempotencyKey = idempotencyKey
 	request.VisibleAt = time.Now()
 
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
-	// Initialize requests map for this session if not exists
-	if _, ok := s.requests[sessionID]; !ok {
-		s.requests[sessionID] = make(map[string]*model.Request)
-	}
-
-	// Store request: persist-first so the store is authoritative. On a persist
-	// failure, surface the error instead of leaving the local cache divergent.
-	// The insert is insert-only: a colliding row (same id, or the
-	// idempotency-key partial unique index) fails rather than overwriting.
-	// Derive from s.ctx so store operations participate in graceful shutdown.
+	// Store request: persist-first so the store is authoritative. The store
+	// call runs without the cache lock — the collision lookup below takes
+	// cache read locks of its own and would deadlock against a held write
+	// lock. On a persist failure, surface the error instead of leaving the
+	// local cache divergent. Derive from s.ctx so store operations
+	// participate in graceful shutdown.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		defer cancel()
 		if err := s.store.InsertRequest(ctx, request); err != nil {
 			// A concurrent replica inserted the same (session, key) first: the
-			// unique partial index rejects this insert and the retry returns the
+			// unique partial index — or the memory store's contract-equivalent
+			// conflict — rejects this insert and the retry returns the
 			// winner's request.
-			if idempotencyKey != "" && storage.IsUniqueViolation(err) {
+			if idempotencyKey != "" && (storage.IsUniqueViolation(err) || errors.Is(err, storage.ErrRequestExists)) {
 				if existing := s.findRequestByIdempotencyKey(sessionID, idempotencyKey); existing != nil {
 					return existing, nil
 				}
@@ -187,8 +181,13 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		}
 	}
 
-	// Mirror into the local cache after a successful persist.
+	// Mirror into the local cache after a successful (or store-less) create.
+	s.requestsMutex.Lock()
+	if _, ok := s.requests[sessionID]; !ok {
+		s.requests[sessionID] = make(map[string]*model.Request)
+	}
 	s.requests[sessionID][request.ID] = request
+	s.requestsMutex.Unlock()
 
 	s.recordRequestEvent(request, trace.EventRequestCreated, "", map[string]any{
 		"toolName":       toolName,
@@ -932,6 +931,15 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 			return fmt.Errorf("persist request cancel failed: %w", err)
 		}
 		if !ok {
+			// Mirror the authoritative terminal row before refusing: this
+			// replica's cache may still hold a stale pending/claimed entry,
+			// and GetRequestByID is cache-first.
+			s.requestsMutex.Lock()
+			if _, ok := s.requests[sessionID]; !ok {
+				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			s.requests[sessionID][requestID] = stored
+			s.requestsMutex.Unlock()
 			return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, stored.Status)
 		}
 		request = stored

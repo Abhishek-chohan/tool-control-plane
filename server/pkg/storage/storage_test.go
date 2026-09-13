@@ -572,3 +572,55 @@ func TestClaimToolOwnership_ConflictAndStaleTransfer(t *testing.T) {
 
 // machineHeartbeatTTLForTest mirrors the service constant for the stale cutoff.
 const machineHeartbeatTTLForTest = 5 * time.Minute
+
+// TestSaveTaskTerminalGuard asserts SaveTask drops stale snapshots: once a
+// task reached a terminal state, re-persisting a non-terminal copy cannot
+// rewrite the outcome. This is the guard that keeps late cache snapshots
+// (e.g. a late updateTaskWithError after a CancelTask landed) inert.
+func TestSaveTaskTerminalGuard(t *testing.T) {
+	runAgainstBoth(t, "save task terminal guard", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		seedSession(t, s, sess)
+
+		task := model.NewTask(sess, "echo", `{}`)
+		task.IdempotencyKey = "key-" + uid(t)
+		if err := s.SaveTask(ctx, task); err != nil {
+			t.Fatalf("save pending task: %v", err)
+		}
+
+		// Terminal write: failed with a result.
+		task.Status = model.StatusFailed
+		task.Result = "boom"
+		task.Error = "boom"
+		completed := time.Now()
+		task.CompletedAt = &completed
+		if err := s.SaveTask(ctx, task); err != nil {
+			t.Fatalf("save failed task: %v", err)
+		}
+
+		// Stale snapshot: the pre-terminal pending copy re-persisted late.
+		stale := model.NewTask(sess, "echo", `{}`)
+		stale.ID = task.ID
+		stale.IdempotencyKey = task.IdempotencyKey
+		stale.Status = model.StatusPending
+		stale.Attempts = 9
+		if err := s.SaveTask(ctx, stale); err != nil {
+			t.Fatalf("save stale snapshot: %v", err)
+		}
+
+		stored, err := s.GetTaskByIdempotencyKey(ctx, sess, task.IdempotencyKey)
+		if err != nil || stored == nil {
+			t.Fatalf("get stored task: stored=%v err=%v", stored, err)
+		}
+		if stored.Status != model.StatusFailed {
+			t.Fatalf("stored status=%s want failed (stale snapshot rewrote a terminal task)", stored.Status)
+		}
+		if stored.Result != "boom" {
+			t.Fatalf("stored result=%q want boom", stored.Result)
+		}
+		if stored.Attempts == 9 {
+			t.Fatal("stale snapshot fields leaked into the terminal row")
+		}
+	})
+}
