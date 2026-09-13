@@ -235,6 +235,12 @@ class RequestManager:
         try:
             self.connection_manager.ensure_connected()
 
+            # No registered tools: with an empty tool filter the server would
+            # match every session tool and we would claim work we cannot
+            # execute.
+            if not tools:
+                return
+
             claimed_count = 0
             while claimed_count < limit:
                 claim_next = ClaimNextRequestRequest(

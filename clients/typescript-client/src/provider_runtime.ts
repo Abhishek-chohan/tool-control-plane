@@ -449,17 +449,29 @@ export class ProviderRuntime {
 
     await this.ensureMachine(state);
 
+    // No registered tools: with an empty tool filter the server would match
+    // every session tool and we would claim work we cannot execute.
+    if (state.tools.size === 0) {
+      return;
+    }
+
     // The atomic poll primitive: one round-trip leases the oldest claimable
     // request for one of this provider's tools, with the lease grant in the
     // response — no list-then-claim race against other claimants.
     const poll = await state.client.claimNextRequest(Array.from(state.tools.keys()));
     const claimedRequest = poll.request;
-    if (!poll.claimed || !claimedRequest?.id || this.activeRequests.has(claimedRequest.id)) {
+    if (!poll.claimed || !claimedRequest?.id) {
       return;
     }
 
+    // If the same request id is already in flight (its lease expired and the
+    // server requeued it, and this poll re-claimed it), start a fresh handler
+    // under the new lease grant: the old handler's fenced writes are rejected
+    // by the epoch bump. Each entry cleans up only its own promise.
     const activeRequest = this.handleRequest(state, claimedRequest).finally(() => {
-      this.activeRequests.delete(claimedRequest.id);
+      if (this.activeRequests.get(claimedRequest.id) === activeRequest) {
+        this.activeRequests.delete(claimedRequest.id);
+      }
     });
 
     this.activeRequests.set(claimedRequest.id, activeRequest);
