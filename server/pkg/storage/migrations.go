@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -203,7 +204,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	// writes landing mid-boot) and can be chosen as the deadlock victim. Retry
 	// those; every other error fails immediately.
 	for attempt := 0; attempt < 3; attempt++ {
-		err = s.runMigrationStatements(ctx, stmts, alterStatements)
+		err = s.runMigrationStatements(ctx, conn, stmts, alterStatements)
 		if err == nil {
 			return nil
 		}
@@ -217,8 +218,12 @@ func (s *Store) migrate(ctx context.Context) error {
 	return fmt.Errorf("migration tx: %w (retried after repeated deadlocks)", err)
 }
 
-func (s *Store) runMigrationStatements(ctx context.Context, stmts, alterStatements []string) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+// runMigrationStatements executes the migration transaction on the SAME
+// connection that holds the advisory lock: pg_advisory_lock is session-scoped,
+// so taking it on conn while the tx ran on a pool connection would leave the
+// pass unprotected (and could starve a one-connection pool waiting on itself).
+func (s *Store) runMigrationStatements(ctx context.Context, conn *sql.Conn, stmts, alterStatements []string) error {
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin migration tx: %w", err)
 	}

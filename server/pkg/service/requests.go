@@ -1485,9 +1485,13 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 	defer poll.Stop()
 
 	for {
-		req, err := s.GetRequestByID(sessionID, requestID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get request: %v", err)
+		// Store-first read when a store is attached: the waiter's local cache
+		// may hold the request as pending while a provider on another replica
+		// claimed and completed it — no local signal fires for that. The
+		// cache-only path (no store) is single-instance by construction.
+		req, readErr := s.waitForRequestState(ctx, sessionID, requestID)
+		if readErr != nil {
+			return nil, readErr
 		}
 
 		switch req.Status {
@@ -1518,6 +1522,29 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// waitForRequestState returns the request's authoritative state for a
+// non-claiming waiter: store-first (mirroring the row into the local cache)
+// when a store is attached, cache-only otherwise.
+func (s *RequestsService) waitForRequestState(ctx context.Context, sessionID, requestID string) (*model.Request, error) {
+	if s.store != nil {
+		readCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		stored, err := s.store.GetRequest(readCtx, requestID)
+		cancel()
+		if err == nil && stored != nil {
+			s.requestsMutex.Lock()
+			if _, ok := s.requests[sessionID]; !ok {
+				s.requests[sessionID] = make(map[string]*model.Request)
+			}
+			s.requests[sessionID][stored.ID] = stored
+			s.requestsMutex.Unlock()
+			return stored, nil
+		}
+		// A failed or empty store read falls through to the cache: it knows
+		// the request was created here, and the waiter retries on its ticker.
+	}
+	return s.GetRequestByID(sessionID, requestID)
 }
 
 type requestSignal struct {
