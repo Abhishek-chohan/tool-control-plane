@@ -291,7 +291,9 @@ func (s *Store) ReclaimExpiredRequest(ctx context.Context, requestID string, now
 	r.LeasedAt = nil
 	r.NextAttemptAt = nil
 	r.UpdatedAt = now
-	if r.Attempts >= maxAttempts {
+	// A non-positive maxAttempts is the "uncapped" sentinel, matching the
+	// claim paths: dead-letter only applies to a positive budget.
+	if maxAttempts > 0 && r.Attempts >= maxAttempts {
 		r.DeadLetter = true
 		r.Status = model.RequestStatusFailed
 		r.LastError = "request timed out: max attempts reached"

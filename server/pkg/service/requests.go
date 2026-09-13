@@ -1502,9 +1502,9 @@ func (s *RequestsService) ensureRequestDefaults(req *model.Request) {
 	if req.BackoffSeconds <= 0 {
 		req.BackoffSeconds = int(s.retryBackoff.Seconds())
 	}
-	if req.MaxAttempts <= 0 {
-		req.MaxAttempts = 3
-	}
+	// MaxAttempts is left untouched: NewRequest defaults it to 3, and a
+	// non-positive value is the explicit "uncapped" sentinel — the claim and
+	// reaper paths both treat it as such.
 	if req.VisibleAt.IsZero() {
 		req.VisibleAt = time.Now()
 	}
@@ -1690,7 +1690,7 @@ func (s *RequestsService) handleExpiredRequest(req *model.Request) {
 	s.recordRequestEvent(req, trace.EventRequestLeaseExpired, machineID, map[string]any{
 		"visibleAt": req.VisibleAt,
 	})
-	if req.Attempts >= req.MaxAttempts {
+	if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 		req.MarkDeadLetter(message)
 		req.Error = message
 		req.ResultType = model.ResultTypeRejection
