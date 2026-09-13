@@ -622,8 +622,11 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		log.Printf("task %s attempt-start state not durable: %v", task.ID, err)
 	}
 
-	machine, err := s.selectMachine(task.SessionID, task.ToolName)
-	if err != nil {
+	// Advisory preflight: fail fast when no machine can serve the tool. The
+	// selected machine is NOT used to claim the request — claiming here would
+	// hold the lease and block every polling provider until lease expiry
+	// (30s of dead time per attempt, attempts burned without execution).
+	if _, err := s.selectMachine(task.SessionID, task.ToolName); err != nil {
 		return err
 	}
 	if err := taskCtx.Err(); err != nil {
@@ -647,7 +650,6 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		s.setCurrentRequestID(task, "")
 	}()
 	s.recordTaskEvent(task, trace.EventTaskExecutionStarted, map[string]any{
-		"machineID": machine.ID,
 		"requestID": request.ID,
 	})
 
@@ -658,7 +660,10 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	}
 	defer cancel()
 
-	result, err := s.requestsService.ExecuteRequest(attemptCtx, task.SessionID, machine.ID, request.ID)
+	// The task stays a synchronous observer: the request remains pending until
+	// a provider machine claims and executes it, and the task-level attempt
+	// counter stays 1:1 with the request-level attempt a provider's claim adds.
+	result, err := s.requestsService.WaitForRequestTerminal(attemptCtx, task.SessionID, request.ID)
 	if err != nil {
 		if s.isTaskCancelled(task.ID) {
 			return errTaskCancelled

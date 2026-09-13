@@ -536,6 +536,11 @@ func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID, instanceID str
 	if !ok {
 		return nil, false, nil
 	}
+	// Terminal tasks are never adoptable (see the Postgres arm): a completion
+	// or cancellation that landed before the claim must not be resurrected.
+	if t.DeadLetter || t.Status == model.StatusCompleted || t.Status == model.StatusFailed || t.Status == model.StatusCancelled {
+		return nil, false, nil
+	}
 	// Acquire when unowned, or when the previous owner's lease (its last
 	// touch + TTL) has expired: a live owner keeps the task.
 	owner, owned := s.taskOwners[taskID]

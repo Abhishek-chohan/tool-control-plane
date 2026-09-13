@@ -174,11 +174,20 @@ func (s *Store) ClaimTaskForAdoption(ctx context.Context, taskID, instanceID str
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
 		var adoptedBy sql.NullString
 		var updatedAt time.Time
-		if err := tx.QueryRowContext(ctx, `SELECT adopted_by, updated_at FROM tasks WHERE id=$1 FOR UPDATE`, taskID).Scan(&adoptedBy, &updatedAt); err != nil {
+		var status string
+		var deadLetter bool
+		if err := tx.QueryRowContext(ctx, `SELECT adopted_by, updated_at, status, dead_letter FROM tasks WHERE id=$1 FOR UPDATE`, taskID).Scan(&adoptedBy, &updatedAt, &status, &deadLetter); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return sql.ErrNoRows
 			}
 			return fmt.Errorf("claim task adoption: load: %w", err)
+		}
+		// Terminal tasks are never adoptable. Under row lock this closes the
+		// race where a completion or cancellation lands between the adoption
+		// sweep's candidate query and this claim — without it, a finished task
+		// could be resurrected and re-executed.
+		if deadLetter || status == string(model.StatusCompleted) || status == string(model.StatusFailed) || status == string(model.StatusCancelled) {
+			return nil
 		}
 		now := time.Now()
 		// Acquire when unowned, or when the previous owner's lease (its

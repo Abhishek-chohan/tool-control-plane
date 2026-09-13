@@ -1463,6 +1463,63 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 	}
 }
 
+// WaitForRequestTerminal waits for an existing request to reach a terminal
+// state without claiming it. Pending requests are executed by provider
+// machines that poll and claim; a synchronous waiter that claimed the request
+// itself would hold the lease and block every polling provider until the
+// lease expired. Wake-ups arrive on local request updates, with a poll ticker
+// as the fallback for completions that happen on another replica.
+func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID, requestID string) (*model.ToolResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeoutCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		defer cancel()
+		ctx = timeoutCtx
+	}
+
+	watch := s.subscribeRequest(requestID)
+	poll := time.NewTicker(waitPollInterval)
+	defer poll.Stop()
+
+	for {
+		req, err := s.GetRequestByID(sessionID, requestID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get request: %v", err)
+		}
+
+		switch req.Status {
+		case model.RequestStatusDone:
+			s.releaseRequestSignal(req.ID)
+			return &model.ToolResult{
+				RequestID:  req.ID,
+				Result:     fmt.Sprintf("%v", req.Result),
+				ResultType: string(req.ResultType),
+			}, nil
+		case model.RequestStatusFailed:
+			s.releaseRequestSignal(req.ID)
+			if req.Error != "" {
+				return nil, fmt.Errorf("tool execution failed: %s", req.Error)
+			}
+			return nil, fmt.Errorf("tool execution failed")
+		case model.RequestStatusStalled:
+			return nil, fmt.Errorf("tool execution stalled")
+		}
+
+		select {
+		case <-watch:
+			watch = s.subscribeRequest(requestID)
+		case <-poll.C:
+			watch = s.subscribeRequest(requestID)
+		case <-ctx.Done():
+			_ = s.CancelRequest(sessionID, requestID)
+			return nil, ctx.Err()
+		}
+	}
+}
+
 type requestSignal struct {
 	mu sync.Mutex
 	ch chan struct{}
