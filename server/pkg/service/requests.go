@@ -427,12 +427,15 @@ func (s *RequestsService) UpdateRequest(
 	result interface{},
 	resultType model.ResultType,
 ) (*model.Request, error) {
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
+	// Store-first: the guarded store write serializes across replicas; the
+	// cache mutex is only held to mirror the winner, never across the store
+	// round-trip. The in-memory dev path keeps the lock for its whole body.
 	if s.store != nil {
 		return s.updateRequestViaStore(sessionID, requestID, machineID, leaseEpoch, status, result, resultType)
 	}
+
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
 
 	// In-memory path (dev/test only when no store is configured).
 	request, err := s.getRequestLocked(sessionID, requestID)
@@ -535,7 +538,7 @@ func (s *RequestsService) UpdateRequest(
 // updateRequestViaStore is the store-backed fenced UpdateRequest path: capacity
 // reservation stays in the service, while the fenced row mutation happens
 // atomically in the store (check lease grant and persist in one transaction).
-// Callers must hold s.requestsMutex.
+// It manages the cache lock itself: callers must NOT hold s.requestsMutex.
 func (s *RequestsService) updateRequestViaStore(
 	sessionID, requestID, machineID string,
 	leaseEpoch int64,
@@ -544,11 +547,13 @@ func (s *RequestsService) updateRequestViaStore(
 	resultType model.ResultType,
 ) (*model.Request, error) {
 	prevStatus := model.RequestStatus("")
+	s.requestsMutex.RLock()
 	if sessionRequests, ok := s.requests[sessionID]; ok {
 		if cached, ok := sessionRequests[requestID]; ok {
 			prevStatus = cached.Status
 		}
 	}
+	s.requestsMutex.RUnlock()
 
 	reservedSlot := false
 	if status == model.RequestStatusRunning && machineID != "" {
@@ -561,7 +566,7 @@ func (s *RequestsService) updateRequestViaStore(
 			if err != nil {
 				return nil, err
 			}
-			s.mirrorRequestLocked(requeued)
+			s.mirrorRequest(requeued)
 			s.recordRequestEvent(requeued, trace.EventRequestRequeued, machineID, map[string]any{
 				"reason": "machine_at_capacity",
 			})
@@ -581,7 +586,7 @@ func (s *RequestsService) updateRequestViaStore(
 		return nil, err
 	}
 
-	s.mirrorRequestLocked(updated)
+	s.mirrorRequest(updated)
 
 	if status != "" {
 		switch status {
@@ -608,10 +613,25 @@ func (s *RequestsService) updateRequestViaStore(
 	return updated, nil
 }
 
+// mirrorRequest replaces the cached copy of a request after an authoritative
+// store write, acquiring the cache lock itself. Store-mode paths use this so
+// the mutex is never held across a store round-trip. It is cache-lock
+// independent: callers must NOT already hold s.requestsMutex.
+func (s *RequestsService) mirrorRequest(request *model.Request) {
+	s.requestsMutex.Lock()
+	s.mirrorRequestLocked(request)
+	s.requestsMutex.Unlock()
+}
+
 // mirrorRequestLocked replaces the cached copy of a request after an
-// authoritative store write. Callers must hold s.requestsMutex.
+// authoritative store write, keeping whichever of (existing, request) has the
+// newer UpdatedAt — with store writes now overlapping, lock-acquisition order
+// does not guarantee commit order. Callers must hold s.requestsMutex.
 func (s *RequestsService) mirrorRequestLocked(request *model.Request) {
 	if request == nil {
+		return
+	}
+	if existing, ok := s.requests[request.SessionID][request.ID]; ok && existing.UpdatedAt.After(request.UpdatedAt) {
 		return
 	}
 	request = request.Clone()
@@ -832,9 +852,9 @@ func (s *RequestsService) SubmitRequestResult(
 	resultType model.ResultType,
 	meta map[string]string,
 ) error {
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
+	// Store-first: the guarded store write serializes across replicas; the
+	// cache mutex is only held to mirror the winner, never across the store
+	// round-trip. The in-memory dev path keeps the lock for its whole body.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		submitted, err := s.store.SubmitRequestResultFenced(ctx, sessionID, requestID, machineID, leaseEpoch, result, resultType, meta)
@@ -842,7 +862,7 @@ func (s *RequestsService) SubmitRequestResult(
 		if err != nil {
 			return err
 		}
-		s.mirrorRequestLocked(submitted)
+		s.mirrorRequest(submitted)
 		s.recordSubmitEvents(submitted, resultType)
 		s.notifyRequestUpdate(submitted.ID)
 		if resultType != model.ResultTypeStreaming {
@@ -851,6 +871,9 @@ func (s *RequestsService) SubmitRequestResult(
 		}
 		return nil
 	}
+
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
 
 	// In-memory path (dev/test only when no store is configured).
 	request, err := s.getRequestLocked(sessionID, requestID)
@@ -1034,9 +1057,8 @@ func (s *RequestsService) AppendRequestChunks(
 		}
 	}
 
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
+	// Store-first: see SubmitRequestResult — the store write runs without the
+	// cache mutex; the in-memory dev path keeps the lock for its whole body.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		updated, err := s.store.AppendRequestChunksFenced(ctx, sessionID, requestID, machineID, leaseEpoch, chunks)
@@ -1044,7 +1066,7 @@ func (s *RequestsService) AppendRequestChunks(
 		if err != nil {
 			return err
 		}
-		s.mirrorRequestLocked(updated)
+		s.mirrorRequest(updated)
 		s.recordRequestEvent(updated, trace.EventRequestChunksAppended, updated.ExecutingMachineID, map[string]any{
 			"chunkCount": len(chunks),
 			"nextSeq":    updated.NextStreamSeq,
@@ -1053,7 +1075,11 @@ func (s *RequestsService) AppendRequestChunks(
 		return nil
 	}
 
-	// In-memory path (dev/test only when no store is configured).
+	// In-memory path (dev/test only when no store is configured): the cache
+	// mutex is the only serialization here.
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
+
 	request, err := s.getRequestLocked(sessionID, requestID)
 	if err != nil {
 		return err
@@ -1086,9 +1112,8 @@ func (s *RequestsService) RenewRequestLease(
 	sessionID, requestID, machineID string,
 	leaseEpoch int64,
 ) (*model.Request, error) {
-	s.requestsMutex.Lock()
-	defer s.requestsMutex.Unlock()
-
+	// Store-first: see SubmitRequestResult — the store write runs without the
+	// cache mutex; the in-memory dev path keeps the lock for its whole body.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
 		renewed, err := s.store.RenewRequestLease(ctx, sessionID, requestID, machineID, leaseEpoch, s.leaseDuration)
@@ -1096,7 +1121,7 @@ func (s *RequestsService) RenewRequestLease(
 		if err != nil {
 			return nil, err
 		}
-		s.mirrorRequestLocked(renewed)
+		s.mirrorRequest(renewed)
 		s.recordRequestEvent(renewed, trace.EventRequestLeaseRenewed, machineID, map[string]any{
 			"leaseEpoch":   renewed.LeaseEpoch,
 			"visibleAt":    renewed.VisibleAt,
@@ -1106,7 +1131,11 @@ func (s *RequestsService) RenewRequestLease(
 		return renewed, nil
 	}
 
-	// In-memory path (dev/test only when no store is configured).
+	// In-memory path (dev/test only when no store is configured): the cache
+	// mutex is the only serialization here.
+	s.requestsMutex.Lock()
+	defer s.requestsMutex.Unlock()
+
 	request, err := s.getRequestLocked(sessionID, requestID)
 	if err != nil {
 		return nil, err
