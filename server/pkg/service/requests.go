@@ -91,12 +91,21 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 	}
 
 	if store != nil {
-		loadCtx, cancel := context.WithTimeout(ctx, defaultPersistenceTimeout)
+		loadCtx, cancel := context.WithTimeout(ctx, startupLoadTimeout)
 		defer cancel()
+		retentionCutoff := time.Now().Add(-requestRetentionAge)
 		if requests, err := store.AllRequests(loadCtx); err != nil {
 			log.Printf("request persistence load failed: %v", err)
 		} else {
 			for _, req := range requests {
+				// Retention-aware hydration: don't materialize terminal rows
+				// the retention sweeper would remove anyway — on a database
+				// with old terminal history, hydration would pay for every
+				// restart.
+				if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+					req.UpdatedAt.Before(retentionCutoff) {
+					continue
+				}
 				if _, ok := service.requests[req.SessionID]; !ok {
 					service.requests[req.SessionID] = make(map[string]*model.Request)
 				}
@@ -109,8 +118,76 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 	// Start cleanup goroutine for stalled requests. Honors ctx for graceful
 	// shutdown so the lease-expiry loop stops cleanly on SIGTERM.
 	go service.cleanupStalledRequests()
+	// Start the retention sweeper for terminal requests (and audit events on
+	// store-backed replicas).
+	go service.cleanupTerminalRequests()
 
 	return service
+}
+
+// cleanupTerminalRequests prunes terminal requests (and audit events, on
+// store-backed replicas) on a schedule so neither table grows without bound.
+// Mirrors the tasks service' retention sweeper.
+func (s *RequestsService) cleanupTerminalRequests() {
+	ticker := time.NewTicker(requestCleanupInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-requestRetentionAge)
+
+			// Store delete runs first: the cache is the degraded-error
+			// fallback for reads, so it must not lose entries the store may
+			// still hold if the delete fails.
+			if s.store != nil {
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), defaultPersistenceTimeout)
+				removed, err := s.store.DeleteTerminalRequestsBefore(ctx, cutoff)
+				cancel()
+				if err != nil {
+					log.Printf("terminal request retention sweep failed: %v", err)
+				} else {
+					if removed > 0 {
+						log.Printf("retention sweep removed %d terminal requests", removed)
+					}
+					// Store pruned successfully: now prune the cache mirror.
+					s.requestsMutex.Lock()
+					for _, sessionRequests := range s.requests {
+						for id, req := range sessionRequests {
+							if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+								req.UpdatedAt.Before(cutoff) {
+								delete(sessionRequests, id)
+							}
+						}
+					}
+					s.requestsMutex.Unlock()
+				}
+
+				auditCtx, auditCancel := context.WithTimeout(context.WithoutCancel(s.ctx), defaultPersistenceTimeout)
+				auditRemoved, err := s.store.DeleteAuditEventsBefore(auditCtx, time.Now().Add(-auditRetentionAge))
+				auditCancel()
+				if err != nil {
+					log.Printf("audit retention sweep failed: %v", err)
+				} else if auditRemoved > 0 {
+					log.Printf("retention sweep removed %d audit events", auditRemoved)
+				}
+				continue
+			}
+
+			// No store: the cache is the only state, prune it directly.
+			s.requestsMutex.Lock()
+			for _, sessionRequests := range s.requests {
+				for id, req := range sessionRequests {
+					if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+						req.UpdatedAt.Before(cutoff) {
+						delete(sessionRequests, id)
+					}
+				}
+			}
+			s.requestsMutex.Unlock()
+		}
+	}
 }
 
 // CreateRequest creates a new tool execution request. timeoutSeconds overrides
