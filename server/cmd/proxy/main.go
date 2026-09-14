@@ -173,8 +173,12 @@ func proxyControlMiddleware(cfg proxyConfig, breaker *CircuitBreakerManager, rlm
 				}
 				panic(rec)
 			}
+			// Only gateway-visible backend failures trip the breaker.
+			// Client-induced 5xx (bad request transformed into an INTERNAL
+			// mapping) or app-level 500s say nothing about backend health.
 			if done != nil {
-				done(recorder.status < 500)
+				status := recorder.status
+				done(status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout)
 			}
 		}()
 
@@ -191,6 +195,11 @@ func extractAPIKey(r *http.Request) string {
 	}
 	if key := r.Header.Get("X-API-Key"); key != "" {
 		return key
+	}
+	// The documented auth path: Authorization: Bearer <key>. Without this
+	// fallback, bearer-key callers bypass per-key rate limiting entirely.
+	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 	}
 	return ""
 }

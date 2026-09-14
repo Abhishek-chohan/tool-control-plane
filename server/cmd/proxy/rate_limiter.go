@@ -14,6 +14,12 @@ type clientLimiter struct {
 	lastSeen time.Time
 }
 
+// maxKeyedEntries bounds each limiter map: between periodic sweeps, a caller
+// rotating unlimited unique keys would otherwise grow the map without bound
+// (memory DoS). New keys past the cap are rejected until the sweep evicts
+// stale entries.
+const maxKeyedEntries = 65536
+
 type keyedLimiter struct {
 	mu      sync.Mutex
 	limit   rate.Limit
@@ -38,6 +44,12 @@ func (kl *keyedLimiter) allow(key string, now time.Time) (bool, time.Duration) {
 	kl.mu.Lock()
 	entry, ok := kl.entries[key]
 	if !ok {
+		// Hard cap: fail closed for brand-new keys at capacity. Existing
+		// callers keep their slots until the sweep evicts them.
+		if len(kl.entries) >= maxKeyedEntries {
+			kl.mu.Unlock()
+			return false, kl.ttl
+		}
 		entry = &clientLimiter{limiter: rate.NewLimiter(kl.limit, kl.burst)}
 		kl.entries[key] = entry
 	}
