@@ -18,7 +18,7 @@ from toolplane.proto.service_pb2_grpc import (
 )
 
 from .config import ClientConfig
-from .errors import ConnectionError
+from .errors import ConnectionError, ToolplaneConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,9 @@ class ConnectionManager:
             return exception.code() in retryable_codes
 
         # Retry on network-related exceptions
-        if isinstance(exception, (ConnectionError, TimeoutError)):
+        if isinstance(
+            exception, (ToolplaneConnectionError, ConnectionError, TimeoutError)
+        ):
             return True
 
         return False
@@ -97,7 +99,7 @@ class ConnectionManager:
         try:
             return Path(path_value).expanduser().read_bytes()
         except OSError as exc:
-            raise ConnectionError(f"Failed to read {label}: {exc}") from exc
+            raise ToolplaneConnectionError(f"Failed to read {label}: {exc}") from exc
 
     def _channel_options(self) -> list[tuple[str, str]]:
         """Build gRPC channel options for TLS overrides."""
@@ -132,7 +134,7 @@ class ConnectionManager:
             "TLS client key",
         )
         if bool(certificate_chain) != bool(private_key):
-            raise ConnectionError(
+            raise ToolplaneConnectionError(
                 "TLS client authentication requires both certificate and key files"
             )
 
@@ -194,7 +196,7 @@ class ConnectionManager:
                         continue
                     break
 
-            raise ConnectionError(
+            raise ToolplaneConnectionError(
                 f"Failed to connect after {self.max_retries + 1} attempts. Last error: {last_exception}"
             )
 
@@ -213,7 +215,7 @@ class ConnectionManager:
     def _initialize_stubs(self):
         """Initialize all gRPC service stubs."""
         if self.channel is None:
-            raise ConnectionError("Channel is not initialized")
+            raise ToolplaneConnectionError("Channel is not initialized")
 
         self.tool_stub = ToolServiceStub(self.channel)
         self.session_stub = SessionsServiceStub(self.channel)
@@ -234,7 +236,7 @@ class ConnectionManager:
         """Ensure connection is established."""
         if not self.connected or self.channel is None:
             if not self.connect():
-                raise ConnectionError("Failed to establish connection")
+                raise ToolplaneConnectionError("Failed to establish connection")
 
     def get_metadata(self):
         """Get metadata for gRPC calls."""

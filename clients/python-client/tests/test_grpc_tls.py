@@ -14,7 +14,7 @@ def _ensure_python_client_on_path() -> None:
 _ensure_python_client_on_path()
 
 from toolplane.core.config import ClientConfig
-from toolplane.core.connection import ConnectionError, ConnectionManager
+from toolplane.core.connection import ToolplaneConnectionError, ConnectionManager
 
 
 class _FakeChannel:
@@ -95,7 +95,7 @@ def test_connection_manager_rejects_partial_client_tls_identity(tmp_path):
 
     try:
         manager._create_channel("localhost:9001")
-    except ConnectionError as exc:
+    except ToolplaneConnectionError as exc:
         assert str(exc) == "TLS client authentication requires both certificate and key files"
         return
 

@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable, List, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,18 @@ try:
     from .core.errors import ConnectionError, ToolplaneError
 except ImportError:
     from core.errors import ConnectionError, ToolplaneError
+
+
+@dataclass
+class _PendingTool:
+    """A tool registration deferred until the runtime starts."""
+
+    session_id: str
+    name: str
+    func: Callable
+    description: Optional[str] = None
+    stream: bool = False
+    tags: List[str] = None
 
 
 class ProviderRuntime:
@@ -24,6 +37,8 @@ class ProviderRuntime:
         heartbeat_interval: Optional[int] = None,
     ):
         self.client = client
+        self._registration_lock = threading.Lock()
+        self._pending_registrations: List[_PendingTool] = []
         self._session_ids: Set[str] = set(session_ids or [])
         self._poll_interval = (
             poll_interval
@@ -130,19 +145,57 @@ class ProviderRuntime:
         stream: bool = False,
         tags: Optional[List[str]] = None,
     ):
+        """Queue a tool for registration at runtime start.
+
+        Decorating defers the (network) registration until
+        start_in_background/run_forever/poll_once, so importing a module of
+        decorated tools performs no I/O.
+        """
+
         def decorator(func: Callable) -> Callable:
-            return self.register_tool(
-                session_id=session_id,
-                name=name or func.__name__,
-                func=func,
-                description=description,
-                stream=stream,
-                tags=tags or [],
-            )
+            with self._registration_lock:
+                self._pending_registrations.append(
+                    _PendingTool(
+                        session_id=session_id,
+                        name=name or func.__name__,
+                        func=func,
+                        description=description,
+                        stream=stream,
+                        tags=tags or [],
+                    )
+                )
+            return func
 
         return decorator
 
+    def _apply_pending_registrations(self) -> None:
+        """Attach sessions and register every deferred tool.
+
+        A failed registration puts the item back at the head of the queue so
+        a later start attempt retries it; tools are never silently lost.
+        """
+        while True:
+            with self._registration_lock:
+                if not self._pending_registrations:
+                    return
+                item = self._pending_registrations.pop(0)
+
+            try:
+                self.register_tool(
+                    session_id=item.session_id,
+                    name=item.name,
+                    func=item.func,
+                    description=item.description,
+                    stream=item.stream,
+                    tags=item.tags,
+                )
+            except Exception:
+                with self._registration_lock:
+                    self._pending_registrations.insert(0, item)
+                raise
+
     def poll_once(self) -> None:
+        self._apply_pending_registrations()
         for session_id in self.managed_session_ids():
             context = self.client.ensure_session_context(
                 session_id,
@@ -155,6 +208,9 @@ class ProviderRuntime:
     def start_in_background(
         self, session_ids: Optional[Iterable[str]] = None
     ) -> "ProviderRuntime":
+        # Queued @tool registrations may introduce the very sessions this
+        # call is about to check for; apply them before validating.
+        self._apply_pending_registrations()
         with self._lock:
             self.add_sessions(session_ids)
             if self._running:
@@ -171,6 +227,8 @@ class ProviderRuntime:
                 raise ToolplaneError(
                     "ProviderRuntime requires at least one attached or configured session"
                 )
+
+            self._apply_pending_registrations()
 
             for session_id in managed_session_ids:
                 self.attach_session(session_id, register_machine=True)

@@ -109,6 +109,10 @@ class ToolplaneHTTP:
         except Exception:
             pass
         try:
+            self.request_manager.shutdown()
+        except Exception:
+            pass
+        try:
             self.machine_manager.stop_heartbeat()
         except Exception:
             pass
