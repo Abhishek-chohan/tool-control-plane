@@ -8,7 +8,7 @@ from toolplane.utils.schema import generate_schema_from_function
 
 from ..common.base_tool_manager import BaseToolManager
 from ..common.utils import validate_tool_name
-from ..core.errors import ToolError
+from ..core.errors import ToolError, ToolplaneAPIError
 from .http_connection import HTTPConnectionManager
 
 
@@ -258,14 +258,23 @@ class HTTPToolManager(BaseToolManager):
             raise ToolError(f"Failed to delete tool {tool_id}: {e}")
 
     def _execute_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ) -> str:
         """Execute a tool and return request ID."""
         try:
             self.connection_manager.ensure_connected()
 
             response = self.connection_manager.execute_tool(
-                session_id, tool_name, json.dumps(params), idempotency_key
+                session_id,
+                tool_name,
+                json.dumps(params),
+                idempotency_key,
+                timeout_seconds=timeout_seconds,
             )
 
             if response.get("error"):
@@ -273,11 +282,18 @@ class HTTPToolManager(BaseToolManager):
 
             return response.get("requestId")
 
+        except ToolplaneAPIError:
+            raise
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
     def _stream_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ):
         """Stream tool execution."""
         try:

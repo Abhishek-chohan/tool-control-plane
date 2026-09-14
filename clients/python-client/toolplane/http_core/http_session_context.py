@@ -10,8 +10,10 @@ from typing import Any, Callable, Dict, List, Optional
 from toolplane.utils.schema import generate_schema_from_function
 
 from ..core.errors import (
+    ToolplaneAPIError,
     ToolplaneError,
     ToolplaneInvalidArgumentError,
+    ToolplaneTimeoutError,
     normalize_status_name,
 )
 from .http_connection import HTTPConnectionManager
@@ -99,20 +101,44 @@ class HTTPSessionContext:
                 f"Failed to register tool {name} for session {self.session_id}: {e}"
             )
 
-    def invoke(self, tool_name: str, **params) -> Any:
-        """Invoke a tool in this session."""
+    def invoke(
+        self,
+        tool_name: str,
+        timeout_seconds: int = 0,
+        wait_timeout: Optional[int] = None,
+        **params,
+    ) -> Any:
+        """Invoke a tool in this session and return the tool's result value.
+
+        timeout_seconds sets the request's absolute per-attempt execution
+        timeout on the wire (0 keeps the server default). The local wait ends
+        after wait_timeout seconds (default: timeout_seconds + 15, else 60).
+        """
         try:
             request_id = self.tool_manager.execute_tool(
-                self.session_id, tool_name, params
+                self.session_id, tool_name, params, timeout_seconds=timeout_seconds
             )
 
-            # Poll for completion
-            return self._wait_for_completion(request_id)
+            # Poll for completion; the HTTP wait already returns the unwrapped
+            # tool result.
+            if wait_timeout is None:
+                wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
+            else:
+                wait_for = wait_timeout
+            return self._wait_for_completion(request_id, timeout=wait_for)
 
-        except Exception as e:
-            raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}")
+        except ToolplaneTimeoutError:
+            raise
+        except ToolplaneAPIError:
+            # Typed server errors keep their identity for the caller.
+            raise
 
-    async def ainvoke(self, tool_name: str, **params) -> str:
+    async def ainvoke(
+        self,
+        tool_name: str,
+        timeout_seconds: int = 0,
+        **params,
+    ) -> str:
         """Submit a tool invocation without blocking the caller.
 
         Returns the request ID once the gateway accepts the work; poll
@@ -121,11 +147,13 @@ class HTTPSessionContext:
         running event loop.
         """
         try:
+            payload = json.dumps(params)
             return await asyncio.to_thread(
                 self.request_manager.create_request,
                 self.session_id,
                 tool_name,
-                json.dumps(params),
+                payload,
+                timeout_seconds=timeout_seconds,
             )
         except Exception as e:
             raise ToolplaneError(f"Failed to async invoke tool {tool_name}: {e}")
@@ -340,9 +368,11 @@ class HTTPSessionContext:
     def _wait_for_completion(self, request_id: str, timeout: int = 60) -> Any:
         """Wait for request completion."""
         start_time = time.time()
+        last_status: Dict[str, Any] = {}
 
         while time.time() - start_time < timeout:
             status = self.get_request_status(request_id)
+            last_status = status
 
             if normalize_status_name(status["status"]) == "done":
                 try:
@@ -357,7 +387,10 @@ class HTTPSessionContext:
 
             time.sleep(0.5)
 
-        raise ToolplaneError("Tool execution timed out")
+        raise ToolplaneTimeoutError(
+            f"Tool execution timed out after {timeout}s (request_id={request_id}, "
+            f"status={last_status.get('status', 'unknown')})"
+        )
 
     def cleanup(self):
         """Cleanup this session."""

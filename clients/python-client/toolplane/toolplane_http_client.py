@@ -265,21 +265,42 @@ class ToolplaneHTTP:
 
         return decorator
 
-    def invoke(self, tool_name: str, session_id: str, **params) -> Any:
-        """Invoke a tool in a session."""
+    def invoke(
+        self,
+        tool_name: str,
+        session_id: str,
+        timeout_seconds: int = 0,
+        wait_timeout: Optional[int] = None,
+        **params,
+    ) -> Any:
+        """Invoke a tool in a session and return the tool result value.
+
+        timeout_seconds sets the request's absolute per-attempt execution
+        timeout on the wire (0 keeps the server default); wait_timeout bounds
+        the local wait (default: timeout_seconds + 15, else 60).
+        """
         context = self.get_session(session_id)
         if not context:
             raise ToolplaneError(f"Session {session_id} not found")
 
-        return context.invoke(tool_name, **params)
+        return context.invoke(
+            tool_name,
+            timeout_seconds=timeout_seconds,
+            wait_timeout=wait_timeout,
+            **params,
+        )
 
-    async def ainvoke(self, tool_name: str, session_id: str, **params) -> str:
+    async def ainvoke(
+        self, tool_name: str, session_id: str, timeout_seconds: int = 0, **params
+    ) -> str:
         """Submit a tool invocation without blocking; awaits the request ID."""
         context = self.get_session(session_id)
         if not context:
             raise ToolplaneError(f"Session {session_id} not found")
 
-        return await context.ainvoke(tool_name, **params)
+        return await context.ainvoke(
+            tool_name, timeout_seconds=timeout_seconds, **params
+        )
 
     def stream(
         self,

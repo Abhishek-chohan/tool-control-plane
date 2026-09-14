@@ -15,11 +15,16 @@ except ImportError:
 
 
 try:
-    from ..core.errors import ToolError
+    from ..core.errors import ToolError, ToolplaneAPIError
 except ImportError:
     # Fallback for standalone testing
     class ToolError(Exception):
         """Tool error for standalone testing."""
+
+        pass
+
+    class ToolplaneAPIError(Exception):
+        """API error for standalone testing."""
 
         pass
 
@@ -170,9 +175,18 @@ class BaseToolManager(ABC):
         pass
 
     def execute_tool(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ) -> str:
-        """Execute a tool and return request ID."""
+        """Execute a tool and return request ID.
+
+        timeout_seconds overrides the request's absolute per-attempt timeout
+        on the wire (0 keeps the server default).
+        """
         try:
             # Validate tool name
             if not validate_tool_name(tool_name):
@@ -180,21 +194,34 @@ class BaseToolManager(ABC):
 
             self.connection_manager.ensure_connected()
             return self._execute_tool_on_server(
-                session_id, tool_name, params, idempotency_key
+                session_id, tool_name, params, idempotency_key, timeout_seconds
             )
 
+        except ToolplaneAPIError:
+            # Typed server errors keep their identity for the caller.
+            raise
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
     @abstractmethod
     def _execute_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ) -> str:
         """Execute tool on server (protocol-specific)."""
         pass
 
     def stream_tool(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ):
         """Stream tool execution."""
         try:
@@ -204,15 +231,22 @@ class BaseToolManager(ABC):
 
             self.connection_manager.ensure_connected()
             yield from self._stream_tool_on_server(
-                session_id, tool_name, params, idempotency_key
+                session_id, tool_name, params, idempotency_key, timeout_seconds
             )
 
+        except ToolplaneAPIError:
+            raise
         except Exception as e:
             raise ToolError(f"Failed to stream tool {tool_name}: {e}")
 
     @abstractmethod
     def _stream_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ):
         """Stream tool execution on server (protocol-specific)."""
         pass
