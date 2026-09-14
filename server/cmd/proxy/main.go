@@ -87,11 +87,12 @@ type responseRecorder struct {
 }
 
 type healthResponse struct {
-	Status           string              `json:"status"`
-	Circuit          CircuitBreakerStats `json:"circuit"`
-	RateLimitRejects int64               `json:"rateLimitRejects"`
-	Throttle         ThrottleSnapshot    `json:"throttle"`
-	Timestamp        time.Time           `json:"timestamp"`
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+	// Breaker and throttle statistics are deliberately omitted: /health is
+	// unauthenticated, and the counters disclose caller behavior to anyone
+	// who can reach the endpoint. Operators scrape the server's
+	// Prometheus /metrics instead.
 }
 
 func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
@@ -266,26 +267,22 @@ func buildHealthResponse(
 	throttleTracker *ThrottleTracker,
 	now time.Time,
 ) (healthResponse, int) {
-	stats := breaker.Stats()
-	throttleStats := ThrottleSnapshot{}
-	if throttleTracker != nil {
-		throttleStats = throttleTracker.Snapshot()
-	}
+	// Rate-limit and throttle counters are deliberately not echoed here:
+	// /health is unauthenticated, and the counters disclose caller behavior
+	// to anyone who can reach the endpoint. Operators scrape the server's
+	// Prometheus /metrics instead.
+	_ = rateLimiter
+	_ = throttleTracker
+
 	response := healthResponse{
-		Status:           "ok",
-		Circuit:          stats,
-		RateLimitRejects: 0,
-		Throttle:         throttleStats,
-		Timestamp:        now,
+		Status:    "ok",
+		Timestamp: now,
 	}
 
 	statusCode := http.StatusOK
-	if breaker.IsOpen() {
+	if breaker != nil && breaker.IsOpen() {
 		response.Status = "degraded"
 		statusCode = http.StatusServiceUnavailable
-	}
-	if rateLimiter != nil {
-		response.RateLimitRejects = rateLimiter.Stats()
 	}
 
 	return response, statusCode

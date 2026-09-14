@@ -173,7 +173,7 @@ with urllib.request.urlopen(url, timeout=5.0, context=ctx) as response:
 if payload.get("status") != "ok":
 	raise SystemExit(f"unexpected /health status from {url}: {payload.get('status')}")
 
-required_top_level = ["status", "circuit", "rateLimitRejects", "throttle", "timestamp"]
+required_top_level = ["status", "timestamp"]
 missing_top_level = [name for name in required_top_level if name not in payload]
 if missing_top_level:
 	raise SystemExit(f"missing /health fields from {url}: {', '.join(missing_top_level)}")

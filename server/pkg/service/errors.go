@@ -62,6 +62,11 @@ var (
 	// claimed=false.
 	ErrNoPendingRequests = errors.New("no pending requests found for the specified tools")
 
+	// ErrTooManyPendingRequests reports that the per-session pending-request
+	// cap was reached: the session already has more queued-than-claimable
+	// work outstanding, and accepting more would only grow the backlog.
+	ErrTooManyPendingRequests = errors.New("too many pending requests in session")
+
 	// ErrRequestTimeoutOutOfRange reports a timeout_seconds above the
 	// configured maximum.
 	ErrRequestTimeoutOutOfRange = errors.New("request timeout out of range")
@@ -109,6 +114,8 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, storage.ErrRequestTerminal):
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
+		return status.Errorf(codes.ResourceExhausted, "failed to %s: %v", action, err)
+	case errors.Is(err, ErrTooManyPendingRequests):
 		return status.Errorf(codes.ResourceExhausted, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrRequestTimeoutOutOfRange):
 		return status.Errorf(codes.OutOfRange, "failed to %s: %v", action, err)

@@ -189,6 +189,9 @@ func run() int {
 	serverOptions = append(serverOptions,
 		grpc.MaxRecvMsgSize(model.MaxChunkBatchBytes),
 		grpc.MaxSendMsgSize(model.MaxChunkBatchBytes),
+		// Bound concurrent streams: the default is unlimited, and the
+		// concurrency contract is enforced per machine at the request layer.
+		grpc.MaxConcurrentStreams(2048),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             5 * time.Second,
 			PermitWithoutStream: true,

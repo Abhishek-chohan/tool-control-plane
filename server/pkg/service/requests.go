@@ -219,6 +219,21 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		return nil, wrapf(ErrNoProviderAvailable, "no machines available for tool %s", toolName)
 	}
 
+	// Per-session pending backlog cap: without a claim-draining provider the
+	// queue would grow without bound, so refuse new work past the ceiling.
+	s.requestsMutex.RLock()
+	pendingCount := 0
+	for _, req := range s.requests[sessionID] {
+		if req != nil && req.Status == model.RequestStatusPending && !req.DeadLetter {
+			pendingCount++
+		}
+	}
+	s.requestsMutex.RUnlock()
+	if pendingCount >= maxPendingRequestsPerSession {
+		return nil, wrapf(ErrTooManyPendingRequests,
+			"session %s already has %d pending requests", sessionID, pendingCount)
+	}
+
 	resolvedTimeout := requestTimeout
 	if timeoutSeconds > 0 {
 		resolvedTimeout = time.Duration(timeoutSeconds) * time.Second
@@ -533,7 +548,9 @@ func (s *RequestsService) UpdateRequest(
 		s.ensureRequestDefaults(request)
 		switch status {
 		case model.RequestStatusRunning:
-			if machineID != "" {
+			// Slot-leak guard: a running->running refresh (renewal-style
+			// transition) already holds its slot from the claim.
+			if machineID != "" && prevStatus != model.RequestStatusRunning {
 				if !s.machineService.ReserveMachineSlot(sessionID, machineID) {
 					retryAt := now.Add(s.retryBackoff)
 					request.Status = model.RequestStatusPending
@@ -633,7 +650,9 @@ func (s *RequestsService) updateRequestViaStore(
 	s.requestsMutex.RUnlock()
 
 	reservedSlot := false
-	if status == model.RequestStatusRunning && machineID != "" {
+	// Slot-leak guard: only reserve on a non-running -> running transition.
+	// A running->running refresh (renewal-style) already holds its slot.
+	if status == model.RequestStatusRunning && machineID != "" && prevStatus != model.RequestStatusRunning {
 		if !s.machineService.ReserveMachineSlot(sessionID, machineID) {
 			// The lease holder's machine is at capacity: fenced requeue back
 			// to pending so another provider can take the work.

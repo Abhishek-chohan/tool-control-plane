@@ -33,3 +33,9 @@ const requestCleanupInterval = 30 * time.Minute
 
 // auditRetentionAge bounds how long audit events are retained.
 const auditRetentionAge = 30 * 24 * time.Hour
+
+// maxPendingRequestsPerSession caps the outstanding pending backlog a single
+// session may accumulate. Providers are expected to drain it; a session
+// whose claims stall (no provider, capacity) hits this ceiling instead of
+// growing the queue without bound.
+const maxPendingRequestsPerSession = 512
