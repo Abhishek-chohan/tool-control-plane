@@ -684,37 +684,3 @@ class Toolplane:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.disconnect()
-
-    # Legacy methods for backward compatibility
-    def _register_machine_internal(self):
-        """Legacy method for backward compatibility."""
-        if not self.session_ids:
-            return False
-        for session_id in self.session_ids:
-            ctx = self.get_session(session_id)
-            if ctx is None or getattr(ctx, "machine_id", None) is None:
-                return False
-        return True
-
-    def _register_tool(
-        self,
-        name: str,
-        func: Callable,
-        schema: Dict,
-        stream: bool = False,
-        tags: Optional[List[str]] = None,
-    ):
-        """Legacy method for registering tools."""
-        # For backward compatibility, register on all sessions
-        for session_id in self.session_ids:
-            context = self.get_session(session_id)
-            if context:
-                context.register_tool(name, func, schema, stream=stream, tags=tags)
-
-    def _register_tools_with_server(self):
-        """Legacy method - tools are now registered immediately."""
-        pass
-
-    def _poll_pending_requests(self):
-        """Legacy method - polling is now handled by main loop."""
-        pass

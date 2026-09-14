@@ -30,22 +30,31 @@ from toolplane.toolplane_client import Toolplane
 # Initialize client
 client = Toolplane(
     server_host="localhost",
-    server_port=80,
-    session_ids=["session-123"],
+    server_port=9001,
     user_id="user-456",
-    api_key="your-api-key"
+    api_key="your-api-key",
 )
-
-# Connect to server
 client.connect()
 
-# Register a tool
-@client.tool("session-123", name="echo_tool")
+# Provider side: create a machine-backed session and register tools through
+# the explicit provider runtime (tools are session-scoped).
+provider = client.provider_runtime()
+session = provider.create_session(user_id="user-456", name="demo")
+
+
+@provider.tool(session_id=session.session_id, name="echo_tool")
 def echo_tool(input_str: str) -> str:
     return f"Echo: {input_str}"
 
-# Start the client
-client.start()
+
+provider.start_in_background()
+
+# Consumer side: invoke in the same session and get the tool's result value.
+result = client.invoke("echo_tool", session.session_id, input_str="Hello World")
+print(result)
+
+# Stop the background poll/heartbeat loop when done.
+provider.stop()
 ```
 
 ## Core Classes
@@ -83,7 +92,7 @@ Establishes connection to the Toolplane server.
 ##### `disconnect() -> None`
 Closes connection to the Toolplane server.
 
-##### `create_session(session_id: Optional[str] = None, user_id: Optional[str] = None, name: Optional[str] = None, description: Optional[str] = None, namespace: Optional[str] = None, register_machine: bool = True) -> SessionContext`
+##### `create_session(session_id: Optional[str] = None, user_id: Optional[str] = None, name: Optional[str] = None, description: Optional[str] = None, namespace: Optional[str] = None, register_machine: bool = False) -> SessionContext`
 Creates a new session on the server.
 
 ##### `get_session(session_id: str) -> Optional[SessionContext]`
@@ -95,8 +104,12 @@ Lists all active session contexts.
 ##### `tool(session_id: str, name: Optional[str] = None, description: Optional[str] = None, stream: bool = False, tags: Optional[List[str]] = None) -> Callable[[Callable], Callable]`
 Decorator to register a tool for a session.
 
-##### `invoke(tool_name: str, session_id: str, **params) -> Any`
-Invokes a tool in a session synchronously.
+##### `invoke(tool_name: str, session_id: str, timeout_seconds: int = 0, wait_timeout: Optional[int] = None, **params) -> Any`
+Invokes a tool in a session synchronously and returns the tool's result
+value. `timeout_seconds` sets the request's absolute per-attempt timeout
+on the wire; `wait_timeout` bounds the local wait (default:
+timeout_seconds + 15, else 60). A lapsed wait raises
+`ToolplaneTimeoutError` carrying the request ID.
 
 ##### `ainvoke(tool_name: str, session_id: str, **params) -> str`
 Invokes a tool asynchronously.
@@ -105,13 +118,14 @@ Invokes a tool asynchronously.
 Streams tool execution results.
 
 ##### `astream(tool_name: str, callback: Callable[[Any, bool], None], session_id: str, **params) -> List[Any]`
-Alias for stream method.
+Awaitable stream: runs the blocking stream loop in a worker thread and
+resolves with the collected chunks.
 
 ##### `get_available_tools(session_id: str) -> Dict[str, Any]`
 Gets available tools for a session.
 
-##### `get_request_status(request_id: str, session_id: str) -> Dict[str, Any]`
-Gets status of a request.
+##### `get_request_status(session_id: str, request_id: str) -> Dict[str, Any]`
+Gets status of a request (arguments are session_id first, then request_id).
 
 ##### `start() -> None`
 Starts the client and begins polling for requests.
@@ -161,8 +175,8 @@ Registers a machine for this session.
 ##### `register_tool(name: str, func: Callable, schema: Optional[Dict] = None, description: Optional[str] = None, stream: bool = False, tags: Optional[List[str]] = None) -> None`
 Registers a tool for this session.
 
-##### `invoke(tool_name: str, **params) -> Any`
-Invokes a tool in this session synchronously.
+##### `invoke(tool_name: str, timeout_seconds: int = 0, wait_timeout: Optional[int] = None, **params) -> Any`
+Invokes a tool in this session synchronously and returns the tool's result value.
 
 ##### `ainvoke(tool_name: str, **params) -> str`
 Invokes a tool asynchronously.

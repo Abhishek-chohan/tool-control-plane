@@ -12,10 +12,20 @@ class ToolplaneError(Exception):
     pass
 
 
-class ConnectionError(ToolplaneError):
-    """Error related to gRPC connection."""
+class ToolplaneConnectionError(ToolplaneError):
+    """Error related to gRPC connection.
+
+    Named to avoid shadowing the builtin ConnectionError: modules that
+    imported the old name silently lost the ability to catch (or retry on)
+    real socket connection errors.
+    """
 
     pass
+
+
+# Backwards-compatible alias for the pre-1.0 name. New code should prefer
+# ToolplaneConnectionError.
+ConnectionError = ToolplaneConnectionError
 
 
 class ToolError(ToolplaneError):
