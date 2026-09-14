@@ -173,12 +173,19 @@ func proxyControlMiddleware(cfg proxyConfig, breaker *CircuitBreakerManager, rlm
 				}
 				panic(rec)
 			}
-			// Only gateway-visible backend failures trip the breaker.
-			// Client-induced 5xx (bad request transformed into an INTERNAL
-			// mapping) or app-level 500s say nothing about backend health.
+			// Only gateway-visible backend failures trip the breaker:
+			// 502/503/504. Client-induced 4xx/5xx (invalid payloads mapped to
+			// INTERNAL) and app-level 500s say nothing about backend health —
+			// counting them would open the gateway-wide breaker on healthy
+			// backends.
 			if done != nil {
 				status := recorder.status
-				done(status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout)
+				// done(success): only 502/503/504 are gateway-visible backend
+				// failures; a 500 or client 4xx is a success for the breaker.
+				success := status != http.StatusBadGateway &&
+					status != http.StatusServiceUnavailable &&
+					status != http.StatusGatewayTimeout
+				done(success)
 			}
 		}()
 
@@ -198,8 +205,11 @@ func extractAPIKey(r *http.Request) string {
 	}
 	// The documented auth path: Authorization: Bearer <key>. Without this
 	// fallback, bearer-key callers bypass per-key rate limiting entirely.
-	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
+	// RFC 7235: the auth-scheme token is case-insensitive.
+	if auth := r.Header.Get("Authorization"); auth != "" {
+		if scheme, rest, found := strings.Cut(auth, " "); found && strings.EqualFold(scheme, "bearer") {
+			return strings.TrimSpace(rest)
+		}
 	}
 	return ""
 }

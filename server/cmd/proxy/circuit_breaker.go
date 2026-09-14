@@ -101,15 +101,11 @@ func (m *CircuitBreakerManager) Begin() (func(success bool), func(), time.Durati
 
 	m.totalAccepted.Add(1)
 	doneWrapper := func(success bool) {
-		// Latch the first success; failures before it are cold-start noise
+		// Any completed response proves the backend channel works: latch on
+		// the first one. Failures before the latch are cold-start noise
 		// (readiness polls racing the lazy backend dial) and must not trip
 		// the breaker.
-		if success && !m.sawSuccess.Load() {
-			m.sawSuccess.Store(true)
-		}
-		if !success && !m.sawSuccess.Load() {
-			success = true
-		}
+		m.sawSuccess.Store(true)
 		done(success)
 	}
 	release := func() {
