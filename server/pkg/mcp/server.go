@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,12 @@ import (
 
 const maxRequestBodyBytes = 4 * 1024 * 1024
 
+// ErrSessionNotBound reports that a request arrived without an explicit
+// session binding while gateway auto-provisioning is disabled. Call sites map
+// it to an instructive invalid-params response instead of a generic internal
+// error.
+var ErrSessionNotBound = errors.New("no session bound")
+
 // DefaultUserID is the user ID applied to auto-provisioned sessions when no
 // override is supplied via WithDefaultUserID.
 const DefaultUserID = "mcp-gateway"
@@ -38,6 +45,12 @@ type Server struct {
 	syncTimeout   time.Duration
 	pollInterval  time.Duration
 	defaultUserID string
+
+	// allowSessionAutoProvision gates creating a session per API key when the
+	// client does not bind one. Disabled by default: production Postgres auth
+	// refuses the create-session call, so callers must bind sessions via
+	// _meta; development enables the convenience explicitly.
+	allowSessionAutoProvision bool
 
 	sessionsMu   sync.Mutex
 	sessionByKey map[string]*cachedSession
@@ -84,13 +97,26 @@ func WithPollInterval(d time.Duration) Option {
 // API keys that do not pass an explicit session via _meta.
 func WithDefaultUserID(userID string) Option {
 	return func(s *Server) {
-		if strings.TrimSpace(userID) != "" {
-			s.defaultUserID = userID
-		}
+		s.defaultUserID = userID
+	}
+}
+
+// WithSessionAutoProvision controls whether the gateway may create a session
+// per API key when the client does not bind one via _meta. Auto-provisioned
+// sessions are a development convenience: under production Postgres auth the
+// gateway's key lacks the capabilities to create sessions, so production
+// deployments must configure explicit session binding.
+func WithSessionAutoProvision(allow bool) Option {
+	return func(s *Server) {
+		s.allowSessionAutoProvision = allow
 	}
 }
 
 // NewServer builds a facade over the given backend connection.
+//
+// Session auto-provisioning defaults to ENABLED for library callers
+// (development convenience); the gateway binary gates it to non-production
+// environments via WithSessionAutoProvision.
 func NewServer(conn grpc.ClientConnInterface, opts ...Option) *Server {
 	server := &Server{
 		tools:         gw.NewToolServiceClient(conn),
@@ -100,6 +126,11 @@ func NewServer(conn grpc.ClientConnInterface, opts ...Option) *Server {
 		pollInterval:  250 * time.Millisecond,
 		defaultUserID: DefaultUserID,
 		sessionByKey:  make(map[string]*cachedSession),
+
+		// Library default: auto-provisioning on (development convenience).
+		// The gateway binary passes WithSessionAutoProvision(environment !=
+		// "production") so production deployments require explicit binding.
+		allowSessionAutoProvision: true,
 	}
 	for _, opt := range opts {
 		opt(server)
@@ -287,6 +318,16 @@ func (s *Server) resolveSession(ctx context.Context, meta requestMeta, apiKey st
 		return meta.sessionID, nil
 	}
 
+	// Auto-provision gate: without explicit binding, creating a session per
+	// API key is a development convenience. Gate it off by default so a
+	// production deployment (where the key lacks create-session capability
+	// and BindSession would reject the mismatch) fails with a clear
+	// instruction instead of a confusing capability error.
+	if !s.allowSessionAutoProvision {
+		return "", fmt.Errorf("%w: set dev.toolplane/session_id in each request's _meta "+
+			"(or enable gateway session auto-provisioning for development)", ErrSessionNotBound)
+	}
+
 	s.sessionsMu.Lock()
 	defer s.sessionsMu.Unlock()
 	now := time.Now()
@@ -343,6 +384,11 @@ func (s *Server) handleTasksGet(ctx context.Context, req *Request, meta requestM
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 
@@ -413,6 +459,11 @@ func (s *Server) handleTasksCancel(ctx context.Context, req *Request, meta reque
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 

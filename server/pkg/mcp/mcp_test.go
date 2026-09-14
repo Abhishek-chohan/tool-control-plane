@@ -504,3 +504,50 @@ func TestAutoProvisionsSessionPerAPIKey(t *testing.T) {
 		t.Fatal("expected the facade to auto-provision a session")
 	}
 }
+
+// TestSessionAutoProvisionGated pins the production gate: with auto-provision
+// disabled, a tools/call that binds no session is refused with an instruction
+// to bind one (instead of auto-creating sessions the caller's key cannot
+// address under production Postgres auth).
+func TestSessionAutoProvisionGated(t *testing.T) {
+	toolService := service.NewToolService(trace.NopTracer(), nil)
+	sessionService := service.NewSessionsService(trace.NopTracer(), nil)
+	machineService := service.NewMachinesService(context.Background(), toolService, trace.NopTracer(), nil)
+	requestService := service.NewRequestsService(context.Background(), toolService, machineService, trace.NopTracer(), nil)
+	tasksService := service.NewTasksService(context.Background(), toolService, machineService, requestService, trace.NopTracer(), nil)
+	conn := serveBackend(t, toolService, sessionService, machineService, requestService, tasksService)
+
+	handler := mcp.NewServer(
+		conn,
+		mcp.WithSessionAutoProvision(false),
+	).Handler()
+
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "anything",
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	var response struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response %s: %v", rec.Body.String(), err)
+	}
+	if response.Error == nil {
+		t.Fatalf("expected an error response, got %s", rec.Body.String())
+	}
+	if !strings.Contains(response.Error.Message, "no session bound") {
+		t.Fatalf("error message %q does not instruct session binding", response.Error.Message)
+	}
+}

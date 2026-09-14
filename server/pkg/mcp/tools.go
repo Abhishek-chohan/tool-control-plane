@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -39,6 +40,11 @@ func (s *Server) handleDiscover() (any, *Error) {
 func (s *Server) handleToolsList(ctx context.Context, meta requestMeta, apiKey string) (any, *Error) {
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 
@@ -109,6 +115,11 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 
 	sessionID, err := s.resolveSession(ctx, meta, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 
@@ -227,6 +238,11 @@ func correlationRef() string {
 func (s *Server) handleLegacyToolsList(ctx context.Context, apiKey string) (any, *Error) {
 	sessionID, err := s.resolveSession(ctx, requestMeta{}, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 
@@ -271,6 +287,11 @@ func (s *Server) handleLegacyToolsCall(ctx context.Context, req *Request, apiKey
 
 	sessionID, err := s.resolveSession(ctx, requestMeta{}, apiKey)
 	if err != nil {
+		if errors.Is(err, ErrSessionNotBound) {
+			return nil, errInvalidParams(
+				"no session bound: set dev.toolplane/session_id in each request's _meta " +
+					"(or enable gateway session auto-provisioning for development)")
+		}
 		return nil, internalErrorRef("session resolution", err)
 	}
 
