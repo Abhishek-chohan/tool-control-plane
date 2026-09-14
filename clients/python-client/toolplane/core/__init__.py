@@ -4,6 +4,7 @@ from .config import ClientConfig
 from .connection import ConnectionManager
 from .errors import (
     ConnectionError,
+    ToolplaneConnectionError,
     MachineError,
     RequestError,
     SessionError,
@@ -42,6 +43,7 @@ __all__ = [
     "SessionContext",
     "ToolplaneError",
     "ConnectionError",
+    "ToolplaneConnectionError",
     "ToolError",
     "SessionError",
     "MachineError",

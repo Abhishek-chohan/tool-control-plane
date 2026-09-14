@@ -27,6 +27,7 @@ from .common import (
 from .core import (
     ClientConfig,
     ConnectionError,
+    ToolplaneConnectionError,
     MachineError,
     RequestError,
     SessionContext,
@@ -59,6 +60,7 @@ __all__ = [
     "ClientConfig",
     "ToolplaneError",
     "ConnectionError",
+    "ToolplaneConnectionError",
     "ToolError",
     "SessionError",
     "MachineError",

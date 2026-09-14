@@ -169,15 +169,18 @@ class ProviderRuntime:
         return decorator
 
     def _apply_pending_registrations(self) -> None:
-        """Attach sessions and register every deferred tool."""
+        """Attach sessions and register every deferred tool.
+
+        A failed registration puts the item back at the head of the queue so
+        a later start attempt retries it; tools are never silently lost.
+        """
         while True:
             with self._registration_lock:
                 if not self._pending_registrations:
                     return
-                pending = list(self._pending_registrations)
-                self._pending_registrations = []
+                item = self._pending_registrations.pop(0)
 
-            for item in pending:
+            try:
                 self.register_tool(
                     session_id=item.session_id,
                     name=item.name,
@@ -186,6 +189,10 @@ class ProviderRuntime:
                     stream=item.stream,
                     tags=item.tags,
                 )
+            except Exception:
+                with self._registration_lock:
+                    self._pending_registrations.insert(0, item)
+                raise
 
     def poll_once(self) -> None:
         self._apply_pending_registrations()
@@ -201,6 +208,9 @@ class ProviderRuntime:
     def start_in_background(
         self, session_ids: Optional[Iterable[str]] = None
     ) -> "ProviderRuntime":
+        # Queued @tool registrations may introduce the very sessions this
+        # call is about to check for; apply them before validating.
+        self._apply_pending_registrations()
         with self._lock:
             self.add_sessions(session_ids)
             if self._running:

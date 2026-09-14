@@ -18,7 +18,7 @@ from toolplane.proto.service_pb2_grpc import (
 )
 
 from .config import ClientConfig
-from .errors import ToolplaneConnectionError
+from .errors import ConnectionError, ToolplaneConnectionError
 
 logger = logging.getLogger(__name__)
 

@@ -61,7 +61,7 @@ class Toolplane:
     def __init__(
         self,
         server_host: str = "localhost",
-        server_port: int = 80,
+        server_port: int = 9001,
         use_tls: bool = False,
         tls_cert_path: Optional[str] = None,
         tls_key_path: Optional[str] = None,
