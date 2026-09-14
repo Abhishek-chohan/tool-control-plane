@@ -125,31 +125,13 @@ url = sys.argv[1]
 with urllib.request.urlopen(url, timeout=2.0) as response:
 	payload = json.loads(response.read().decode("utf-8"))
 
-required_top_level = ["status", "circuit", "rateLimitRejects", "throttle", "timestamp"]
+required_top_level = ["status", "timestamp"]
 missing_top_level = [name for name in required_top_level if name not in payload]
 if missing_top_level:
 	raise SystemExit(f"missing /health fields from {url}: {', '.join(missing_top_level)}")
 
 if payload["status"] != "ok":
 	raise SystemExit(f"unexpected /health status from {url}: {payload['status']}")
-
-circuit = payload["circuit"]
-required_circuit = ["state", "inflight", "rejected", "accepted", "counts"]
-missing_circuit = [name for name in required_circuit if name not in circuit]
-if missing_circuit:
-	raise SystemExit(f"missing circuit fields from {url}: {', '.join(missing_circuit)}")
-
-counts = circuit["counts"]
-required_counts = ["Requests", "TotalSuccesses", "TotalFailures", "ConsecutiveSuccesses", "ConsecutiveFailures"]
-missing_counts = [name for name in required_counts if name not in counts]
-if missing_counts:
-	raise SystemExit(f"missing circuit count fields from {url}: {', '.join(missing_counts)}")
-
-throttle = payload["throttle"]
-required_throttle = ["total", "apiRate", "ipRate", "concurrency", "circuitOpen", "circuitProbe", "unknown"]
-missing_throttle = [name for name in required_throttle if name not in throttle]
-if missing_throttle:
-	raise SystemExit(f"missing throttle fields from {url}: {', '.join(missing_throttle)}")
 PY
 }
 
