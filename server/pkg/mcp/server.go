@@ -47,9 +47,9 @@ type Server struct {
 	defaultUserID string
 
 	// allowSessionAutoProvision gates creating a session per API key when the
-	// client does not bind one. Disabled by default: production Postgres auth
-	// refuses the create-session call, so callers must bind sessions via
-	// _meta; development enables the convenience explicitly.
+	// client does not bind one. The library default (set in NewServer) is
+	// enabled for development convenience; the gateway binary disables it in
+	// production, where clients must bind sessions via _meta.
 	allowSessionAutoProvision bool
 
 	sessionsMu   sync.Mutex
@@ -97,7 +97,9 @@ func WithPollInterval(d time.Duration) Option {
 // API keys that do not pass an explicit session via _meta.
 func WithDefaultUserID(userID string) Option {
 	return func(s *Server) {
-		s.defaultUserID = userID
+		if strings.TrimSpace(userID) != "" {
+			s.defaultUserID = userID
+		}
 	}
 }
 

@@ -522,12 +522,19 @@ func TestSessionAutoProvisionGated(t *testing.T) {
 		mcp.WithSessionAutoProvision(false),
 	).Handler()
 
+	// A modern 2026 tools/call: the 2026-07-28 protocol version and
+	// capabilities ride in _meta, but no session is bound — exactly the
+	// production posture the gate exists for.
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "anything",
+			"_meta": map[string]any{
+				"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+				"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			},
 		},
 	})
 
