@@ -52,6 +52,7 @@ PY
 
 wait_for_http_ok() {
 	"$python_bin" - "$1" "$2" <<'PY'
+import ssl
 import sys
 import time
 import urllib.error
@@ -59,10 +60,14 @@ import urllib.request
 
 url = sys.argv[1]
 deadline = time.time() + float(sys.argv[2])
+# Self-signed reference CA material: https probes skip verification. The
+# integrity claim comes from the pinned CA in the deployed certs, not from
+# the probe.
+ctx = ssl._create_unverified_context()
 
 while time.time() < deadline:
 	try:
-		with urllib.request.urlopen(url, timeout=1.0) as response:
+		with urllib.request.urlopen(url, timeout=1.0, context=ctx) as response:
 			if response.status == 200:
 				sys.exit(0)
 	except (urllib.error.URLError, TimeoutError, ValueError):
@@ -156,11 +161,13 @@ PY
 validate_health() {
 	"$python_bin" - "$1" <<'PY'
 import json
+import ssl
 import sys
 import urllib.request
 
 url = sys.argv[1]
-with urllib.request.urlopen(url, timeout=5.0) as response:
+ctx = ssl._create_unverified_context()
+with urllib.request.urlopen(url, timeout=5.0, context=ctx) as response:
 	payload = json.loads(response.read().decode("utf-8"))
 
 if payload.get("status") != "ok":
@@ -229,6 +236,22 @@ EOF
 
 	openssl x509 -req -in "$cert_dir/server.csr" -CA "$cert_dir/ca.crt" -CAkey "$cert_dir/ca.key" -CAcreateserial \
 		-out "$cert_dir/server.crt" -days 2 -sha256 -extfile "$cert_dir/server.ext" >/dev/null 2>&1
+
+	# Client-facing certificates for both edge gateways, signed by the same
+	# reference CA. SANs must cover the compose service names (used as the
+	# backend TLS server name) and localhost for health probes.
+	for edge in gateway mcp-gateway; do
+		openssl genrsa -out "$cert_dir/$edge.key" 2048 >/dev/null 2>&1
+		openssl req -new -key "$cert_dir/$edge.key" -subj "/CN=$edge" -out "$cert_dir/$edge.csr" >/dev/null 2>&1
+
+		cat >"$cert_dir/$edge.ext" <<EOF
+subjectAltName = DNS:$edge,DNS:localhost,IP:127.0.0.1
+extendedKeyUsage = serverAuth
+EOF
+
+		openssl x509 -req -in "$cert_dir/$edge.csr" -CA "$cert_dir/ca.crt" -CAkey "$cert_dir/ca.key" -CAcreateserial \
+			-out "$cert_dir/$edge.crt" -days 2 -sha256 -extfile "$cert_dir/$edge.ext" >/dev/null 2>&1
+	done
 }
 
 project_name="toolplane-reference-it-$$-$(date +%s)"
@@ -242,6 +265,7 @@ grpc_port="${TOOLPLANE_REFERENCE_GRPC_PORT:-$(find_free_port)}"
 http_port="${TOOLPLANE_REFERENCE_HTTP_PORT:-$(find_free_port)}"
 metrics_port="${TOOLPLANE_REFERENCE_METRICS_PORT:-$(find_free_port)}"
 bootstrap_http_port="${TOOLPLANE_REFERENCE_BOOTSTRAP_HTTP_PORT:-$(find_free_port)}"
+mcp_port="${TOOLPLANE_REFERENCE_MCP_PORT:-$(find_free_port)}"
 bootstrap_token="${TOOLPLANE_REFERENCE_BOOTSTRAP_TOKEN:-toolplane-bootstrap-${project_name}}"
 image_name="${TOOLPLANE_REFERENCE_IMAGE:-toolplane-reference:reference-deployment-integration}"
 skip_build="${TOOLPLANE_REFERENCE_SKIP_BUILD:-auto}"
@@ -296,11 +320,19 @@ TOOLPLANE_GRPC_PUBLISHED_PORT=${grpc_port}
 TOOLPLANE_HTTP_PUBLISHED_PORT=${http_port}
 TOOLPLANE_METRICS_PUBLISHED_PORT=${metrics_port}
 TOOLPLANE_BOOTSTRAP_HTTP_PUBLISHED_PORT=${bootstrap_http_port}
+TOOLPLANE_MCP_PUBLISHED_PORT=${mcp_port}
 TOOLPLANE_SERVER_TLS_CERT_PATH=${cert_subdir}/server.crt
 TOOLPLANE_SERVER_TLS_KEY_PATH=${cert_subdir}/server.key
 TOOLPLANE_PROXY_BACKEND_TLS_CA_PATH=${cert_subdir}/ca.crt
+TOOLPLANE_GATEWAY_TLS_CERT_PATH=${cert_subdir}/gateway.crt
+TOOLPLANE_GATEWAY_TLS_KEY_PATH=${cert_subdir}/gateway.key
+TOOLPLANE_MCP_TLS_CERT_PATH=${cert_subdir}/mcp-gateway.crt
+TOOLPLANE_MCP_TLS_KEY_PATH=${cert_subdir}/mcp-gateway.key
+TOOLPLANE_MCP_BACKEND_TLS_CA_PATH=${cert_subdir}/ca.crt
 TOOLPLANE_PROXY_ALLOWED_ORIGINS=https://example.invalid
 TOOLPLANE_PROXY_BACKEND_TLS_SERVER_NAME=server
+TOOLPLANE_MCP_ALLOWED_ORIGINS=https://example.invalid
+TOOLPLANE_MCP_BACKEND_TLS_SERVER_NAME=server
 TOOLPLANE_BOOTSTRAP_FIXED_API_KEY=${bootstrap_token}
 EOF
 
@@ -365,7 +397,7 @@ compose stop bootstrap-server bootstrap-gateway >/dev/null
 compose rm -f bootstrap-server bootstrap-gateway >/dev/null
 
 log_step "starting production services"
-compose up -d server gateway
+compose up -d server gateway mcp-gateway
 
 if ! wait_for_tcp 127.0.0.1 "$grpc_port" 120; then
 	echo "gRPC server did not become ready on port ${grpc_port}" >&2
@@ -375,16 +407,31 @@ if ! wait_for_http_ok "http://127.0.0.1:${metrics_port}/metrics" 120; then
 	echo "metrics endpoint did not become ready on port ${metrics_port}" >&2
 	exit 1
 fi
-if ! wait_for_http_ok "http://127.0.0.1:${http_port}/health" 120; then
+if ! wait_for_http_ok "https://127.0.0.1:${http_port}/health" 120; then
 	echo "gateway health endpoint did not become ready on port ${http_port}" >&2
+	exit 1
+fi
+if ! wait_for_http_ok "https://127.0.0.1:${mcp_port}/health" 120; then
+	echo "mcp-gateway health endpoint did not become ready on port ${mcp_port}" >&2
 	exit 1
 fi
 
 validate_metrics "http://127.0.0.1:${metrics_port}/metrics"
-validate_health "http://127.0.0.1:${http_port}/health"
+validate_health "https://127.0.0.1:${http_port}/health"
 
-get_session_json="$(curl -fsS \
-	"http://127.0.0.1:${http_port}/api.v1/sessions/${session_id}" \
+# Crash-loop guard: a production gate (missing certs, refused config) shows
+# up here as a nonzero RestartCount even when a later restart succeeded.
+for service in server gateway mcp-gateway; do
+	container="$project_name-$service-1"
+	restarts="$(docker inspect --format "{{.RestartCount}}" "$container" 2>/dev/null || echo 0)"
+	if [ "$restarts" != "0" ]; then
+		echo "service $service restarted $restarts time(s) — production gate regressed" >&2
+		exit 1
+	fi
+done
+
+get_session_json="$(curl -fsSk \
+	"https://127.0.0.1:${http_port}/api.v1/sessions/${session_id}" \
 	-H "Authorization: Bearer ${admin_api_key}" \
 	-H 'Content-Type: application/json' \
 	-d "{\"sessionId\":\"${session_id}\"}")"

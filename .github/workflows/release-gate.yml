@@ -127,3 +127,34 @@ jobs:
             -m conformance \
             -k "mcp" \
             -q
+
+  # Boots the production reference compose stack (Postgres + migrate + server
+  # + both TLS edge gateways) and asserts it comes up healthy with zero
+  # restarts — the crash-loop guard for production-mode configuration gates.
+  reference-deployment:
+    name: Reference Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+
+      - name: Run reference deployment integration
+        working-directory: server
+        env:
+          TOOLPLANE_REFERENCE_VERBOSE: "1"
+        run: bash ./scripts/reference_deployment_integration.sh
+
+      - name: Upload integration logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-deployment-logs
+          path: /tmp/toolplane-reference-it-*/
+          retention-days: 5
+          if-no-files-found: ignore
