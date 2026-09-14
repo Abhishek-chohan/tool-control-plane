@@ -462,7 +462,7 @@ Public methods parsed from `toolplane/provider_runtime.py`:
 | `attach_session(session_id: str, register_machine: bool=True)` |  |
 | `create_session(session_id: Optional[str]=None, user_id: Optional[str]=None, name: Optional[str]=None, description: Optional[str]=None, namespace: Optional[str]=None, register_machine: bool=True)` |  |
 | `register_tool(session_id: str, name: str, func: Callable, schema: Optional[dict]=None, description: Optional[str]=None, stream: bool=False, tags: Optional[List[str]]=None) -> Callable` |  |
-| `tool(session_id: str, name: Optional[str]=None, description: Optional[str]=None, stream: bool=False, tags: Optional[List[str]]=None)` |  |
+| `tool(session_id: str, name: Optional[str]=None, description: Optional[str]=None, stream: bool=False, tags: Optional[List[str]]=None)` | Queue a tool for registration at runtime start. |
 | `poll_once() -> None` |  |
 | `start_in_background(session_ids: Optional[Iterable[str]]=None) -> 'ProviderRuntime'` |  |
 | `run_forever(session_ids: Optional[Iterable[str]]=None) -> None` |  |
