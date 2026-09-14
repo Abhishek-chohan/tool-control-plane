@@ -154,13 +154,11 @@ func (s *GRPCServer) CreateSession(ctx context.Context, req *proto.CreateSession
 	// Create session with optional client-specified ID
 	session, err := s.sessionService.CreateSession(req.UserId, req.Name, req.Description, req.SessionId, req.Namespace)
 	if err != nil {
-		// If session already exists, return existing session
+		// Existence-oracle guard: on a collision, return a bare
+		// AlreadyExists with no payload. Fetching and returning the existing
+		// session would hand the caller another tenant's session metadata.
 		if errors.Is(err, ErrAlreadyExists) {
-			existing, getErr := s.sessionService.GetSessionByID(req.SessionId)
-			if getErr != nil {
-				return nil, status.Errorf(codes.Internal, "session %s exists but failed to retrieve: %v", req.SessionId, getErr)
-			}
-			return &proto.CreateSessionResponse{Session: convertPublicSessionToProto(existing)}, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
+			return nil, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
 		}
 		return nil, statusFromDomainError("create session", err)
 	}
