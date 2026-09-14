@@ -250,6 +250,21 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	request.IdempotencyKey = idempotencyKey
 	request.VisibleAt = time.Now()
 
+	// Cap check + insert run under the cache write lock so concurrent creates
+	// cannot all pass the ceiling check between count and insert.
+	s.requestsMutex.Lock()
+	pendingCount = 0
+	for _, req := range s.requests[sessionID] {
+		if req != nil && req.Status == model.RequestStatusPending && !req.DeadLetter {
+			pendingCount++
+		}
+	}
+	if pendingCount >= maxPendingRequestsPerSession {
+		s.requestsMutex.Unlock()
+		return nil, wrapf(ErrTooManyPendingRequests,
+			"session %s already has %d pending requests", sessionID, pendingCount)
+	}
+
 	// Store request: persist-first so the store is authoritative. The store
 	// call runs without the cache lock — the collision lookup below takes
 	// cache read locks of its own and would deadlock against a held write
@@ -258,8 +273,9 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	// participate in graceful shutdown.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
-		defer cancel()
 		if err := s.store.InsertRequest(ctx, request); err != nil {
+			cancel()
+			s.requestsMutex.Unlock()
 			// A concurrent replica inserted the same (session, key) first: the
 			// unique partial index — or the memory store's contract-equivalent
 			// conflict — rejects this insert and the retry returns the
@@ -271,14 +287,13 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 			}
 			return nil, fmt.Errorf("persist request create failed: %w", err)
 		}
+		cancel()
+	} else {
+		if _, ok := s.requests[sessionID]; !ok {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		s.requests[sessionID][request.ID] = request
 	}
-
-	// Mirror into the local cache after a successful (or store-less) create.
-	s.requestsMutex.Lock()
-	if _, ok := s.requests[sessionID]; !ok {
-		s.requests[sessionID] = make(map[string]*model.Request)
-	}
-	s.requests[sessionID][request.ID] = request
 	s.requestsMutex.Unlock()
 
 	s.recordRequestEvent(request, trace.EventRequestCreated, "", map[string]any{
