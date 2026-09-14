@@ -26,6 +26,12 @@ type CircuitBreakerManager struct {
 	breaker       *gobreaker.TwoStepCircuitBreaker
 	maxConcurrent int64
 
+	// sawSuccess latches the first successful backend request: startup
+	// failures before any success (lazy channel dial racing the readiness
+	// probe) are cold-start noise, not a backend going bad, and must not
+	// trip the breaker.
+	sawSuccess atomic.Bool
+
 	openTimeout  time.Duration
 	state        atomic.Uint32
 	stateChanged atomic.Int64
@@ -94,11 +100,19 @@ func (m *CircuitBreakerManager) Begin() (func(success bool), func(), time.Durati
 	}
 
 	m.totalAccepted.Add(1)
+	doneWrapper := func(success bool) {
+		// Any completed response proves the backend channel works: latch on
+		// the first one. Failures before the latch are cold-start noise
+		// (readiness polls racing the lazy backend dial) and must not trip
+		// the breaker.
+		m.sawSuccess.Store(true)
+		done(success)
+	}
 	release := func() {
 		m.inflight.Add(-1)
 	}
 
-	return done, release, 0, nil
+	return doneWrapper, release, 0, nil
 }
 
 // Stats exposes aggregate breaker metrics for health endpoints.
