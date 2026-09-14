@@ -93,6 +93,10 @@ services:
         ":8080",
         "--backend",
         "server:9001",
+        "--tls-cert-file",
+        "/certs/gateway.crt",
+        "--tls-key-file",
+        "/certs/gateway.key",
         "--api-rate",
         "${TOOLPLANE_PROXY_API_RATE:-25}",
         "--api-burst",
@@ -113,11 +117,15 @@ services:
       server:
         condition: service_healthy
     ports:
-      - "${TOOLPLANE_HTTP_PUBLISHED_PORT:-8080}:8080"
+      # Loopback-bound: client-facing TLS terminates here, but the reference
+      # stack never publishes the edge on all interfaces by default.
+      - "127.0.0.1:${TOOLPLANE_HTTP_PUBLISHED_PORT:-8080}:8080"
     volumes:
       - ${TOOLPLANE_PROXY_BACKEND_TLS_CA_PATH:-./certs/ca.crt}:/certs/ca.crt:ro
+      - ${TOOLPLANE_GATEWAY_TLS_CERT_PATH:-./certs/gateway.crt}:/certs/gateway.crt:ro
+      - ${TOOLPLANE_GATEWAY_TLS_KEY_PATH:-./certs/gateway.key}:/certs/gateway.key:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health >/dev/null"]
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8080/health >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -131,6 +139,10 @@ services:
         ":8081",
         "--backend",
         "server:9001",
+        "--tls-cert-file",
+        "/certs/mcp-gateway.crt",
+        "--tls-key-file",
+        "/certs/mcp-gateway.key",
       ]
     restart: unless-stopped
     environment:
@@ -143,11 +155,13 @@ services:
       server:
         condition: service_healthy
     ports:
-      - "${TOOLPLANE_MCP_PUBLISHED_PORT:-8081}:8081"
+      - "127.0.0.1:${TOOLPLANE_MCP_PUBLISHED_PORT:-8081}:8081"
     volumes:
       - ${TOOLPLANE_MCP_BACKEND_TLS_CA_PATH:-./certs/ca.crt}:/certs/ca.crt:ro
+      - ${TOOLPLANE_MCP_TLS_CERT_PATH:-./certs/mcp-gateway.crt}:/certs/mcp-gateway.crt:ro
+      - ${TOOLPLANE_MCP_TLS_KEY_PATH:-./certs/mcp-gateway.key}:/certs/mcp-gateway.key:ro
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/health >/dev/null"]
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://127.0.0.1:8081/health >/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12
