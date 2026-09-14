@@ -115,3 +115,37 @@ func TestGRPCServerListRequestsFullFinalPage(t *testing.T) {
 		t.Fatalf("full final page must not carry a next_page_token (page=%+v)", page.Page)
 	}
 }
+
+// TestGRPCServerCreateSessionCollisionBareAlreadyExists pins the
+// existence-oracle guard: a duplicate CreateSession gets a bare
+// AlreadyExists with NO session payload (the response must be nil), so a
+// caller cannot harvest another tenant's session metadata by guessing IDs.
+func TestGRPCServerCreateSessionCollisionBareAlreadyExists(t *testing.T) {
+	sessionService := NewSessionsService(trace.NopTracer(), nil)
+	first, err := sessionService.CreateSession("owner-user", "Private Session", "owner metadata", "sess-collision", "tenant-a")
+	if err != nil {
+		t.Fatalf("create initial session: %v", err)
+	}
+
+	server := NewGRPCServer(nil, sessionService, nil, nil, nil)
+	resp, err := server.CreateSession(context.Background(), &proto.CreateSessionRequest{
+		SessionId: "sess-collision",
+		UserId:    "attacker-user",
+		Name:      "Attacker Session",
+	})
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("collision error = %v, want AlreadyExists", err)
+	}
+	if resp != nil && resp.Session != nil {
+		t.Fatalf("collision response leaked session payload: %+v", resp.Session)
+	}
+
+	// The owner's session is untouched and still readable by its ID.
+	stored, err := sessionService.GetSessionByID("sess-collision")
+	if err != nil {
+		t.Fatalf("get session after collision: %v", err)
+	}
+	if stored.ID != first.ID || stored.Name != "Private Session" {
+		t.Fatalf("session mutated by collision: %+v", stored)
+	}
+}
