@@ -8,7 +8,7 @@ from toolplane.utils.schema import generate_schema_from_function
 
 from ..common.base_tool_manager import BaseToolManager
 from ..common.utils import validate_tool_name
-from ..core.errors import ToolError
+from ..core.errors import ToolError, ToolplaneAPIError
 from .http_connection import HTTPConnectionManager
 
 
@@ -282,11 +282,18 @@ class HTTPToolManager(BaseToolManager):
 
             return response.get("requestId")
 
+        except ToolplaneAPIError:
+            raise
         except Exception as e:
             raise ToolError(f"Failed to execute tool {tool_name}: {e}")
 
     def _stream_tool_on_server(
-        self, session_id: str, tool_name: str, params: Dict, idempotency_key: str = ""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict,
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
     ):
         """Stream tool execution."""
         try:

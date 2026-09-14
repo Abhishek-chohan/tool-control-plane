@@ -121,8 +121,9 @@ class SessionContext:
 
         except ToolplaneTimeoutError:
             raise
-        except ToolplaneAPIError as e:
-            raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}") from e
+        except ToolplaneAPIError:
+            # Typed server errors keep their identity for the caller.
+            raise
 
     async def ainvoke(
         self,
@@ -222,7 +223,11 @@ class SessionContext:
                 # idempotency key returns that request instead of executing
                 # the tool a second time.
                 return self._stream_via_polling(
-                    tool_name, callback, params, idempotency_key
+                    tool_name,
+                    callback,
+                    params,
+                    idempotency_key,
+                    timeout_seconds=timeout_seconds,
                 )
 
         except ToolplaneError:
@@ -239,6 +244,7 @@ class SessionContext:
         tool_name: str,
         params: Dict,
         idempotency_key: str,
+        timeout_seconds: int = 0,
     ):
         """Continue a broken stream from the last acknowledged sequence."""
         try:
@@ -264,6 +270,7 @@ class SessionContext:
                 request_id=request_id,
                 skip=len(all_chunks),
                 accumulate=all_chunks,
+                timeout_seconds=timeout_seconds,
             )
         return all_chunks
 
@@ -276,6 +283,7 @@ class SessionContext:
         request_id: Optional[str] = None,
         skip: int = 0,
         accumulate: Optional[List] = None,
+        timeout_seconds: int = 0,
     ):
         """Stream via polling fallback.
 
@@ -287,7 +295,11 @@ class SessionContext:
         """
         if request_id is None:
             request_id = self.tool_manager.execute_tool(
-                self.session_id, tool_name, params, idempotency_key
+                self.session_id,
+                tool_name,
+                params,
+                idempotency_key,
+                timeout_seconds=timeout_seconds,
             )
 
         all_chunks = accumulate if accumulate is not None else []

@@ -129,10 +129,16 @@ class HTTPSessionContext:
 
         except ToolplaneTimeoutError:
             raise
-        except ToolplaneAPIError as e:
-            raise ToolplaneError(f"Failed to invoke tool {tool_name}: {e}") from e
+        except ToolplaneAPIError:
+            # Typed server errors keep their identity for the caller.
+            raise
 
-    async def ainvoke(self, tool_name: str, **params) -> str:
+    async def ainvoke(
+        self,
+        tool_name: str,
+        timeout_seconds: int = 0,
+        **params,
+    ) -> str:
         """Submit a tool invocation without blocking the caller.
 
         Returns the request ID once the gateway accepts the work; poll
@@ -141,11 +147,13 @@ class HTTPSessionContext:
         running event loop.
         """
         try:
+            payload = json.dumps(params)
             return await asyncio.to_thread(
                 self.request_manager.create_request,
                 self.session_id,
                 tool_name,
-                json.dumps(params),
+                payload,
+                timeout_seconds=timeout_seconds,
             )
         except Exception as e:
             raise ToolplaneError(f"Failed to async invoke tool {tool_name}: {e}")

@@ -290,13 +290,17 @@ class ToolplaneHTTP:
             **params,
         )
 
-    async def ainvoke(self, tool_name: str, session_id: str, **params) -> str:
+    async def ainvoke(
+        self, tool_name: str, session_id: str, timeout_seconds: int = 0, **params
+    ) -> str:
         """Submit a tool invocation without blocking; awaits the request ID."""
         context = self.get_session(session_id)
         if not context:
             raise ToolplaneError(f"Session {session_id} not found")
 
-        return await context.ainvoke(tool_name, **params)
+        return await context.ainvoke(
+            tool_name, timeout_seconds=timeout_seconds, **params
+        )
 
     def stream(
         self,
