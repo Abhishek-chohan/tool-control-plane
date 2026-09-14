@@ -134,10 +134,14 @@ func main() {
 	}
 	defer conn.Close()
 
+	// Auto-provisioning is a development convenience: production Postgres
+	// auth refuses the create-session call, so gate it to non-production.
+	// Production clients bind sessions explicitly via _meta.
 	facade := mcp.NewServer(conn,
 		mcp.WithSyncTimeout(*syncTimeout),
 		mcp.WithPollInterval(*pollInterval),
 		mcp.WithDefaultUserID(*defaultUserID),
+		mcp.WithSessionAutoProvision(cfg.environment != "production"),
 	)
 
 	root := http.NewServeMux()
