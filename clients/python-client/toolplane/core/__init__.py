@@ -4,7 +4,6 @@ from .config import ClientConfig
 from .connection import ConnectionManager
 from .errors import (
     ConnectionError,
-    ToolplaneConnectionError,
     MachineError,
     RequestError,
     SessionError,
@@ -13,6 +12,7 @@ from .errors import (
     ToolplaneAlreadyExistsError,
     ToolplaneAPIError,
     ToolplaneCancelledError,
+    ToolplaneConnectionError,
     ToolplaneError,
     ToolplaneFailedPreconditionError,
     ToolplaneInternalError,

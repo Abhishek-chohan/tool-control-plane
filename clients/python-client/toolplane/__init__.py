@@ -27,7 +27,6 @@ from .common import (
 from .core import (
     ClientConfig,
     ConnectionError,
-    ToolplaneConnectionError,
     MachineError,
     RequestError,
     SessionContext,
@@ -37,6 +36,7 @@ from .core import (
     ToolplaneAlreadyExistsError,
     ToolplaneAPIError,
     ToolplaneCancelledError,
+    ToolplaneConnectionError,
     ToolplaneError,
     ToolplaneFailedPreconditionError,
     ToolplaneInternalError,
