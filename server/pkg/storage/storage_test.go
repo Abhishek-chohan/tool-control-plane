@@ -895,3 +895,56 @@ func TestApiKeyAllowedToolsRoundTrip(t *testing.T) {
 		}
 	})
 }
+
+// TestServingReadsBySession covers the session-scoped serving reads on both
+// backends: GetToolByName, ListToolsBySession and ListMachinesBySession
+// resolve exactly the seeded rows and nothing else.
+func TestServingReadsBySession(t *testing.T) {
+	runAgainstBoth(t, "serving reads by session", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		other := "sess-" + uid(t)
+		mach := "mach-" + uid(t)
+		tool := "tool-" + uid(t)
+		seedSession(t, s, sess)
+		seedSession(t, s, other)
+		seedMachine(t, s, sess, mach, time.Now())
+		seedMachine(t, s, other, mach+"-other", time.Now())
+		seedOwnedTool(t, s, sess, mach, tool)
+		seedOwnedTool(t, s, other, mach+"-other", tool)
+
+		// Tool by name: scoped to the session.
+		got, err := s.GetToolByName(ctx, sess, tool)
+		if err != nil || got == nil {
+			t.Fatalf("get tool by name: tool=%+v err=%v", got, err)
+		}
+		if got.MachineID != mach {
+			t.Fatalf("get tool by name owner=%q want %q", got.MachineID, mach)
+		}
+		if missing, err := s.GetToolByName(ctx, other, "no-such-"+uid(t)); err != nil || missing != nil {
+			t.Fatalf("missing tool: got=%+v err=%v", missing, err)
+		}
+
+		// Tool listing: only the requested session's rows.
+		tools, err := s.ListToolsBySession(ctx, sess)
+		if err != nil {
+			t.Fatalf("list tools: %v", err)
+		}
+		if len(tools) != 1 || tools[0].SessionID != sess {
+			t.Fatalf("list tools: n=%d first=%+v", len(tools), tools)
+		}
+
+		// Machine listing: only the requested session's rows.
+		machines, err := s.ListMachinesBySession(ctx, sess)
+		if err != nil {
+			t.Fatalf("list machines: %v", err)
+		}
+		if len(machines) != 1 || machines[0].ID != mach {
+			t.Fatalf("list machines: n=%d first=%+v", len(machines), machines)
+		}
+		otherMachines, err := s.ListMachinesBySession(ctx, other)
+		if err != nil || len(otherMachines) != 1 || otherMachines[0].ID != mach+"-other" {
+			t.Fatalf("list machines (other session): %+v err=%v", otherMachines, err)
+		}
+	})
+}

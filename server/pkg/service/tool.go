@@ -341,7 +341,39 @@ func (s *ToolService) GetToolByID(sessionID, toolID string) (*model.Tool, error)
 }
 
 // GetToolByName gets a tool by name in a specific session
+// GetToolByName gets a tool by name in a specific session. Store-first when
+// a store is configured: a registration made on another replica is resolved
+// here instead of missing, and the local registry mirrors the row so
+// claim-time ownership sees it too. Store errors degrade to the cache.
 func (s *ToolService) GetToolByName(sessionID, name string) (*model.Tool, error) {
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		tool, err := s.store.GetToolByName(ctx, sessionID, name)
+		cancel()
+		if err != nil {
+			// Only a store error degrades to the cache. A successful miss is
+			// authoritative: the row is gone (cross-replica delete), so the
+			// stale local mirror is dropped and NOT_FOUND is returned rather
+			// than silently serving the deleted tool.
+			log.Printf("tool read-through failed: %v", err)
+		} else {
+			s.toolsMutex.Lock()
+			if sessionTools, ok := s.tools[sessionID]; ok {
+				for id, t := range sessionTools {
+					if t != nil && t.Name == name {
+						delete(sessionTools, id)
+					}
+				}
+			}
+			s.toolsMutex.Unlock()
+			if tool == nil {
+				return nil, wrapf(ErrNotFound, "tool %s not found in session %s", name, sessionID)
+			}
+			s.cacheTool(sessionID, tool)
+			return tool, nil
+		}
+	}
+
 	s.toolsMutex.RLock()
 	defer s.toolsMutex.RUnlock()
 
@@ -352,6 +384,17 @@ func (s *ToolService) GetToolByName(sessionID, name string) (*model.Tool, error)
 	}
 
 	return tool, nil
+}
+
+// cacheTool mirrors a store-read tool into the local registry so subsequent
+// lookups (claim-time ownership, listings) resolve locally.
+func (s *ToolService) cacheTool(sessionID string, tool *model.Tool) {
+	s.toolsMutex.Lock()
+	defer s.toolsMutex.Unlock()
+	if _, ok := s.tools[sessionID]; !ok {
+		s.tools[sessionID] = make(map[string]*model.Tool)
+	}
+	s.tools[sessionID][tool.ID] = tool
 }
 
 // findToolByName is an internal helper to find a tool by name (assumes lock is held)
@@ -405,28 +448,44 @@ func (s *ToolService) MachineProvidesTool(sessionID, machineID, toolName string)
 	return tool != nil && tool.MachineID == machineID
 }
 
-// ListTools lists all tools in a session
+// ListTools lists all tools in a session. Store-first when a store is
+// configured so listings include registrations made on other replicas; every
+// store row is mirrored into the local registry. Store errors degrade to the
+// cache.
 func (s *ToolService) ListTools(sessionID string) ([]*model.Tool, error) {
-	log.Printf("ToolService.ListTools called for sessionID: %s", sessionID)
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		tools, err := s.store.ListToolsBySession(ctx, sessionID)
+		cancel()
+		if err != nil {
+			log.Printf("tool list read-through failed: %v", err)
+		} else {
+			s.toolsMutex.Lock()
+			if _, ok := s.tools[sessionID]; !ok {
+				s.tools[sessionID] = make(map[string]*model.Tool)
+			}
+			for _, tool := range tools {
+				s.tools[sessionID][tool.ID] = tool
+			}
+			s.toolsMutex.Unlock()
+			return tools, nil
+		}
+	}
+
 	s.toolsMutex.RLock()
 	defer s.toolsMutex.RUnlock()
 
 	// Check if session exists
 	if _, ok := s.tools[sessionID]; !ok {
-		log.Printf("Session %s not found, returning empty tools list", sessionID)
 		return []*model.Tool{}, nil
 	}
-
-	log.Printf("Found session %s with %d tools", sessionID, len(s.tools[sessionID]))
 
 	// Get all tools for this session
 	tools := make([]*model.Tool, 0, len(s.tools[sessionID]))
 	for _, tool := range s.tools[sessionID] {
-		log.Printf("Adding tool to list: ID=%s, Name=%s, Tags=%v", tool.ID, tool.Name, tool.Tags)
 		tools = append(tools, tool)
 	}
 
-	log.Printf("Returning %d tools from ToolService.ListTools", len(tools))
 	return tools, nil
 }
 

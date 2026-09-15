@@ -455,3 +455,62 @@ func TestClaimOwnershipServicePath(t *testing.T) {
 		t.Fatalf("mach-alpha claim: req=%+v err=%v", alphaClaimed, err)
 	}
 }
+
+// TestToolAndMachineReadsSeeOtherReplicaRegistrations pins serving-time
+// read-through for tools and machines: replica B exists before the
+// registration (nothing hydrated), so every successful read below comes from
+// the store-first path — including an end-to-end CreateRequest for a tool B
+// never saw registered.
+func TestToolAndMachineReadsSeeOtherReplicaRegistrations(t *testing.T) {
+	store := memory.New()
+	toolSvcA := NewToolService(trace.NopTracer(), store)
+	machineSvcA := NewMachinesService(context.Background(), toolSvcA, trace.NopTracer(), store)
+
+	// Replica B before the registration.
+	toolSvcB := NewToolService(trace.NopTracer(), store)
+	machineSvcB := NewMachinesService(context.Background(), toolSvcB, trace.NopTracer(), store)
+	requestSvcB := NewRequestsService(context.Background(), toolSvcB, machineSvcB, trace.NopTracer(), store)
+
+	const sessionID = "sess-coherence-reg"
+
+	if _, err := machineSvcA.RegisterMachine(sessionID, "machine-reg-a", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-reg-a", "echo", "echo tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register on A: %v", err)
+	}
+
+	// Tool read-through.
+	tool, err := toolSvcB.GetToolByName(sessionID, "echo")
+	if err != nil {
+		t.Fatalf("GetToolByName on B: %v", err)
+	}
+	if tool == nil || tool.MachineID != "machine-reg-a" {
+		t.Fatalf("B resolved wrong tool: %+v", tool)
+	}
+
+	// End to end, and FIRST: B creates a request for the foreign-registered
+	// tool without any prior machine read on B — provider resolution must
+	// read through the owning machine itself.
+	req, err := requestSvcB.CreateRequest(sessionID, "echo", `{}`, 0, "")
+	if err != nil {
+		t.Fatalf("CreateRequest on B for tool registered on A: %v", err)
+	}
+	if req.ToolName != "echo" {
+		t.Fatalf("unexpected request tool %q", req.ToolName)
+	}
+
+	// Tool listing.
+	tools, err := toolSvcB.ListTools(sessionID)
+	if err != nil || len(tools) != 1 {
+		t.Fatalf("ListTools on B: n=%d err=%v", len(tools), err)
+	}
+
+	// Machine listing and lookup.
+	machines, err := machineSvcB.ListMachines(sessionID)
+	if err != nil || len(machines) != 1 || machines[0].ID != "machine-reg-a" {
+		t.Fatalf("ListMachines on B: %+v err=%v", machines, err)
+	}
+	if _, err := machineSvcB.GetMachineByID(sessionID, "machine-reg-a"); err != nil {
+		t.Fatalf("GetMachineByID on B: %v", err)
+	}
+}

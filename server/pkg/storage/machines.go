@@ -46,6 +46,42 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	return machines, rows.Err()
 }
 
+// ListMachinesBySession returns the machines registered in a session, so
+// serving-time listings are not partition-dependent.
+func (s *Store) ListMachinesBySession(ctx context.Context, sessionID string) ([]*model.Machine, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE session_id=$1`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list machines by session: %w", err)
+	}
+	defer rows.Close()
+
+	var machines []*model.Machine
+	for rows.Next() {
+		m := &model.Machine{}
+		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+			return nil, fmt.Errorf("scan machine: %w", err)
+		}
+		if sdkVersion.Valid {
+			m.SDKVersion = sdkVersion.String
+		}
+		if sdkLanguage.Valid {
+			m.SDKLanguage = sdkLanguage.String
+		}
+		if ip.Valid {
+			m.IP = ip.String
+		}
+		if tokenHash.Valid {
+			m.TokenHash = tokenHash.String
+		}
+		machines = append(machines, m)
+	}
+	return machines, rows.Err()
+}
+
 // GetMachine fetches a single machine by ID (nil when absent). The returned
 // copy never carries a machine token plaintext.
 func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machine, error) {
