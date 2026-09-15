@@ -111,6 +111,7 @@ type ApiKey struct {
 	CreatedAt          time.Time          `json:"createdAt"`
 	CreatedBy          string             `json:"createdBy"`
 	Capabilities       []APIKeyCapability `json:"capabilities,omitempty"`
+	AllowedTools       []string           `json:"allowedTools,omitempty"`
 	RevokedAt          *time.Time         `json:"revokedAt,omitempty"`
 	PlaintextPersisted bool               `json:"-"`
 }

@@ -377,7 +377,7 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 }
 
 // CreateApiKey creates a new API key for a session
-func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabilityValues []string) (*model.ApiKey, error) {
+func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabilityValues []string, allowedTools []string) (*model.ApiKey, error) {
 	// Check if session exists
 	s.sessionsMutex.RLock()
 	_, ok := s.sessions[sessionID]
@@ -392,8 +392,14 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 		return nil, err
 	}
 
+	allowed, err := model.NormalizeAllowedTools(allowedTools)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create new API key
 	apiKey := model.NewApiKey(name, sessionID, createdBy, capabilities)
+	apiKey.AllowedTools = allowed
 
 	s.apiKeysMutex.Lock()
 	defer s.apiKeysMutex.Unlock()
@@ -421,6 +427,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 		"name":          apiKey.Name,
 		"createdBy":     createdBy,
 		"capabilities":  model.CapabilityStrings(apiKey.Capabilities),
+		"allowedTools":  apiKey.AllowedTools,
 		"keyPreview":    apiKey.KeyPreview,
 		"storageBacked": s.store != nil,
 	})
@@ -543,6 +550,7 @@ func (s *SessionsService) AuthenticateAPIKey(key string) (*model.AuthPrincipal, 
 		UserID:       userID,
 		KeyID:        matchedKey.ID,
 		Capabilities: append([]model.APIKeyCapability(nil), matchedKey.Capabilities...),
+		AllowedTools: append([]string(nil), matchedKey.AllowedTools...),
 		TokenPreview: matchedKey.KeyPreview,
 	}, nil
 }

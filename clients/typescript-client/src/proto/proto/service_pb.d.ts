@@ -218,6 +218,10 @@ export class ApiKey extends jspb.Message {
     addCapabilities(value: string, index?: number): string;
     getKeyPreview(): string;
     setKeyPreview(value: string): ApiKey;
+    clearAllowedToolsList(): void;
+    getAllowedToolsList(): Array<string>;
+    setAllowedToolsList(value: Array<string>): ApiKey;
+    addAllowedTools(value: string, index?: number): string;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ApiKey.AsObject;
@@ -240,6 +244,7 @@ export namespace ApiKey {
         revokedAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         capabilitiesList: Array<string>,
         keyPreview: string,
+        allowedToolsList: Array<string>,
     }
 }
 
@@ -1032,6 +1037,10 @@ export class CreateApiKeyRequest extends jspb.Message {
     getCapabilitiesList(): Array<string>;
     setCapabilitiesList(value: Array<string>): CreateApiKeyRequest;
     addCapabilities(value: string, index?: number): string;
+    clearAllowedToolsList(): void;
+    getAllowedToolsList(): Array<string>;
+    setAllowedToolsList(value: Array<string>): CreateApiKeyRequest;
+    addAllowedTools(value: string, index?: number): string;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): CreateApiKeyRequest.AsObject;
@@ -1048,6 +1057,7 @@ export namespace CreateApiKeyRequest {
         sessionId: string,
         name: string,
         capabilitiesList: Array<string>,
+        allowedToolsList: Array<string>,
     }
 }
 

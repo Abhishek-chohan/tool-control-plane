@@ -848,3 +848,50 @@ func seedOwnedTool(t *testing.T, s storage.Storer, sessionID, machineID, toolNam
 		t.Fatalf("seed tool: %v", err)
 	}
 }
+
+// TestApiKeyAllowedToolsRoundTrip pins the per-key tool allowlist in the
+// storage contract: the list survives a save/reload on both backends, and an
+// absent list reads back as unrestricted (nil).
+func TestApiKeyAllowedToolsRoundTrip(t *testing.T) {
+	runAgainstBoth(t, "api key allowed tools", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		seedSession(t, s, sess)
+
+		restricted := model.NewApiKey("restricted-"+uid(t), sess, "tester", model.DefaultAPIKeyCapabilities())
+		restricted.AllowedTools = []string{"alpha", "beta"}
+		if err := s.SaveApiKey(ctx, restricted); err != nil {
+			t.Fatalf("save restricted key: %v", err)
+		}
+		keys, err := s.AllApiKeys(ctx)
+		if err != nil {
+			t.Fatalf("list keys: %v", err)
+		}
+		var loaded *model.ApiKey
+		for _, key := range keys {
+			if key.ID == restricted.ID {
+				loaded = key
+			}
+		}
+		if loaded == nil {
+			t.Fatal("restricted key not found after save")
+		}
+		if len(loaded.AllowedTools) != 2 || loaded.AllowedTools[0] != "alpha" || loaded.AllowedTools[1] != "beta" {
+			t.Fatalf("allowed tools did not round-trip: %v", loaded.AllowedTools)
+		}
+
+		unrestricted := model.NewApiKey("open-"+uid(t), sess, "tester", model.DefaultAPIKeyCapabilities())
+		if err := s.SaveApiKey(ctx, unrestricted); err != nil {
+			t.Fatalf("save unrestricted key: %v", err)
+		}
+		keys, err = s.AllApiKeys(ctx)
+		if err != nil {
+			t.Fatalf("relist keys: %v", err)
+		}
+		for _, key := range keys {
+			if key.ID == unrestricted.ID && len(key.AllowedTools) != 0 {
+				t.Fatalf("unrestricted key read back with allowlist: %v", key.AllowedTools)
+			}
+		}
+	})
+}

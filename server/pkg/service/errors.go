@@ -107,7 +107,8 @@ func statusFromDomainError(action string, err error) error {
 		return status.Errorf(codes.AlreadyExists, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrInvalidArgument),
 		errors.Is(err, model.ErrUnsupportedAPIKeyCapability),
-		errors.Is(err, model.ErrAPIKeyCapabilitiesRequired):
+		errors.Is(err, model.ErrAPIKeyCapabilitiesRequired),
+		errors.Is(err, model.ErrAPIKeyAllowedToolsBlank):
 		return status.Errorf(codes.InvalidArgument, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineCredentialRejected),
 		errors.Is(err, ErrMachineNotToolOwner),

@@ -28,7 +28,7 @@ func TestAPIKeyRevocationPropagatesAcrossReplicas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"})
+	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestSessionDeletionPropagatesToAuthAcrossReplicas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"})
+	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
+	"toolplane/proto"
 )
 
 type AuthenticateFunc func(context.Context, string) (*model.AuthPrincipal, error)
@@ -34,6 +35,22 @@ type sessionScopedRequest interface {
 
 type userScopedRequest interface {
 	GetUserId() string
+}
+
+// invocationToolName extracts the tool a request would execute, for the
+// per-key tool allowlist check. Only the payload types that create an
+// execution carry a tool name; every other request type reports not-applicable.
+func invocationToolName(req interface{}) (string, bool) {
+	switch r := req.(type) {
+	case *proto.ExecuteToolRequest:
+		return r.GetToolName(), true
+	case *proto.CreateRequestRequest:
+		return r.GetToolName(), true
+	case *proto.CreateTaskRequest:
+		return r.GetToolName(), true
+	default:
+		return "", false
+	}
 }
 
 type APIKeyAuthorizer struct {
@@ -176,13 +193,49 @@ func (a *APIKeyAuthorizer) StreamInterceptor() grpc.StreamServerInterceptor {
 			return denyErr
 		}
 
-		wrapped := &principalServerStream{
+		var wrapped grpc.ServerStream = &principalServerStream{
 			ServerStream: ss,
 			ctx:          NewContext(ss.Context(), principal),
+		}
+		// Per-key tool allowlist for streaming RPCs: the tool name arrives
+		// in the first stream message (e.g. StreamExecuteTool's
+		// ExecuteToolRequest), so the check runs inside the message receive
+		// path rather than the interceptor prologue.
+		if len(principal.AllowedTools) > 0 {
+			wrapped = &allowlistedServerStream{
+				ServerStream: wrapped,
+				principal:    principal,
+				authorizer:   a,
+				method:       info.FullMethod,
+			}
 		}
 		a.recordValidated(principal, info.FullMethod, "stream")
 		return handler(srv, wrapped)
 	}
+}
+
+type allowlistedServerStream struct {
+	grpc.ServerStream
+	principal  *model.AuthPrincipal
+	authorizer *APIKeyAuthorizer
+	method     string
+	denied     bool
+}
+
+func (s *allowlistedServerStream) RecvMsg(m interface{}) error {
+	if s.denied {
+		return status.Errorf(codes.PermissionDenied, "api key is not authorized to invoke tools")
+	}
+	if err := s.ServerStream.RecvMsg(m); err != nil {
+		return err
+	}
+	if toolName, ok := invocationToolName(m); ok && !s.principal.AllowsTool(toolName) {
+		s.denied = true
+		denyErr := status.Errorf(codes.PermissionDenied, "api key is not authorized for tool %s", toolName)
+		s.authorizer.recordDenied(s.principal, s.method, denyErr.Error())
+		return denyErr
+	}
+	return nil
 }
 
 type principalServerStream struct {
@@ -264,6 +317,14 @@ func (a *APIKeyAuthorizer) authorizeUnary(principal *model.AuthPrincipal, fullMe
 		targetSessionID := sessionRequest.GetSessionId()
 		if targetSessionID != "" && targetSessionID != principal.SessionID {
 			return status.Errorf(codes.PermissionDenied, "api key is not authorized for session %s", targetSessionID)
+		}
+	}
+	// Per-key tool allowlist: when the key restricts invocation to named
+	// tools, any request that would create an execution for a different tool
+	// is denied here, at the policy table, before reaching the service.
+	if len(principal.AllowedTools) > 0 {
+		if toolName, ok := invocationToolName(req); ok && !principal.AllowsTool(toolName) {
+			return status.Errorf(codes.PermissionDenied, "api key is not authorized for tool %s", toolName)
 		}
 	}
 	if policy.BindUser {

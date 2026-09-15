@@ -316,7 +316,7 @@ func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRe
 	}
 
 	// Create API key
-	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities)
+	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities, req.AllowedTools)
 	if err != nil {
 		return nil, statusFromDomainError("create API key", err)
 	}
