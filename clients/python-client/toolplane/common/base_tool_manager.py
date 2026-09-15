@@ -181,11 +181,16 @@ class BaseToolManager(ABC):
         params: Dict,
         idempotency_key: str = "",
         timeout_seconds: int = 0,
-    ) -> str:
-        """Execute a tool and return request ID.
+        wait_timeout_seconds: int = 0,
+    ):
+        """Execute a tool and return ``(request_id, terminal_status, result)``.
 
         timeout_seconds overrides the request's absolute per-attempt timeout
-        on the wire (0 keeps the server default).
+        on the wire (0 keeps the server default). wait_timeout_seconds asks
+        the server to long-poll until the request is terminal; then
+        terminal_status names the final state and result carries the parsed
+        result value for a successful run, and both are ``(None, None)``
+        when the call returned while the request is still in flight.
         """
         try:
             # Validate tool name
@@ -194,7 +199,12 @@ class BaseToolManager(ABC):
 
             self.connection_manager.ensure_connected()
             return self._execute_tool_on_server(
-                session_id, tool_name, params, idempotency_key, timeout_seconds
+                session_id,
+                tool_name,
+                params,
+                idempotency_key,
+                timeout_seconds,
+                wait_timeout_seconds,
             )
 
         except ToolplaneAPIError:

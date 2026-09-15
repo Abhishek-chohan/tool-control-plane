@@ -116,7 +116,10 @@ service ToolService {
     };
   }
 
-  // InvokeTool is the v1 name for synchronous tool invocation.
+  // InvokeTool is the v1 name for synchronous tool invocation. The call
+  // creates the request and, when wait_timeout_seconds is positive, blocks
+  // server-side until the request reaches a terminal state (returning
+  // result/error) or the wait elapses (returning the in-flight state).
   rpc InvokeTool(ExecuteToolRequest) returns (ExecuteToolResponse) {
     option (google.api.http) = {
       post: "/api.v1/InvokeTool";
@@ -754,6 +757,11 @@ message ExecuteToolRequest {
   // Optional caller-chosen dedup key: retrying the same call with the same
   // key returns the original request instead of executing the tool again.
   string idempotency_key = 5;
+  // Optional server-side wait: when positive, the RPC blocks until the
+  // request reaches a terminal state (returning its result/error) or this
+  // many seconds elapse (returning the current PENDING state). The wait
+  // never cancels the request. Zero keeps fire-and-forget semantics.
+  int32 wait_timeout_seconds = 6;
 }
 
 // ExecuteToolResponse

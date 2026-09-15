@@ -11371,7 +11371,8 @@ proto.api.v1.ExecuteToolRequest.toObject = function(includeInstance, msg) {
     toolName: jspb.Message.getFieldWithDefault(msg, 2, ""),
     input: jspb.Message.getFieldWithDefault(msg, 3, ""),
     timeoutSeconds: jspb.Message.getFieldWithDefault(msg, 4, 0),
-    idempotencyKey: jspb.Message.getFieldWithDefault(msg, 5, "")
+    idempotencyKey: jspb.Message.getFieldWithDefault(msg, 5, ""),
+    waitTimeoutSeconds: jspb.Message.getFieldWithDefault(msg, 6, 0)
   };
 
   if (includeInstance) {
@@ -11427,6 +11428,10 @@ proto.api.v1.ExecuteToolRequest.deserializeBinaryFromReader = function(msg, read
     case 5:
       var value = /** @type {string} */ (reader.readString());
       msg.setIdempotencyKey(value);
+      break;
+    case 6:
+      var value = /** @type {number} */ (reader.readInt32());
+      msg.setWaitTimeoutSeconds(value);
       break;
     default:
       reader.skipField();
@@ -11489,6 +11494,13 @@ proto.api.v1.ExecuteToolRequest.serializeBinaryToWriter = function(message, writ
   if (f.length > 0) {
     writer.writeString(
       5,
+      f
+    );
+  }
+  f = message.getWaitTimeoutSeconds();
+  if (f !== 0) {
+    writer.writeInt32(
+      6,
       f
     );
   }
@@ -11582,6 +11594,24 @@ proto.api.v1.ExecuteToolRequest.prototype.getIdempotencyKey = function() {
  */
 proto.api.v1.ExecuteToolRequest.prototype.setIdempotencyKey = function(value) {
   return jspb.Message.setProto3StringField(this, 5, value);
+};
+
+
+/**
+ * optional int32 wait_timeout_seconds = 6;
+ * @return {number}
+ */
+proto.api.v1.ExecuteToolRequest.prototype.getWaitTimeoutSeconds = function() {
+  return /** @type {number} */ (jspb.Message.getFieldWithDefault(this, 6, 0));
+};
+
+
+/**
+ * @param {number} value
+ * @return {!proto.api.v1.ExecuteToolRequest} returns this
+ */
+proto.api.v1.ExecuteToolRequest.prototype.setWaitTimeoutSeconds = function(value) {
+  return jspb.Message.setProto3IntField(this, 6, value);
 };
 
 

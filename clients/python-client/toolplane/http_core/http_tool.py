@@ -11,6 +11,18 @@ from ..common.utils import validate_tool_name
 from ..core.errors import ToolError, ToolplaneAPIError
 from .http_connection import HTTPConnectionManager
 
+# Gateway JSON enums arrive as their proto names (lowercased here); map the
+# terminal ones onto the normalized status names used by the waiters.
+_RESPONSE_STATUS_NAMES = {
+    "request_status_done": "done",
+    "request_status_failed": "failed",
+    "request_status_cancelled": "cancelled",
+    "done": "done",
+    "failed": "failed",
+    "failure": "failed",
+    "cancelled": "cancelled",
+}
+
 
 class HTTPToolManager(BaseToolManager):
     """Manages tool registration and execution for HTTP client."""
@@ -264,8 +276,13 @@ class HTTPToolManager(BaseToolManager):
         params: Dict,
         idempotency_key: str = "",
         timeout_seconds: int = 0,
-    ) -> str:
-        """Execute a tool and return request ID."""
+        wait_timeout_seconds: int = 0,
+    ):
+        """Execute a tool and return ``(request_id, terminal_status, result)``.
+
+        ``terminal_status``/``result`` are populated only when the
+        server-side long-poll observed a terminal state.
+        """
         try:
             self.connection_manager.ensure_connected()
 
@@ -275,12 +292,32 @@ class HTTPToolManager(BaseToolManager):
                 json.dumps(params),
                 idempotency_key,
                 timeout_seconds=timeout_seconds,
+                wait_timeout_seconds=wait_timeout_seconds,
             )
 
             if response.get("error"):
                 raise ToolError(f"Tool execution failed: {response.get('error')}")
 
-            return response.get("requestId")
+            status_name = _RESPONSE_STATUS_NAMES.get(
+                str(response.get("status", "")).lower()
+            )
+            if wait_timeout_seconds > 0 and status_name in (
+                "done",
+                "failed",
+                "cancelled",
+            ):
+                result_value = None
+                if status_name == "done" and response.get("result") is not None:
+                    raw = response["result"]
+                    if isinstance(raw, str):
+                        try:
+                            result_value = json.loads(raw)
+                        except ValueError:
+                            result_value = raw
+                    else:
+                        result_value = raw
+                return response.get("requestId"), status_name, result_value
+            return response.get("requestId"), None, None
 
         except ToolplaneAPIError:
             raise

@@ -383,6 +383,7 @@ class HTTPConnectionManager:
         input_data: str,
         idempotency_key: str = "",
         timeout_seconds: int = 0,
+        wait_timeout_seconds: int = 0,
     ):
         """Execute tool."""
         payload = {"sessionId": session_id, "toolName": tool_name, "input": input_data}
@@ -390,6 +391,8 @@ class HTTPConnectionManager:
             payload["idempotencyKey"] = idempotency_key
         if timeout_seconds > 0:
             payload["timeoutSeconds"] = timeout_seconds
+        if wait_timeout_seconds > 0:
+            payload["waitTimeoutSeconds"] = wait_timeout_seconds
         return self._post("api.v1/InvokeTool", payload)
 
     def stream_execute_tool(

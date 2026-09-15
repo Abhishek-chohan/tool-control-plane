@@ -66,7 +66,10 @@ type ToolServiceClient interface {
 	// The server retains a bounded chunk window; if the requested sequence has
 	// fallen out of that window, this RPC fails with OUT_OF_RANGE.
 	ResumeStream(ctx context.Context, in *ResumeStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ExecuteToolChunk], error)
-	// InvokeTool is the v1 name for synchronous tool invocation.
+	// InvokeTool is the v1 name for synchronous tool invocation. The call
+	// creates the request and, when wait_timeout_seconds is positive, blocks
+	// server-side until the request reaches a terminal state (returning
+	// result/error) or the wait elapses (returning the in-flight state).
 	InvokeTool(ctx context.Context, in *ExecuteToolRequest, opts ...grpc.CallOption) (*ExecuteToolResponse, error)
 	// Deprecated: Do not use.
 	// Deprecated: use InvokeTool. Retained as a stable alias.
@@ -253,7 +256,10 @@ type ToolServiceServer interface {
 	// The server retains a bounded chunk window; if the requested sequence has
 	// fallen out of that window, this RPC fails with OUT_OF_RANGE.
 	ResumeStream(*ResumeStreamRequest, grpc.ServerStreamingServer[ExecuteToolChunk]) error
-	// InvokeTool is the v1 name for synchronous tool invocation.
+	// InvokeTool is the v1 name for synchronous tool invocation. The call
+	// creates the request and, when wait_timeout_seconds is positive, blocks
+	// server-side until the request reaches a terminal state (returning
+	// result/error) or the wait elapses (returning the in-flight state).
 	InvokeTool(context.Context, *ExecuteToolRequest) (*ExecuteToolResponse, error)
 	// Deprecated: Do not use.
 	// Deprecated: use InvokeTool. Retained as a stable alias.

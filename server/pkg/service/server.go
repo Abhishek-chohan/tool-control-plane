@@ -752,10 +752,42 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 		return nil, statusFromDomainError("execute tool", err)
 	}
 
-	// Return initial response
+	// Fire-and-forget: return the enqueued request immediately.
+	if req.GetWaitTimeoutSeconds() <= 0 {
+		return &proto.ExecuteToolResponse{
+			RequestId: request.ID,
+			Status:    protoRequestStatus(request.Status),
+		}, nil
+	}
+
+	// Server-side long-poll: block until the request reaches a terminal
+	// state, or return the in-flight state on wait expiry. The deadline
+	// never cancels the request — execution continues and clients fall back
+	// to polling.
+	waitCtx, cancel := context.WithTimeout(ctx, time.Duration(req.GetWaitTimeoutSeconds())*time.Second)
+	defer cancel()
+	final, waitErr := s.requestService.WaitForRequestState(waitCtx, req.SessionId, request.ID)
+	if waitErr != nil {
+		if errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, context.Canceled) {
+			return &proto.ExecuteToolResponse{
+				RequestId: request.ID,
+				Status:    protoRequestStatus(request.Status),
+			}, nil
+		}
+		return nil, statusFromDomainError("wait for request", waitErr)
+	}
+
+	resultJSON := ""
+	if final.Result != nil {
+		if raw, mErr := json.Marshal(final.Result); mErr == nil {
+			resultJSON = string(raw)
+		}
+	}
 	return &proto.ExecuteToolResponse{
 		RequestId: request.ID,
-		Status:    protoRequestStatus(request.Status),
+		Status:    protoRequestStatus(final.Status),
+		Result:    resultJSON,
+		Error:     final.Error,
 	}, nil
 }
 

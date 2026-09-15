@@ -354,11 +354,20 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 		return nil, fmt.Errorf("failed to marshal parameters: %w", err)
 	}
 
+	// Server-side long-poll: keep the wait just inside the execution context
+	// deadline so the RPC itself completes; the poll loop remains as the
+	// fallback when the response returns still in flight.
+	waitSeconds := int32(c.executionTimeout.Seconds()) - 2
+	if waitSeconds < 1 {
+		waitSeconds = 1
+	}
+
 	request := &pb.ExecuteToolRequest{
-		SessionId:      c.sessionID,
-		ToolName:       toolName,
-		Input:          string(paramsJSON),
-		IdempotencyKey: idempotencyKey,
+		SessionId:          c.sessionID,
+		ToolName:           toolName,
+		Input:              string(paramsJSON),
+		IdempotencyKey:     idempotencyKey,
+		WaitTimeoutSeconds: waitSeconds,
 	}
 
 	execCtx, cancel := c.executionContext(ctx)
@@ -377,6 +386,31 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 		return nil, fmt.Errorf("tool execution did not return a request ID")
 	}
 
+	// Terminal inside the wait budget: use the response directly.
+	switch response.Status {
+	case pb.RequestStatus_REQUEST_STATUS_DONE:
+		return &pb.Request{
+			Id:     response.RequestId,
+			Status: pb.RequestStatus_REQUEST_STATUS_DONE,
+			Result: response.Result,
+		}, nil
+	case pb.RequestStatus_REQUEST_STATUS_CANCELLED:
+		return nil, &Error{
+			Op:        "execute tool",
+			RequestID: response.RequestId,
+			Code:      codes.Canceled,
+			Message:   "tool execution was cancelled",
+		}
+	case pb.RequestStatus_REQUEST_STATUS_FAILED:
+		return nil, &Error{
+			Op:        "execute tool",
+			RequestID: response.RequestId,
+			Code:      codes.Internal,
+			Message:   response.Error,
+		}
+	}
+
+	// Still in flight: fall back to local polling.
 	return c.waitForRequestCompletion(ctx, response.RequestId)
 }
 

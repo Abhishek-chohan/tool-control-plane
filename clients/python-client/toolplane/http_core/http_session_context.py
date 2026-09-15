@@ -116,16 +116,32 @@ class HTTPSessionContext:
         after wait_timeout seconds (default: timeout_seconds + 15, else 60).
         """
         try:
-            request_id = self.tool_manager.execute_tool(
-                self.session_id, tool_name, params, timeout_seconds=timeout_seconds
-            )
-
-            # Poll for completion; the HTTP wait already returns the unwrapped
-            # tool result.
+            # Wait budget: also drives the server-side long-poll.
             if wait_timeout is None:
                 wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
             else:
                 wait_for = wait_timeout
+
+            request_id, terminal_status, result = self.tool_manager.execute_tool(
+                self.session_id,
+                tool_name,
+                params,
+                timeout_seconds=timeout_seconds,
+                wait_timeout_seconds=wait_for,
+            )
+
+            # Poll for completion; the HTTP wait already returns the unwrapped
+            # tool result.
+            if terminal_status == "done":
+                return result
+            if terminal_status == "cancelled":
+                raise ToolplaneCancelledError(
+                    f"Request was cancelled (request_id={request_id})"
+                )
+            if terminal_status == "failed":
+                raise ToolplaneError(
+                    f"Tool execution failed (request_id={request_id})"
+                )
             return self._wait_for_completion(request_id, timeout=wait_for)
 
         except ToolplaneTimeoutError:
@@ -287,7 +303,7 @@ class HTTPSessionContext:
         if request_id is None:
             request_id = self.tool_manager.execute_tool(
                 self.session_id, tool_name, params, idempotency_key
-            )
+            )[0]
 
         all_chunks = accumulate if accumulate is not None else []
         last_chunk_count = skip

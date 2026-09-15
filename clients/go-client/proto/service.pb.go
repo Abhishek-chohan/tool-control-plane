@@ -3075,8 +3075,13 @@ type ExecuteToolRequest struct {
 	// Optional caller-chosen dedup key: retrying the same call with the same
 	// key returns the original request instead of executing the tool again.
 	IdempotencyKey string `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Optional server-side wait: when positive, the RPC blocks until the
+	// request reaches a terminal state (returning its result/error) or this
+	// many seconds elapse (returning the current PENDING state). The wait
+	// never cancels the request. Zero keeps fire-and-forget semantics.
+	WaitTimeoutSeconds int32 `protobuf:"varint,6,opt,name=wait_timeout_seconds,json=waitTimeoutSeconds,proto3" json:"wait_timeout_seconds,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *ExecuteToolRequest) Reset() {
@@ -3142,6 +3147,13 @@ func (x *ExecuteToolRequest) GetIdempotencyKey() string {
 		return x.IdempotencyKey
 	}
 	return ""
+}
+
+func (x *ExecuteToolRequest) GetWaitTimeoutSeconds() int32 {
+	if x != nil {
+		return x.WaitTimeoutSeconds
+	}
+	return 0
 }
 
 // ExecuteToolResponse
@@ -5187,14 +5199,15 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"machine_id\x18\x02 \x01(\tR\tmachineId\"5\n" +
 	"\x19UnregisterMachineResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xb8\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\xea\x01\n" +
 	"\x12ExecuteToolRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\ttool_name\x18\x02 \x01(\tR\btoolName\x12\x14\n" +
 	"\x05input\x18\x03 \x01(\tR\x05input\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\x05R\x0etimeoutSeconds\x12'\n" +
-	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\"\xb2\x01\n" +
+	"\x0fidempotency_key\x18\x05 \x01(\tR\x0eidempotencyKey\x120\n" +
+	"\x14wait_timeout_seconds\x18\x06 \x01(\x05R\x12waitTimeoutSeconds\"\xb2\x01\n" +
 	"\x13ExecuteToolResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12-\n" +

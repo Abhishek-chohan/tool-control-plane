@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -147,5 +149,80 @@ func TestGRPCServerCreateSessionCollisionBareAlreadyExists(t *testing.T) {
 	}
 	if stored.ID != first.ID || stored.Name != "Private Session" {
 		t.Fatalf("session mutated by collision: %+v", stored)
+	}
+}
+
+// TestInvokeToolLongPollReturnsTerminalResult pins the server-side
+// long-poll: with wait_timeout_seconds set, InvokeTool blocks until the
+// provider completes and returns the terminal payload with result/error
+// populated — the ExecuteToolResponse fields that used to be dead on the
+// wire.
+func TestInvokeToolLongPollReturnsTerminalResult(t *testing.T) {
+	server, _, machineService, requestService, _, machineID := newTaxonomyTestServer(t)
+	const sessionID = "sess-taxonomy"
+
+	// Provider: claim the request and complete it shortly after.
+	go func() {
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"echo"})
+			if err != nil || claimed == nil {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			_, _ = requestService.UpdateRequest(sessionID, claimed.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
+			time.Sleep(100 * time.Millisecond)
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, machineID, claimed.LeaseEpoch,
+				map[string]string{"echo": "hello"}, model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+
+	resp, err := server.InvokeTool(context.Background(), &proto.ExecuteToolRequest{
+		SessionId:          sessionID,
+		ToolName:           "echo",
+		Input:              `{}`,
+		WaitTimeoutSeconds: 5,
+	})
+	if err != nil {
+		t.Fatalf("long-poll invoke: %v", err)
+	}
+	if resp.Status != proto.RequestStatus_REQUEST_STATUS_DONE {
+		t.Fatalf("long-poll status=%v want DONE", resp.Status)
+	}
+	if resp.Result == "" {
+		t.Fatal("long-poll returned empty result")
+	}
+	if !strings.Contains(resp.Result, "hello") {
+		t.Fatalf("result %q missing provider payload", resp.Result)
+	}
+
+	// Sanity: the machine is available again for a second call.
+	if _, err := machineService.GetMachineByID(sessionID, machineID); err != nil {
+		t.Fatalf("machine lookup after long-poll: %v", err)
+	}
+}
+
+// TestInvokeToolLongPollDeadlineReturnsInFlight pins the deadline path: when
+// the wait elapses before completion, InvokeTool returns the in-flight state
+// and leaves the request running — the deadline never cancels the work.
+func TestInvokeToolLongPollDeadlineReturnsInFlight(t *testing.T) {
+	server, _, _, _, _, _ := newTaxonomyTestServer(t)
+	const sessionID = "sess-taxonomy"
+
+	resp, err := server.InvokeTool(context.Background(), &proto.ExecuteToolRequest{
+		SessionId:          sessionID,
+		ToolName:           "echo",
+		Input:              `{}`,
+		WaitTimeoutSeconds: 1,
+	})
+	if err != nil {
+		t.Fatalf("long-poll deadline invoke: %v", err)
+	}
+	if resp.Status != proto.RequestStatus_REQUEST_STATUS_PENDING {
+		t.Fatalf("deadline status=%v want PENDING", resp.Status)
+	}
+	if resp.RequestId == "" {
+		t.Fatal("deadline response missing request id")
 	}
 }
