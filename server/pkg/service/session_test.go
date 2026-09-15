@@ -23,7 +23,7 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 		t.Fatalf("update session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"})
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"})
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *tes
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "reader", "user-audit", []string{"read", "execute"})
+	apiKey, err := svc.CreateApiKey(session.ID, "reader", "user-audit", []string{"read", "execute"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "runner", "user-audit", []string{"execute"})
+	apiKey, err := svc.CreateApiKey(session.ID, "runner", "user-audit", []string{"execute"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -217,13 +217,23 @@ func TestSessionsServiceCreateApiKeyRequiresExplicitCapabilities(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	if _, err := svc.CreateApiKey(session.ID, "no-caps", "user-caps", nil); err == nil {
+	if _, err := svc.CreateApiKey(session.ID, "no-caps", "user-caps", nil, nil); err == nil {
 		t.Fatal("CreateApiKey with no capabilities should fail")
 	}
-	if _, err := svc.CreateApiKey(session.ID, "blank-caps", "user-caps", []string{"", "  "}); err == nil {
+	if _, err := svc.CreateApiKey(session.ID, "blank-caps", "user-caps", []string{"", "  "}, nil); err == nil {
 		t.Fatal("CreateApiKey with only blank capabilities should fail")
 	}
-	if _, err := svc.CreateApiKey(session.ID, "reader", "user-caps", []string{"read"}); err != nil {
+	if _, err := svc.CreateApiKey(session.ID, "blank-tools", "user-caps", []string{"read"}, []string{"", "  "}); err == nil {
+		t.Fatal("CreateApiKey with only blank allowed_tools should fail")
+	}
+	restricted, err := svc.CreateApiKey(session.ID, "restricted", "user-caps", []string{"read"}, []string{" alpha ", "beta", "alpha", ""})
+	if err != nil {
+		t.Fatalf("CreateApiKey with allowlist: %v", err)
+	}
+	if len(restricted.AllowedTools) != 2 || restricted.AllowedTools[0] != "alpha" || restricted.AllowedTools[1] != "beta" {
+		t.Fatalf("allowed tools not trimmed/deduped: %v", restricted.AllowedTools)
+	}
+	if _, err := svc.CreateApiKey(session.ID, "reader", "user-caps", []string{"read"}, nil); err != nil {
 		t.Fatalf("CreateApiKey with explicit capabilities: %v", err)
 	}
 }
@@ -235,7 +245,7 @@ func TestSessionsServiceApiKeySecretDoesNotEmbedSessionID(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "fmt", "user-fmt", []string{"read"})
+	apiKey, err := svc.CreateApiKey(session.ID, "fmt", "user-fmt", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -254,11 +264,11 @@ func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	first, err := svc.CreateApiKey(session.ID, "first", "user-inval", []string{"read", "execute"})
+	first, err := svc.CreateApiKey(session.ID, "first", "user-inval", []string{"read", "execute"}, nil)
 	if err != nil {
 		t.Fatalf("create first key: %v", err)
 	}
-	second, err := svc.CreateApiKey(session.ID, "second", "user-inval", []string{"admin"})
+	second, err := svc.CreateApiKey(session.ID, "second", "user-inval", []string{"admin"}, nil)
 	if err != nil {
 		t.Fatalf("create second key: %v", err)
 	}

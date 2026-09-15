@@ -176,7 +176,7 @@ func (s *Store) AllApiKeys(ctx context.Context) ([]*model.ApiKey, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at FROM api_keys`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, allowed_tools, created_at, created_by, revoked_at FROM api_keys`)
 	if err != nil {
 		return nil, fmt.Errorf("query api keys: %w", err)
 	}
@@ -201,7 +201,7 @@ func (s *Store) GetAPIKeyByHash(ctx context.Context, keyHash string) (*model.Api
 	if s == nil {
 		return nil, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at FROM api_keys WHERE key_hash=$1`, keyHash)
+	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, name, key, key_hash, key_preview, capabilities, allowed_tools, created_at, created_by, revoked_at FROM api_keys WHERE key_hash=$1`, keyHash)
 	rec, err := scanAPIKeyRow(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -220,8 +220,9 @@ func scanAPIKeyRow(row interface {
 	var keyHash sql.NullString
 	var keyPreview sql.NullString
 	var capabilitiesPayload []byte
+	var allowedToolsPayload []byte
 	var revokedAt sql.NullTime
-	if err := row.Scan(&rec.ID, &rec.SessionID, &rec.Name, &key, &keyHash, &keyPreview, &capabilitiesPayload, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
+	if err := row.Scan(&rec.ID, &rec.SessionID, &rec.Name, &key, &keyHash, &keyPreview, &capabilitiesPayload, &allowedToolsPayload, &rec.CreatedAt, &rec.CreatedBy, &revokedAt); err != nil {
 		return nil, fmt.Errorf("scan api key: %w", err)
 	}
 	if key.Valid {
@@ -245,6 +246,13 @@ func scanAPIKeyRow(row interface {
 		}
 		rec.Capabilities = capabilities
 	}
+	if len(allowedToolsPayload) > 0 {
+		var allowedTools []string
+		if err := json.Unmarshal(allowedToolsPayload, &allowedTools); err != nil {
+			return nil, fmt.Errorf("unmarshal api key allowed tools: %w", err)
+		}
+		rec.AllowedTools = allowedTools
+	}
 	if revokedAt.Valid {
 		t := revokedAt.Time
 		rec.RevokedAt = &t
@@ -266,23 +274,32 @@ func (s *Store) SaveApiKey(ctx context.Context, key *model.ApiKey) error {
 	if err != nil {
 		return fmt.Errorf("marshal api key capabilities: %w", err)
 	}
+	var allowedToolsPayload interface{}
+	if len(key.AllowedTools) > 0 {
+		payload, err := json.Marshal(key.AllowedTools)
+		if err != nil {
+			return fmt.Errorf("marshal api key allowed tools: %w", err)
+		}
+		allowedToolsPayload = payload
+	}
 	var persistedKey interface{}
 	if key.PlaintextPersisted && key.Key != "" {
 		persistedKey = key.Key
 	}
 	_, err = s.db.ExecContext(ctx, `
-	        INSERT INTO api_keys (id, session_id, name, key, key_hash, key_preview, capabilities, created_at, created_by, revoked_at)
-	        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	        INSERT INTO api_keys (id, session_id, name, key, key_hash, key_preview, capabilities, allowed_tools, created_at, created_by, revoked_at)
+	        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             key = EXCLUDED.key,
 	            key_hash = EXCLUDED.key_hash,
 	            key_preview = EXCLUDED.key_preview,
 	            capabilities = EXCLUDED.capabilities,
+            allowed_tools = EXCLUDED.allowed_tools,
             created_at = EXCLUDED.created_at,
             created_by = EXCLUDED.created_by,
             revoked_at = EXCLUDED.revoked_at
-	    `, key.ID, key.SessionID, key.Name, persistedKey, nullString(key.KeyHash), nullString(key.KeyPreview), capabilitiesPayload, key.CreatedAt, key.CreatedBy, revokedAt)
+	    `, key.ID, key.SessionID, key.Name, persistedKey, nullString(key.KeyHash), nullString(key.KeyPreview), capabilitiesPayload, allowedToolsPayload, key.CreatedAt, key.CreatedBy, revokedAt)
 	if err != nil {
 		return fmt.Errorf("upsert api key: %w", err)
 	}

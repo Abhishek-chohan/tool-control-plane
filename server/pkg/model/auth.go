@@ -42,6 +42,12 @@ var ErrUnsupportedAPIKeyCapability = errors.New("unsupported api key capability"
 // and explicit; there is no implicit full-access default.
 var ErrAPIKeyCapabilitiesRequired = errors.New("api key capabilities are required")
 
+// ErrAPIKeyAllowedToolsBlank is returned when a caller provides an
+// allowed_tools list whose entries are all blank — an ambiguous request that
+// would otherwise silently mean "unrestricted". Omitting the list entirely
+// is the way to say unrestricted.
+var ErrAPIKeyAllowedToolsBlank = errors.New("api key allowed_tools entries are all blank")
+
 const (
 	AuthModeFixed      AuthMode = "fixed"
 	AuthModeSessionKey AuthMode = "session_key"
@@ -53,6 +59,9 @@ type AuthPrincipal struct {
 	UserID       string
 	KeyID        string
 	Capabilities []APIKeyCapability
+	// AllowedTools is the optional per-key tool allowlist; nil or empty
+	// means unrestricted invocation within the bound session.
+	AllowedTools []string
 	TokenPreview string
 }
 
@@ -138,6 +147,47 @@ func CapabilityStrings(capabilities []APIKeyCapability) []string {
 		values = append(values, string(capability))
 	}
 	return values
+}
+
+// NormalizeAllowedTools trims entries, drops blanks, and de-duplicates an
+// optional per-key tool allowlist. A nil or empty result means unrestricted
+// invocation; an input consisting solely of blank entries is a caller
+// mistake and is rejected.
+func NormalizeAllowedTools(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	allowed := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, dup := seen[trimmed]; dup {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		allowed = append(allowed, trimmed)
+	}
+	if len(allowed) == 0 {
+		return nil, ErrAPIKeyAllowedToolsBlank
+	}
+	return allowed, nil
+}
+
+// AllowsTool reports whether the principal may invoke the named tool. An
+// empty allowlist is unrestricted; a non-empty one is an exact-name match.
+func (p *AuthPrincipal) AllowsTool(toolName string) bool {
+	if len(p.AllowedTools) == 0 {
+		return true
+	}
+	for _, allowed := range p.AllowedTools {
+		if allowed == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *AuthPrincipal) HasCapability(required APIKeyCapability) bool {

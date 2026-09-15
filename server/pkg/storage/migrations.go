@@ -165,6 +165,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_preview TEXT`,
 		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS capabilities JSONB NOT NULL DEFAULT '["read","execute","admin"]'::jsonb`,
+		`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS allowed_tools JSONB`,
 		`ALTER TABLE api_keys ALTER COLUMN key DROP NOT NULL`,
 		`ALTER TABLE requests ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_idempotency ON requests(session_id, idempotency_key) WHERE idempotency_key <> ''`,

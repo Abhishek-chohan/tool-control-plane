@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
+	"toolplane/proto"
 )
 
 type AuthenticateFunc func(context.Context, string) (*model.AuthPrincipal, error)
@@ -34,6 +35,20 @@ type sessionScopedRequest interface {
 
 type userScopedRequest interface {
 	GetUserId() string
+}
+
+// invocationToolName extracts the tool a request would execute, for the
+// per-key tool allowlist check. Only the payload types that create an
+// execution carry a tool name; every other request type reports not-applicable.
+func invocationToolName(req interface{}) (string, bool) {
+	switch r := req.(type) {
+	case *proto.ExecuteToolRequest:
+		return r.GetToolName(), true
+	case *proto.CreateRequestRequest:
+		return r.GetToolName(), true
+	default:
+		return "", false
+	}
 }
 
 type APIKeyAuthorizer struct {
@@ -264,6 +279,14 @@ func (a *APIKeyAuthorizer) authorizeUnary(principal *model.AuthPrincipal, fullMe
 		targetSessionID := sessionRequest.GetSessionId()
 		if targetSessionID != "" && targetSessionID != principal.SessionID {
 			return status.Errorf(codes.PermissionDenied, "api key is not authorized for session %s", targetSessionID)
+		}
+	}
+	// Per-key tool allowlist: when the key restricts invocation to named
+	// tools, any request that would create an execution for a different tool
+	// is denied here, at the policy table, before reaching the service.
+	if len(principal.AllowedTools) > 0 {
+		if toolName, ok := invocationToolName(req); ok && !principal.AllowsTool(toolName) {
+			return status.Errorf(codes.PermissionDenied, "api key is not authorized for tool %s", toolName)
 		}
 	}
 	if policy.BindUser {

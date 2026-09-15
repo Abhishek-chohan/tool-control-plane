@@ -154,3 +154,58 @@ func TestAPIKeyAuthorizerUnaryInterceptorDeniesUserBoundRequestWithoutPrincipalU
 		t.Fatalf("UnaryInterceptor error = %v, want permission denied", err)
 	}
 }
+
+// TestPerKeyToolAllowlist pins the per-key tool allowlist: a key restricted
+// to named tools may invoke exactly those, other tools are denied before
+// reaching the service, and keys without an allowlist are unrestricted.
+func TestPerKeyToolAllowlist(t *testing.T) {
+	authorizer := NewAPIKeyAuthorizer(func(_ context.Context, token string) (*model.AuthPrincipal, error) {
+		return &model.AuthPrincipal{
+			Mode:         model.AuthModeSessionKey,
+			SessionID:    "session-1",
+			KeyID:        token,
+			Capabilities: []model.APIKeyCapability{model.APIKeyCapabilityInvoke},
+			AllowedTools: []string{"alpha", "beta"},
+		}, nil
+	}, trace.NopTracer())
+
+	interceptor := authorizer.UnaryInterceptor()
+	handler := func(_ context.Context, _ interface{}) (interface{}, error) { return nil, nil }
+	info := &grpc.UnaryServerInfo{FullMethod: "/api.v1.RequestsService/CreateRequest"}
+
+	invoke := func(toolName string) error {
+		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer test-key"))
+		_, err := interceptor(ctx, &proto.CreateRequestRequest{SessionId: "session-1", ToolName: toolName}, info, handler)
+		return err
+	}
+
+	// Allowed tool reaches the handler.
+	if err := invoke("alpha"); err != nil {
+		t.Fatalf("invoke allowed tool: %v", err)
+	}
+	// Foreign tool is denied at the policy table.
+	if err := invoke("gamma"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("invoke foreign tool: err=%v, want PermissionDenied", err)
+	}
+
+	// The explicit-claim surface carries no tool name and stays governed by
+	// capability and session checks only.
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer test-key"))
+	if _, err := interceptor(ctx, &proto.ClaimNextRequestRequest{SessionId: "session-1"}, info, handler); err != nil {
+		t.Fatalf("non-execution payload should not be allowlist-checked: %v", err)
+	}
+
+	// A key without an allowlist is unrestricted.
+	unrestricted := NewAPIKeyAuthorizer(func(_ context.Context, token string) (*model.AuthPrincipal, error) {
+		return &model.AuthPrincipal{
+			Mode:         model.AuthModeSessionKey,
+			SessionID:    "session-1",
+			KeyID:        token,
+			Capabilities: []model.APIKeyCapability{model.APIKeyCapabilityInvoke},
+		}, nil
+	}, trace.NopTracer())
+	uctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer test-key"))
+	if _, err := unrestricted.UnaryInterceptor()(uctx, &proto.CreateRequestRequest{SessionId: "session-1", ToolName: "anything"}, info, handler); err != nil {
+		t.Fatalf("unrestricted key invoke: %v", err)
+	}
+}

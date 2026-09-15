@@ -127,6 +127,7 @@ func convertModelApiKeyToProto(in *model.ApiKey) *proto.ApiKey {
 		CreatedBy: in.CreatedBy,
 		RevokedAt: revokedAt,
 	}
+	out.AllowedTools = append(out.AllowedTools, in.AllowedTools...)
 	return out
 }
 

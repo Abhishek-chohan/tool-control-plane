@@ -443,6 +443,9 @@ message ApiKey {
   google.protobuf.Timestamp revoked_at = 7;
   repeated string capabilities = 8;
   string key_preview = 9;
+  // Optional per-key tool allowlist, enforced on every invocation. Empty
+  // means the key may invoke every tool in its session.
+  repeated string allowed_tools = 10;
 }
 
 // Machine definition
@@ -667,6 +670,10 @@ message CreateApiKeyRequest {
   // REQUIRED: an empty list is rejected with INVALID_ARGUMENT so keys are
   // always minted least-privilege and explicit.
   repeated string capabilities = 3;
+  // Optional per-key tool allowlist. Empty or omitted means the key may
+  // invoke every tool in its session; non-empty restricts invocation to
+  // exactly these tool names. Entries are trimmed and de-duplicated.
+  repeated string allowed_tools = 4;
 }
 
 // ListApiKeysRequest
