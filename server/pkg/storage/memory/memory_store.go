@@ -153,11 +153,44 @@ func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 	return nil
 }
 
+// machineProvidesToolLocked reports whether the machine registered toolName
+// in the session. Derived from the current tool records, not the machineTools
+// index: the index is not maintained when ownership transfers, so an old
+// owner could otherwise still pass while the new owner would not. Callers
+// hold s.mu.
+func (s *Store) machineProvidesToolLocked(sessionID, machineID, toolName string) bool {
+	for _, t := range s.tools {
+		if t != nil && t.SessionID == sessionID && t.MachineID == machineID && t.Name == toolName {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID string, toolNames []string, leaseDuration time.Duration) (*model.Request, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now()
-	// Find oldest pending, non-dead-letter, visible request matching toolNames.
+	// Machine↔tool ownership mirrors the Postgres path: an empty requested
+	// filter means "every tool this machine registered", a non-empty one is
+	// intersected with that set, and without a machine identity (or with no
+	// registered tools) nothing is leasable — fail closed. Ownership is
+	// derived from the current tool records, not the machineTools index,
+	// which is not maintained across ownership transfers.
+	owned := make(map[string]struct{})
+	if machineID != "" {
+		for _, t := range s.tools {
+			if t != nil && t.SessionID == sessionID && t.MachineID == machineID {
+				owned[t.Name] = struct{}{}
+			}
+		}
+	}
+	requested := make(map[string]struct{}, len(toolNames))
+	for _, name := range toolNames {
+		requested[name] = struct{}{}
+	}
+	// Find oldest pending, non-dead-letter, visible request for a tool the
+	// machine owns and (when given) the caller asked for.
 	var (
 		pick   *model.Request
 		pickAt time.Time
@@ -173,8 +206,13 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 		if !r.VisibleAt.IsZero() && r.VisibleAt.After(now) {
 			continue
 		}
-		if !toolMatches(r.ToolName, toolNames) {
+		if _, isOwned := owned[r.ToolName]; !isOwned {
 			continue
+		}
+		if len(requested) > 0 {
+			if _, isRequested := requested[r.ToolName]; !isRequested {
+				continue
+			}
 		}
 		if pick == nil || r.CreatedAt.Before(pickAt) {
 			pick = r
@@ -257,6 +295,11 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 	// Attempt budget: an exhausted request is only reachable by the reaper.
 	if r.MaxAttempts > 0 && r.Attempts >= r.MaxAttempts {
 		return nil, false, nil
+	}
+	// Machine↔tool ownership, under the same lock as the claim: the claiming
+	// machine must have registered the request's tool.
+	if machineID == "" || !s.machineProvidesToolLocked(sessionID, machineID, r.ToolName) {
+		return nil, false, storage.ErrMachineNotToolOwner
 	}
 	now := time.Now()
 	visible := now.Add(leaseDuration)
@@ -859,18 +902,6 @@ func (s *Store) ClaimToolOwnership(ctx context.Context, tool *model.Tool, staleC
 }
 
 // ---------------- helpers ----------------
-
-func toolMatches(toolName string, toolNames []string) bool {
-	if len(toolNames) == 0 {
-		return true
-	}
-	for _, n := range toolNames {
-		if n == toolName {
-			return true
-		}
-	}
-	return false
-}
 
 func cloneRequest(r *model.Request) *model.Request {
 	if r == nil {

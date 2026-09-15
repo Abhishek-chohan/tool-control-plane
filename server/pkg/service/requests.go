@@ -766,6 +766,11 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 		defer cancel()
 		claimed, ok, err := s.store.ClaimRequest(ctx, sessionID, requestID, machineID, s.leaseDuration)
 		if err != nil {
+			// Ownership is enforced inside the claim transaction: the
+			// claiming machine must have registered the request's tool.
+			if errors.Is(err, storage.ErrMachineNotToolOwner) {
+				return nil, wrapf(ErrMachineNotToolOwner, "machine %s does not provide the tool for request %s", machineID, requestID)
+			}
 			return nil, fmt.Errorf("persist request claim failed: %w", err)
 		}
 		if !ok {
@@ -822,6 +827,13 @@ func (s *RequestsService) ClaimRequest(sessionID, requestID, machineID string) (
 	}
 	if request.MaxAttempts > 0 && request.Attempts >= request.MaxAttempts {
 		return nil, wrapf(ErrRequestNotClaimable, "request %s has exhausted its attempts", requestID)
+	}
+
+	// Machine↔tool ownership: the claiming machine must have registered the
+	// request's tool (same rule the store-level claim enforces in its
+	// transaction; this is the no-store parity check).
+	if !s.toolService.MachineProvidesTool(sessionID, machineID, request.ToolName) {
+		return nil, wrapf(ErrMachineNotToolOwner, "machine %s does not provide the tool for request %s", machineID, requestID)
 	}
 
 	// Mark request as claimed
@@ -890,6 +902,29 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 		return nil, wrapf(ErrNotFound, "no requests found for session %s", sessionID)
 	}
 
+	// Ownership resolution for the no-store path: the leasable set is the
+	// machine's registered tools intersected with the caller's filter,
+	// mirroring LeasePendingRequest's in-transaction ownership filter. An
+	// empty caller filter means "every tool this machine registered", never
+	// "every tool in the session"; without a machine identity nothing is
+	// leasable.
+	leasable := map[string]struct{}{}
+	if machineID != "" {
+		requested := make(map[string]struct{}, len(toolNames))
+		for _, name := range toolNames {
+			requested[name] = struct{}{}
+		}
+		for _, name := range s.toolService.ToolNamesForMachine(sessionID, machineID) {
+			if len(requested) == 0 {
+				leasable[name] = struct{}{}
+				continue
+			}
+			if _, wanted := requested[name]; wanted {
+				leasable[name] = struct{}{}
+			}
+		}
+	}
+
 	var oldestRequest *model.Request
 	var oldestTime time.Time
 	now := time.Now()
@@ -906,24 +941,12 @@ func (s *RequestsService) ClaimPendingRequest(sessionID, machineID string, toolN
 		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 			continue
 		}
-		// Empty toolNames matches every tool in the session, mirroring the
-		// ClaimNextRequest contract (and LeasePendingRequest's store path).
-		if len(toolNames) == 0 {
-			if oldestRequest == nil || req.CreatedAt.Before(oldestTime) {
-				oldestRequest = req
-				oldestTime = req.CreatedAt
-			}
+		if _, ok := leasable[req.ToolName]; !ok {
 			continue
 		}
-		for _, name := range toolNames {
-			if req.ToolName != name {
-				continue
-			}
-			if oldestRequest == nil || req.CreatedAt.Before(oldestTime) {
-				oldestRequest = req
-				oldestTime = req.CreatedAt
-			}
-			break
+		if oldestRequest == nil || req.CreatedAt.Before(oldestTime) {
+			oldestRequest = req
+			oldestTime = req.CreatedAt
 		}
 	}
 

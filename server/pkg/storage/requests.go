@@ -124,6 +124,16 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 
 	var selected *model.Request
 	err := s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		// Machine↔tool ownership: a machine may only lease requests whose
+		// tool it registered. The filter intersects the caller-supplied names
+		// with the tools registry inside the claim transaction, so a
+		// compromised provider cannot lease (and answer) other tools'
+		// requests, and an empty requested filter means "every tool this
+		// machine registered", never "every tool in the session". Without a
+		// machine identity ownership cannot be established: fail closed.
+		if machineID == "" {
+			return sql.ErrNoRows
+		}
 		queryBuilder := strings.Builder{}
 		args := []interface{}{sessionID, string(model.RequestStatusPending)}
 		queryBuilder.WriteString(`SELECT ` + requestColumns + ` FROM requests WHERE session_id=$1 AND status=$2 AND dead_letter=false AND visible_at <= NOW() AND (max_attempts <= 0 OR attempts < max_attempts)`)
@@ -140,6 +150,9 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 			}
 			queryBuilder.WriteString(")")
 		}
+		ownerArg := fmt.Sprintf("$%d", len(args)+1)
+		queryBuilder.WriteString(` AND tool_name IN (SELECT name FROM tools WHERE session_id=$1 AND machine_id=` + ownerArg + `)`)
+		args = append(args, machineID)
 
 		queryBuilder.WriteString(" ORDER BY created_at ASC FOR UPDATE SKIP LOCKED LIMIT 1")
 
@@ -457,6 +470,22 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 		// reachable by the reaper (into dead-letter), never a new execution.
 		if req.MaxAttempts > 0 && req.Attempts >= req.MaxAttempts {
 			return nil
+		}
+		// Machine↔tool ownership, checked under the same row lock: the
+		// claiming machine must have registered the request's tool. An empty
+		// machine identity satisfies an EXISTS against a malformed
+		// machine_id='' registry row, so it is rejected before the query.
+		if machineID == "" {
+			return ErrMachineNotToolOwner
+		}
+		var owned bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM tools WHERE session_id=$1 AND machine_id=$2 AND name=$3)`,
+			sessionID, machineID, req.ToolName).Scan(&owned); err != nil {
+			return fmt.Errorf("claim request: ownership check: %w", err)
+		}
+		if !owned {
+			return ErrMachineNotToolOwner
 		}
 		now := time.Now()
 		visible := now.Add(leaseDuration)

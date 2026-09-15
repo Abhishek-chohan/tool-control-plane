@@ -153,11 +153,6 @@ func TestRenewRequestLeaseCannotCrossAbsoluteTimeout(t *testing.T) {
 func TestFencedWritesAfterReclaim(t *testing.T) {
 	requestService, machineService, sessionID, machineA := newLeaseTestStack()
 	const machineB = "machine-lease-b"
-	if _, err := machineService.RegisterMachine(sessionID, machineB, "1.0.0", "go", "127.0.0.1", []*model.Tool{
-		model.NewTool(sessionID, machineB, "echo", "echo tool", `{"type":"object"}`, nil, nil),
-	}, ""); err != nil {
-		t.Fatalf("register machine B: %v", err)
-	}
 
 	request, err := requestService.CreateRequest(sessionID, "echo", `{"x":1}`, 0, "")
 	if err != nil {
@@ -183,6 +178,18 @@ func TestFencedWritesAfterReclaim(t *testing.T) {
 	mutateCachedRequestForTest(requestService, request.ID, func(r *model.Request) {
 		r.VisibleAt = time.Now().Add(-time.Second)
 	})
+
+	// Machine A goes away, and machine B takes over the tool provision: the
+	// takeover must hand it a fresh lease epoch when it claims the requeued
+	// request.
+	if err := machineService.UnregisterMachine(sessionID, machineA); err != nil {
+		t.Fatalf("unregister machine A: %v", err)
+	}
+	if _, err := machineService.RegisterMachine(sessionID, machineB, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineB, "echo", "echo tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine B: %v", err)
+	}
 
 	secondClaim, err := requestService.ClaimRequest(sessionID, request.ID, machineB)
 	if err != nil {
@@ -273,6 +280,12 @@ func TestActiveActiveFencedWritesAcrossInstances(t *testing.T) {
 	requeued.VisibleAt = time.Now().Add(-time.Second)
 	if err := store.SaveRequest(context.Background(), requeued); err != nil {
 		t.Fatalf("expire backoff: %v", err)
+	}
+	// Machine-b took over the tool provision: the shared registry row moves
+	// to it before the cross-instance claim.
+	echoTool.MachineID = "machine-b"
+	if err := store.SaveTool(context.Background(), echoTool); err != nil {
+		t.Fatalf("transfer tool to machine-b: %v", err)
 	}
 	claimedB, err := svcB.ClaimRequest("sess-aa", req.ID, "machine-b")
 	if err != nil {

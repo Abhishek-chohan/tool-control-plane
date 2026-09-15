@@ -32,6 +32,12 @@ var ErrLeaseConflict = errors.New("storage: lease conflict: caller does not hold
 // already in a terminal state (done/failure).
 var ErrRequestTerminal = errors.New("storage: request is already in a terminal state")
 
+// ErrMachineNotToolOwner reports that a claim was rejected because the
+// claiming machine never registered the request's tool: a provider may only
+// lease and answer requests for tools it provides, and the ownership filter
+// is derived from the tools registry, never from caller-supplied names alone.
+var ErrMachineNotToolOwner = errors.New("storage: machine does not provide the requested tool")
+
 // ErrNotFound reports that the targeted row does not exist. Fenced
 // primitives return it (wrapped with detail) so callers can distinguish a
 // missing entity from a lease rejection without parsing messages.

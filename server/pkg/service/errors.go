@@ -40,6 +40,12 @@ var (
 	// terminal).
 	ErrRequestNotClaimable = errors.New("request not claimable")
 
+	// ErrMachineNotToolOwner reports that a claim was rejected because the
+	// claiming machine never registered the request's tool. Providers may
+	// only claim and answer requests for tools they provide; the ownership
+	// filter comes from the tools registry, not from caller-supplied names.
+	ErrMachineNotToolOwner = errors.New("machine does not provide the requested tool")
+
 	// ErrRequestNotCancellable reports a cancel against a request that
 	// already reached a terminal state.
 	ErrRequestNotCancellable = errors.New("request not cancellable")
@@ -103,7 +109,9 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, model.ErrUnsupportedAPIKeyCapability),
 		errors.Is(err, model.ErrAPIKeyCapabilitiesRequired):
 		return status.Errorf(codes.InvalidArgument, "failed to %s: %v", action, err)
-	case errors.Is(err, ErrMachineCredentialRejected):
+	case errors.Is(err, ErrMachineCredentialRejected),
+		errors.Is(err, ErrMachineNotToolOwner),
+		errors.Is(err, storage.ErrMachineNotToolOwner):
 		return status.Errorf(codes.PermissionDenied, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineDraining),
 		errors.Is(err, ErrRequestNotClaimable),

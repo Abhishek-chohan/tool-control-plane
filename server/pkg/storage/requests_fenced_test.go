@@ -24,6 +24,7 @@ func TestClaimAssignsLeaseEpoch(t *testing.T) {
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, mach, time.Now())
+		seedOwnedTool(t, s, sess, mach, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, mach, 30*time.Second)
@@ -47,6 +48,7 @@ func TestRenewRequestLeaseExtendsDeadline(t *testing.T) {
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, mach, time.Now())
+		seedOwnedTool(t, s, sess, mach, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, mach, 5*time.Second)
@@ -81,6 +83,7 @@ func TestRenewRequestLeaseCapsAtAbsoluteTimeout(t *testing.T) {
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, mach, time.Now())
+		seedOwnedTool(t, s, sess, mach, "tool")
 		req := seedPendingRequest(t, s, sess, reqID, "tool")
 		// Absolute per-attempt timeout of 5 seconds: renewal must never push
 		// the lease deadline past leased_at + 5s no matter the requested TTL.
@@ -128,6 +131,7 @@ func TestRenewRequestLeaseRejectsStaleEpochAndWrongMachine(t *testing.T) {
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
 		seedMachine(t, s, sess, machB, time.Now())
+		seedOwnedTool(t, s, sess, machA, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
@@ -158,6 +162,10 @@ func TestFencedWritesRejectStaleHolderAfterReclaim(t *testing.T) {
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
 		seedMachine(t, s, sess, machB, time.Now())
+		tool := model.NewTool(sess, machA, "tool", "test tool", `{}`, nil, nil)
+		if err := s.SaveTool(ctx, tool); err != nil {
+			t.Fatalf("seed tool: %v", err)
+		}
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		firstClaim, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
@@ -189,6 +197,13 @@ func TestFencedWritesRejectStaleHolderAfterReclaim(t *testing.T) {
 		// The requeue scheduled a retry backoff; let it elapse before the
 		// second claim (claims now honor a not-yet-elapsed backoff).
 		time.Sleep(5 * time.Millisecond)
+
+		// Machine B took over the tool provision: the same registry row
+		// moves to B, so the claim ownership check accepts it.
+		tool.MachineID = machB
+		if err := s.SaveTool(ctx, tool); err != nil {
+			t.Fatalf("transfer tool to machB: %v", err)
+		}
 
 		secondClaim, ok, err := s.ClaimRequest(ctx, sess, reqID, machB, 30*time.Second)
 		if err != nil || !ok {
@@ -239,6 +254,7 @@ func TestFencedAppendRejectsNonHolder(t *testing.T) {
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
 		seedMachine(t, s, sess, machB, time.Now())
+		seedOwnedTool(t, s, sess, machA, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
@@ -275,6 +291,7 @@ func TestUpdateRequestFencedRunningTransition(t *testing.T) {
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
 		seedMachine(t, s, sess, machB, time.Now())
+		seedOwnedTool(t, s, sess, machA, "tool")
 		req := seedPendingRequest(t, s, sess, reqID, "tool")
 		req.TimeoutSeconds = 77
 		if err := s.SaveRequest(ctx, req); err != nil {
@@ -314,6 +331,7 @@ func TestSubmitRequestResultFencedTerminalSemantics(t *testing.T) {
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, mach, time.Now())
+		seedOwnedTool(t, s, sess, mach, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, mach, 30*time.Second)
@@ -362,6 +380,7 @@ func TestRequeueRequestFenced(t *testing.T) {
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
 		seedMachine(t, s, sess, machB, time.Now())
+		seedOwnedTool(t, s, sess, machA, "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
@@ -494,7 +513,8 @@ func TestClaimRequestRejectsFutureVisibleAt(t *testing.T) {
 		sess := "sess-" + uid(t)
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
-		seedMachine(t, s, sess, "mach-"+uid(t), time.Now())
+		seedMachine(t, s, sess, "mach-1", time.Now())
+		seedOwnedTool(t, s, sess, "mach-1", "tool")
 		req := seedPendingRequest(t, s, sess, reqID, "tool")
 
 		// A queued retry whose backoff has not elapsed is not claimable.
@@ -546,6 +566,8 @@ func TestRequeueDoesNotDoubleCountAttempts(t *testing.T) {
 		sess := "sess-" + uid(t)
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
+		seedMachine(t, s, sess, "mach-1", time.Now())
+		seedOwnedTool(t, s, sess, "mach-1", "tool")
 		seedPendingRequest(t, s, sess, reqID, "tool")
 
 		// First execution: the claim counts the attempt.
@@ -597,6 +619,12 @@ func TestDeadLetterAfterExactlyMaxAttemptsExecutions(t *testing.T) {
 		sess := "sess-" + uid(t)
 		reqID := "req-" + uid(t)
 		seedSession(t, s, sess)
+		seedMachine(t, s, sess, "mach-1", time.Now())
+		seedMachine(t, s, sess, "mach-2", time.Now())
+		tool := model.NewTool(sess, "mach-1", "tool", "test tool", `{}`, nil, nil)
+		if err := s.SaveTool(ctx, tool); err != nil {
+			t.Fatalf("seed tool: %v", err)
+		}
 		req := seedPendingRequest(t, s, sess, reqID, "tool")
 		req.MaxAttempts = 2
 		if err := s.SaveRequest(ctx, req); err != nil {
@@ -622,7 +650,12 @@ func TestDeadLetterAfterExactlyMaxAttemptsExecutions(t *testing.T) {
 			t.Fatalf("reclaim 1: ok=%v status=%s err=%v", ok, requeued.Status, err)
 		}
 
-		// Execution 2: the second claim exhausts the budget of 2.
+		// Execution 2: the second claim exhausts the budget of 2. Mach-2
+		// took over the tool provision: the same registry row moves to it.
+		tool.MachineID = "mach-2"
+		if err := s.SaveTool(ctx, tool); err != nil {
+			t.Fatalf("transfer tool to mach-2: %v", err)
+		}
 		if _, ok, err := s.ClaimRequest(ctx, sess, reqID, "mach-2", 30*time.Second); err != nil || !ok {
 			t.Fatalf("claim 2: ok=%v err=%v", ok, err)
 		}
