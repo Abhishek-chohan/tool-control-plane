@@ -32,6 +32,9 @@ enum RequestStatus {
   REQUEST_STATUS_RUNNING = 3;
   REQUEST_STATUS_DONE = 4;
   REQUEST_STATUS_FAILED = 5;
+  // Terminal state set when the request was cancelled: the durable record
+  // no longer relies on FAILED plus a conventioned error string.
+  REQUEST_STATUS_CANCELLED = 6;
 }
 
 // TaskStatus is the lifecycle state of a Task.

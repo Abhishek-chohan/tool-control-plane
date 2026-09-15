@@ -153,6 +153,15 @@ export class AlreadyExistsError extends APIError {
   }
 }
 
+/** The operation was cancelled before completing: the call carried the
+ * CANCELLED gRPC status, or the request reached REQUEST_STATUS_CANCELLED. */
+export class CancelledError extends APIError {
+  constructor(message: string, context: APIErrorContext = {}) {
+    super(message, 1, 'CANCELLED', context);
+    this.name = 'CancelledError';
+  }
+}
+
 /** The server was momentarily unreachable; retryable with backoff. */
 export class UnavailableError extends APIError {
   constructor(message: string, context: APIErrorContext = {}) {

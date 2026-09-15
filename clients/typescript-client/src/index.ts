@@ -18,6 +18,7 @@ export {
   APIError,
   AlreadyExistsError,
   ConnectionError,
+  CancelledError,
   FailedPreconditionError,
   InvalidArgumentError,
   NotFoundError,

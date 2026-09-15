@@ -292,6 +292,13 @@ func (c *ToolplaneClient) waitForRequestCompletion(ctx context.Context, requestI
 		switch request.Status {
 		case pb.RequestStatus_REQUEST_STATUS_DONE:
 			return request, nil
+		case pb.RequestStatus_REQUEST_STATUS_CANCELLED:
+			return nil, &Error{
+				Op:        "execute tool",
+				RequestID: requestID,
+				Code:      codes.Canceled,
+				Message:   "tool execution was cancelled",
+			}
 		case pb.RequestStatus_REQUEST_STATUS_FAILED:
 			errMsg := request.Error
 			if errMsg == "" {
@@ -1114,6 +1121,8 @@ func requestStatusForWire(status string) pb.RequestStatus {
 		return pb.RequestStatus_REQUEST_STATUS_DONE
 	case "failure", "failed":
 		return pb.RequestStatus_REQUEST_STATUS_FAILED
+	case "cancelled":
+		return pb.RequestStatus_REQUEST_STATUS_CANCELLED
 	default:
 		return pb.RequestStatus_REQUEST_STATUS_UNSPECIFIED
 	}

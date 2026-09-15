@@ -51,12 +51,15 @@ type metaMap map[string]any
 
 // requestTaskStatus maps a Toolplane request status to an MCP Tasks status.
 // pending/claimed/running/stalled all mean work is in flight; MCP has a
-// single working state. A failure caused by CancelRequest maps to cancelled;
-// every other failure maps to failed.
+// single working state. CANCELLED is the first-class cancelled status; the
+// legacy error-string check remains as a fallback for backends that have not
+// been upgraded, and every other failure maps to failed.
 func requestTaskStatus(request *gw.Request) string {
 	switch request.Status {
 	case gw.RequestStatus_REQUEST_STATUS_DONE:
 		return TaskStatusCompleted
+	case gw.RequestStatus_REQUEST_STATUS_CANCELLED:
+		return TaskStatusCancelled
 	case gw.RequestStatus_REQUEST_STATUS_FAILED:
 		if request.Error == requestCancelledError {
 			return TaskStatusCancelled

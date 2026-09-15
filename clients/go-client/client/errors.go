@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -21,6 +22,10 @@ type Error struct {
 	Code codes.Code
 	// Message is the human-readable failure detail.
 	Message string
+	// Reason is the machine-readable failure reason from the server's
+	// google.rpc.ErrorInfo detail (e.g. "REPLAY_WINDOW_EXPIRED"), when one
+	// was attached. Empty when the failure carries no reason.
+	Reason string
 	// Retryable reports whether the code is transport-level (Unavailable) or
 	// capacity (ResourceExhausted) — the only codes where a retry can help.
 	Retryable bool
@@ -102,7 +107,20 @@ func FromGRPC(op, requestID string, err error) error {
 		RequestID: requestID,
 		Code:      st.Code(),
 		Message:   st.Message(),
+		Reason:    reasonFromStatus(st),
 		Retryable: IsRetryableCode(st.Code()),
 		cause:     err,
 	}
+}
+
+// reasonFromStatus extracts the machine-readable failure reason from a
+// google.rpc.ErrorInfo detail attached by the server ("toolplane" domain),
+// so clients can branch on semantics instead of parsing error strings.
+func reasonFromStatus(st *status.Status) string {
+	for _, detail := range st.Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok {
+			return info.Reason
+		}
+	}
+	return ""
 }

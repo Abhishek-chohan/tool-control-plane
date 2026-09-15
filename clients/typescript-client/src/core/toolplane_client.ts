@@ -25,6 +25,7 @@ import { ProviderRuntime } from '../provider_runtime';
 
 import {
   AlreadyExistsError,
+  CancelledError,
   ConnectionError,
   FailedPreconditionError,
   InvalidArgumentError,
@@ -142,6 +143,8 @@ function normalizeRequestStatus(status: number): string {
       return 'done';
     case RequestStatus.REQUEST_STATUS_FAILED:
       return 'failure';
+    case RequestStatus.REQUEST_STATUS_CANCELLED:
+      return 'cancelled';
     case RequestStatus.REQUEST_STATUS_PENDING:
       return 'pending';
     case RequestStatus.REQUEST_STATUS_CLAIMED:
@@ -160,6 +163,8 @@ function requestStatusForWire(status?: string): number {
     case 'failure':
     case 'failed':
       return RequestStatus.REQUEST_STATUS_FAILED;
+    case 'cancelled':
+      return RequestStatus.REQUEST_STATUS_CANCELLED;
     case 'pending':
       return RequestStatus.REQUEST_STATUS_PENDING;
     case 'claimed':
@@ -1173,6 +1178,8 @@ export class ToolplaneClient {
       switch (response.getStatus()) {
         case RequestStatus.REQUEST_STATUS_DONE:
           return response;
+        case RequestStatus.REQUEST_STATUS_CANCELLED:
+          throw new CancelledError(`request ${requestId} was cancelled`, { requestId, status: 'cancelled' });
         case RequestStatus.REQUEST_STATUS_FAILED: {
           const errorMessage = response.getError() || `request ${requestId} failed`;
           throw new FailedPreconditionError(errorMessage, { requestId, status: 'failure' });
@@ -1301,7 +1308,7 @@ export class ToolplaneClient {
       case grpc.status.DEADLINE_EXCEEDED:
         return new TimeoutError(prefixed, error);
       case grpc.status.CANCELLED:
-        return new ConnectionError(prefixed, error);
+        return new CancelledError(prefixed, ctx);
       default:
         return new ToolplaneError(prefixed, error.code, error);
     }

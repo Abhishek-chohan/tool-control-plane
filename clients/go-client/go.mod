@@ -1,12 +1,12 @@
 module toolplane-go-client
 
-go 1.23.0
+go 1.25.0
 
 require (
 	github.com/google/uuid v1.6.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250721164621-a45f3dfb1074
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.12
 )
 
 require (

@@ -10,6 +10,7 @@ from toolplane.utils.schema import generate_schema_from_function
 from .connection import ConnectionManager
 from .errors import (
     ToolplaneAPIError,
+    ToolplaneCancelledError,
     ToolplaneError,
     ToolplaneInvalidArgumentError,
     ToolplaneTimeoutError,
@@ -322,6 +323,12 @@ class SessionContext:
                 callback("", True)
                 break
 
+            if normalize_status_name(status["status"]) == "cancelled":
+                raise ToolplaneCancelledError(
+                    "Request was cancelled "
+                    f"(request_id={status.get('requestId', request_id)})"
+                )
+
             if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Streaming failed: {status.get('error', 'Unknown error')}"
@@ -390,6 +397,11 @@ class SessionContext:
             if normalize_status_name(status["status"]) == "done":
                 # Ensure result is JSON-parsed if possible (RequestManager already attempts this)
                 return status
+
+            if normalize_status_name(status["status"]) == "cancelled":
+                raise ToolplaneCancelledError(
+                    f"Request was cancelled (request_id={request_id})"
+                )
 
             if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(

@@ -612,7 +612,7 @@ func TestCrossReplicaTaskReadsAndCancel(t *testing.T) {
 	if err != nil || cancelled == nil {
 		t.Fatalf("reload cancelled request: %v", err)
 	}
-	if cancelled.Status != model.RequestStatusFailed {
+	if cancelled.Status != model.RequestStatusCancelled {
 		t.Fatalf("executing request not cancelled via replica B: status=%s", cancelled.Status)
 	}
 

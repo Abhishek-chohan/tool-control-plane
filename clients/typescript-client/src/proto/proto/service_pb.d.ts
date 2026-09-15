@@ -2126,6 +2126,7 @@ export enum RequestStatus {
     REQUEST_STATUS_RUNNING = 3,
     REQUEST_STATUS_DONE = 4,
     REQUEST_STATUS_FAILED = 5,
+    REQUEST_STATUS_CANCELLED = 6,
 }
 
 export enum TaskStatus {

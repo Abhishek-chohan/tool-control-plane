@@ -477,11 +477,14 @@ func (s *Store) CancelRequestFenced(ctx context.Context, sessionID, requestID, m
 		if err != nil {
 			return err
 		}
-		if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
+		if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed || req.Status == model.RequestStatusCancelled {
 			result = req
 			return nil
 		}
 		req.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, message)
+		// Cancelled is a first-class terminal status: the durable record no
+		// longer relies on FAILED plus a conventioned error string.
+		req.Status = model.RequestStatusCancelled
 		req.LastError = message
 		req.DeadLetter = true
 		if err := persistRequestInTx(ctx, tx, req); err != nil {

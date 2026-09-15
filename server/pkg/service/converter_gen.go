@@ -45,6 +45,8 @@ func protoRequestStatus(s model.RequestStatus) proto.RequestStatus {
 		return proto.RequestStatus_REQUEST_STATUS_DONE
 	case model.RequestStatusFailed:
 		return proto.RequestStatus_REQUEST_STATUS_FAILED
+	case model.RequestStatusCancelled:
+		return proto.RequestStatus_REQUEST_STATUS_CANCELLED
 	default:
 		return proto.RequestStatus_REQUEST_STATUS_UNSPECIFIED
 	}

@@ -207,10 +207,12 @@ func (s *Store) CancelRequestFenced(ctx context.Context, sessionID, requestID, m
 	if err != nil {
 		return nil, false, err
 	}
-	if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed {
+	if req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed || req.Status == model.RequestStatusCancelled {
 		return cloneRequest(req), false, nil
 	}
 	req.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, message)
+	// Cancelled is a first-class terminal status, matching the Postgres path.
+	req.Status = model.RequestStatusCancelled
 	req.LastError = message
 	req.DeadLetter = true
 	return cloneRequest(req), true, nil

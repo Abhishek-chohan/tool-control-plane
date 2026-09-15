@@ -417,8 +417,8 @@ func TestCancelRequestFencedCancelsNonTerminal(t *testing.T) {
 		if err != nil || !ok {
 			t.Fatalf("cancel: ok=%v err=%v", ok, err)
 		}
-		if cancelled.Status != model.RequestStatusFailed {
-			t.Fatalf("cancel status: got %s want failed", cancelled.Status)
+		if cancelled.Status != model.RequestStatusCancelled {
+			t.Fatalf("cancel status: got %s want cancelled", cancelled.Status)
 		}
 		if !cancelled.DeadLetter {
 			t.Fatal("cancel should mark dead_letter")
@@ -435,7 +435,7 @@ func TestCancelRequestFencedCancelsNonTerminal(t *testing.T) {
 		if err != nil {
 			t.Fatalf("get after cancel: %v", err)
 		}
-		if stored.Status != model.RequestStatusFailed || !stored.DeadLetter {
+		if stored.Status != model.RequestStatusCancelled || !stored.DeadLetter {
 			t.Fatalf("stored after cancel: status=%s deadLetter=%v", stored.Status, stored.DeadLetter)
 		}
 	})

@@ -11,6 +11,7 @@ from toolplane.utils.schema import generate_schema_from_function
 
 from ..core.errors import (
     ToolplaneAPIError,
+    ToolplaneCancelledError,
     ToolplaneError,
     ToolplaneInvalidArgumentError,
     ToolplaneTimeoutError,
@@ -308,6 +309,12 @@ class HTTPSessionContext:
                 callback("", True)
                 break
 
+            if normalize_status_name(status["status"]) == "cancelled":
+                raise ToolplaneCancelledError(
+                    "Request was cancelled "
+                    f"(request_id={status.get('requestId', request_id)})"
+                )
+
             if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(
                     f"Streaming failed: {status.get('error', 'Unknown error')}"
@@ -379,6 +386,11 @@ class HTTPSessionContext:
                     return json.loads(status["result"])
                 except (TypeError, ValueError, json.JSONDecodeError):
                     return status["result"]
+
+            if normalize_status_name(status["status"]) == "cancelled":
+                raise ToolplaneCancelledError(
+                    f"Request was cancelled (request_id={request_id})"
+                )
 
             if normalize_status_name(status["status"]) == "failure":
                 raise ToolplaneError(

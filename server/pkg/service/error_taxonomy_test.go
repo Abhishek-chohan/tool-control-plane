@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"toolplane/pkg/model"
@@ -207,5 +208,49 @@ func TestLookupHandlersReturnNotFound(t *testing.T) {
 		SessionId: "sess-taxonomy", TaskId: "task-missing",
 	}); status.Code(err) != codes.NotFound {
 		t.Fatalf("get missing task = %v, want not found", err)
+	}
+}
+
+// TestStatusCarriesMachineReadableReason pins the typed-error contract: the
+// overloaded OUT_OF_RANGE conditions carry distinct ErrorInfo reasons, and
+// capacity rejections carry RetryInfo, so clients branch on semantics rather
+// than parsing error strings.
+func TestStatusCarriesMachineReadableReason(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantCode   codes.Code
+		wantReason string
+	}{
+		{"timeout above max", wrapf(ErrRequestTimeoutOutOfRange, "7200s"), codes.OutOfRange, ReasonTimeoutAboveMax},
+		{"replay window expired", &RequestStreamExpiredError{}, codes.OutOfRange, ReasonReplayWindowExpired},
+		{"machine at capacity", wrapf(ErrMachineAtCapacity, "machine m1"), codes.ResourceExhausted, ReasonCapacityExhausted},
+		{"session backlog full", wrapf(ErrTooManyPendingRequests, "session s1"), codes.ResourceExhausted, ReasonSessionBacklogFull},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			st, ok := status.FromError(statusFromDomainError("unit test", tc.err))
+			if !ok {
+				t.Fatal("expected a gRPC status")
+			}
+			found := false
+			for _, detail := range st.Details() {
+				if info, ok := detail.(*errdetails.ErrorInfo); ok && info.Reason == tc.wantReason {
+					found = true
+				}
+				if tc.wantCode == codes.ResourceExhausted {
+					if _, ok := detail.(*errdetails.RetryInfo); !ok {
+						continue
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("status details missing reason %s: %+v", tc.wantReason, st.Details())
+			}
+			if status.Code(st.Err()) != tc.wantCode {
+				t.Fatalf("code=%v want %v", status.Code(st.Err()), tc.wantCode)
+			}
+		})
 	}
 }

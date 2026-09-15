@@ -3,13 +3,55 @@ package service
 import (
 	"errors"
 	"fmt"
+	"time"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	"toolplane/pkg/model"
 	"toolplane/pkg/storage"
 )
+
+// Stable machine-readable failure reasons, carried on the wire as
+// google.rpc.ErrorInfo (domain "toolplane") attached to the gRPC status, so
+// clients can branch on semantics instead of parsing error strings. RetryInfo
+// accompanies capacity rejections with a suggested backoff.
+const (
+	ReasonTimeoutAboveMax     = "TIMEOUT_ABOVE_MAX"
+	ReasonReplayWindowExpired = "REPLAY_WINDOW_EXPIRED"
+	ReasonCapacityExhausted   = "CAPACITY_EXHAUSTED"
+	ReasonSessionBacklogFull  = "SESSION_BACKLOG_FULL"
+)
+
+// errorInfoStatus builds a status with an attached google.rpc.ErrorInfo so
+// the failure reason is machine-readable on the wire.
+func errorInfoStatus(c codes.Code, msg, reason string) error {
+	st := status.New(c, msg)
+	with, err := st.WithDetails(&errdetails.ErrorInfo{
+		Reason: reason,
+		Domain: "toolplane",
+	})
+	if err != nil {
+		return st.Err()
+	}
+	return with.Err()
+}
+
+// retryableStatus builds a RESOURCE_EXHAUSTED status carrying both the reason
+// and a suggested retry delay (google.rpc.RetryInfo).
+func retryableStatus(msg, reason string, retryAfter time.Duration) error {
+	st := status.New(codes.ResourceExhausted, msg)
+	with, err := st.WithDetails(
+		&errdetails.ErrorInfo{Reason: reason, Domain: "toolplane"},
+		&errdetails.RetryInfo{RetryDelay: durationpb.New(retryAfter)},
+	)
+	if err != nil {
+		return st.Err()
+	}
+	return with.Err()
+}
 
 // Domain error sentinels.
 //
@@ -123,15 +165,15 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, storage.ErrRequestTerminal):
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
-		return status.Errorf(codes.ResourceExhausted, "failed to %s: %v", action, err)
+		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonCapacityExhausted, 2*time.Second)
 	case errors.Is(err, ErrTooManyPendingRequests):
-		return status.Errorf(codes.ResourceExhausted, "failed to %s: %v", action, err)
+		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonSessionBacklogFull, 5*time.Second)
 	case errors.Is(err, ErrRequestTimeoutOutOfRange):
-		return status.Errorf(codes.OutOfRange, "failed to %s: %v", action, err)
+		return errorInfoStatus(codes.OutOfRange, fmt.Sprintf("failed to %s: %v", action, err), ReasonTimeoutAboveMax)
 	default:
 		var expired *RequestStreamExpiredError
 		if errors.As(err, &expired) {
-			return status.Errorf(codes.OutOfRange, "failed to %s: %v", action, err)
+			return errorInfoStatus(codes.OutOfRange, fmt.Sprintf("failed to %s: %v", action, err), ReasonReplayWindowExpired)
 		}
 		return status.Errorf(codes.Internal, "failed to %s: %v", action, err)
 	}

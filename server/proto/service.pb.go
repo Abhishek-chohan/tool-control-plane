@@ -33,6 +33,9 @@ const (
 	RequestStatus_REQUEST_STATUS_RUNNING     RequestStatus = 3
 	RequestStatus_REQUEST_STATUS_DONE        RequestStatus = 4
 	RequestStatus_REQUEST_STATUS_FAILED      RequestStatus = 5
+	// Terminal state set when the request was cancelled: the durable record
+	// no longer relies on FAILED plus a conventioned error string.
+	RequestStatus_REQUEST_STATUS_CANCELLED RequestStatus = 6
 )
 
 // Enum value maps for RequestStatus.
@@ -44,6 +47,7 @@ var (
 		3: "REQUEST_STATUS_RUNNING",
 		4: "REQUEST_STATUS_DONE",
 		5: "REQUEST_STATUS_FAILED",
+		6: "REQUEST_STATUS_CANCELLED",
 	}
 	RequestStatus_value = map[string]int32{
 		"REQUEST_STATUS_UNSPECIFIED": 0,
@@ -52,6 +56,7 @@ var (
 		"REQUEST_STATUS_RUNNING":     3,
 		"REQUEST_STATUS_DONE":        4,
 		"REQUEST_STATUS_FAILED":      5,
+		"REQUEST_STATUS_CANCELLED":   6,
 	}
 )
 
@@ -5353,14 +5358,15 @@ const file_proto_service_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x17\n" +
 	"\atask_id\x18\x02 \x01(\tR\x06taskId\".\n" +
 	"\x12CancelTaskResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess*\xb7\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess*\xd5\x01\n" +
 	"\rRequestStatus\x12\x1e\n" +
 	"\x1aREQUEST_STATUS_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16REQUEST_STATUS_PENDING\x10\x01\x12\x1a\n" +
 	"\x16REQUEST_STATUS_CLAIMED\x10\x02\x12\x1a\n" +
 	"\x16REQUEST_STATUS_RUNNING\x10\x03\x12\x17\n" +
 	"\x13REQUEST_STATUS_DONE\x10\x04\x12\x19\n" +
-	"\x15REQUEST_STATUS_FAILED\x10\x05*\xc6\x01\n" +
+	"\x15REQUEST_STATUS_FAILED\x10\x05\x12\x1c\n" +
+	"\x18REQUEST_STATUS_CANCELLED\x10\x06*\xc6\x01\n" +
 	"\n" +
 	"TaskStatus\x12\x1b\n" +
 	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +

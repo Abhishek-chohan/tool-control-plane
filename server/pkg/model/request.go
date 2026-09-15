@@ -10,13 +10,26 @@ import (
 type RequestStatus string
 
 const (
-	RequestStatusPending RequestStatus = "pending"
-	RequestStatusClaimed RequestStatus = "claimed"
-	RequestStatusRunning RequestStatus = "running"
-	RequestStatusDone    RequestStatus = "done"
-	RequestStatusFailed  RequestStatus = "failure"
-	RequestStatusStalled RequestStatus = "stalled"
+	RequestStatusPending   RequestStatus = "pending"
+	RequestStatusClaimed   RequestStatus = "claimed"
+	RequestStatusRunning   RequestStatus = "running"
+	RequestStatusDone      RequestStatus = "done"
+	RequestStatusFailed    RequestStatus = "failure"
+	RequestStatusStalled   RequestStatus = "stalled"
+	RequestStatusCancelled RequestStatus = "cancelled"
 )
+
+// IsTerminal reports whether the request reached a final state: done,
+// failed, or cancelled. Cancelled is a first-class terminal status, not
+// FAILED plus a conventioned error string.
+func (r *Request) IsTerminal() bool {
+	if r == nil {
+		return false
+	}
+	return r.Status == RequestStatusDone ||
+		r.Status == RequestStatusFailed ||
+		r.Status == RequestStatusCancelled
+}
 
 // ResultType represents the type of result
 type ResultType string
@@ -320,4 +333,14 @@ func (r *Request) LeaseExpired(now time.Time) bool {
 		return false
 	}
 	return !r.VisibleAt.IsZero() && !r.VisibleAt.After(now)
+}
+
+// IsTerminalStatus reports whether s is a final request state: done, failed,
+// or cancelled. Every terminal-pair check must include cancelled so a
+// cancelled request is treated as finished everywhere (claims, retention,
+// waiters, slot release).
+func IsTerminalStatus(s RequestStatus) bool {
+	return s == RequestStatusDone ||
+		s == RequestStatusFailed ||
+		s == RequestStatusCancelled
 }

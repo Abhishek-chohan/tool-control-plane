@@ -47,7 +47,7 @@ type RequestStreamSnapshot struct {
 }
 
 func (s RequestStreamSnapshot) IsTerminal() bool {
-	return s.Status == model.RequestStatusDone || s.Status == model.RequestStatusFailed
+	return model.IsTerminalStatus(s.Status)
 }
 
 func (s RequestStreamSnapshot) FinalSeq() int32 {
@@ -102,7 +102,7 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 				// the retention sweeper would remove anyway — on a database
 				// with old terminal history, hydration would pay for every
 				// restart.
-				if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+				if (model.IsTerminalStatus(req.Status)) &&
 					req.UpdatedAt.Before(retentionCutoff) {
 					continue
 				}
@@ -155,7 +155,7 @@ func (s *RequestsService) cleanupTerminalRequests() {
 					s.requestsMutex.Lock()
 					for _, sessionRequests := range s.requests {
 						for id, req := range sessionRequests {
-							if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+							if (model.IsTerminalStatus(req.Status)) &&
 								req.UpdatedAt.Before(cutoff) {
 								delete(sessionRequests, id)
 							}
@@ -179,7 +179,7 @@ func (s *RequestsService) cleanupTerminalRequests() {
 			s.requestsMutex.Lock()
 			for _, sessionRequests := range s.requests {
 				for id, req := range sessionRequests {
-					if (req.Status == model.RequestStatusDone || req.Status == model.RequestStatusFailed) &&
+					if (model.IsTerminalStatus(req.Status)) &&
 						req.UpdatedAt.Before(cutoff) {
 						delete(sessionRequests, id)
 					}
@@ -306,7 +306,7 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	})
 
 	s.notifyRequestUpdate(request.ID)
-	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+	if model.IsTerminalStatus(request.Status) {
 		s.releaseRequestSignal(request.ID)
 	}
 
@@ -555,7 +555,7 @@ func (s *RequestsService) UpdateRequest(
 	if err := storage.CheckLeaseFence(request, machineID, leaseEpoch); err != nil {
 		return nil, err
 	}
-	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+	if model.IsTerminalStatus(request.Status) {
 		return nil, fmt.Errorf("%w: request %s is already in state %s", storage.ErrRequestTerminal, requestID, request.Status)
 	}
 
@@ -600,7 +600,7 @@ func (s *RequestsService) UpdateRequest(
 			request.NextAttemptAt = nil
 			request.Error = ""
 			request.LastError = ""
-		case model.RequestStatusDone, model.RequestStatusFailed:
+		case model.RequestStatusDone, model.RequestStatusFailed, model.RequestStatusCancelled:
 			request.Status = status
 			if status == model.RequestStatusFailed && request.Error != "" {
 				request.LastError = request.Error
@@ -634,7 +634,7 @@ func (s *RequestsService) UpdateRequest(
 			s.recordRequestEvent(request, trace.EventRequestExecutionFailed, request.ExecutingMachineID, map[string]any{"source": "update_request"})
 		}
 
-		if (status == model.RequestStatusDone || status == model.RequestStatusFailed) && request.ExecutingMachineID != "" {
+		if (model.IsTerminalStatus(status)) && request.ExecutingMachineID != "" {
 			s.machineService.ReleaseMachineSlot(sessionID, request.ExecutingMachineID)
 		} else if status == model.RequestStatusRunning && !reservedSlot && prevStatus == model.RequestStatusRunning && request.ExecutingMachineID != "" {
 			// Refresh counters for resumed execution when lock was already held
@@ -712,7 +712,7 @@ func (s *RequestsService) updateRequestViaStore(
 			s.recordRequestEvent(updated, trace.EventRequestExecutionFailed, updated.ExecutingMachineID, map[string]any{"source": "update_request"})
 		}
 
-		if (status == model.RequestStatusDone || status == model.RequestStatusFailed) && updated.ExecutingMachineID != "" {
+		if (model.IsTerminalStatus(status)) && updated.ExecutingMachineID != "" {
 			s.machineService.ReleaseMachineSlot(sessionID, updated.ExecutingMachineID)
 		} else if status == model.RequestStatusRunning && !reservedSlot && prevStatus == model.RequestStatusRunning && updated.ExecutingMachineID != "" {
 			s.machineService.ReserveMachineSlot(sessionID, updated.ExecutingMachineID)
@@ -720,7 +720,7 @@ func (s *RequestsService) updateRequestViaStore(
 	}
 
 	s.notifyRequestUpdate(updated.ID)
-	if updated.Status == model.RequestStatusDone || updated.Status == model.RequestStatusFailed {
+	if model.IsTerminalStatus(updated.Status) {
 		s.releaseRequestSignal(updated.ID)
 	}
 
@@ -1032,7 +1032,7 @@ func (s *RequestsService) SubmitRequestResult(
 
 	// Special handling for streaming updates to allow continued updates
 	if resultType == model.ResultTypeStreaming {
-		if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+		if model.IsTerminalStatus(request.Status) {
 			if resultStr, ok := result.(string); ok {
 				request.AddStreamChunk(resultStr)
 			}
@@ -1042,7 +1042,7 @@ func (s *RequestsService) SubmitRequestResult(
 	}
 
 	// Don't update already completed requests unless streaming
-	if request.Status == model.RequestStatusDone || request.Status == model.RequestStatusFailed {
+	if model.IsTerminalStatus(request.Status) {
 		return fmt.Errorf("%w: request %s is already in state %s", storage.ErrRequestTerminal, requestID, request.Status)
 	}
 
@@ -1158,7 +1158,7 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 		}
 
 		// Check if request can be cancelled
-		if cached.Status == model.RequestStatusDone || cached.Status == model.RequestStatusFailed {
+		if model.IsTerminalStatus(cached.Status) {
 			s.requestsMutex.Unlock()
 			return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, cached.Status)
 		}
