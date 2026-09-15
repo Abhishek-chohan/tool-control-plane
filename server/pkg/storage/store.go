@@ -168,6 +168,12 @@ type Storer interface {
 	AllTasks(ctx context.Context) ([]*model.Task, error)
 	SaveTask(ctx context.Context, task *model.Task) error
 	DeleteTask(ctx context.Context, taskID string) error
+	// GetTaskByID fetches a task row by ID (nil when absent). Serving-time
+	// task reads use it so a task created on another replica resolves, and
+	// CancelTask falls back to its durable current_request_id.
+	GetTaskByID(ctx context.Context, taskID string) (*model.Task, error)
+	// ListTasksBySession returns the session's tasks.
+	ListTasksBySession(ctx context.Context, sessionID string) ([]*model.Task, error)
 	// Retention. DeleteTerminalRequestsBefore removes done/failed requests
 	// whose last transition precedes the cutoff (non-terminal rows are never
 	// eligible); DeleteAuditEventsBefore removes audit events created before

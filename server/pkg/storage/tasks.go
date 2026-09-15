@@ -36,6 +36,45 @@ func (s *Store) AllTasks(ctx context.Context) ([]*model.Task, error) {
 	return tasks, rows.Err()
 }
 
+// GetTaskByID fetches a single task row by ID (nil when absent), so
+// serving-time reads resolve tasks created on other replicas.
+func (s *Store) GetTaskByID(ctx context.Context, taskID string) (*model.Task, error) {
+	if s == nil {
+		return nil, nil
+	}
+	row := s.db.QueryRowContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE id=$1`, taskID)
+	t, err := scanTaskRow(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get task: %w", err)
+	}
+	return t, nil
+}
+
+// ListTasksBySession returns the session's tasks.
+func (s *Store) ListTasksBySession(ctx context.Context, sessionID string) ([]*model.Task, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE session_id=$1`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list tasks by session: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*model.Task
+	for rows.Next() {
+		t, err := scanTaskRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
 func (s *Store) SaveTask(ctx context.Context, task *model.Task) error {
 	if s == nil || task == nil {
 		return nil

@@ -948,3 +948,48 @@ func TestServingReadsBySession(t *testing.T) {
 		}
 	})
 }
+
+// TestTaskServingReadsBySession covers the session-scoped task serving reads
+// on both backends: GetTaskByID resolves exactly the seeded row (nil for a
+// missing one), and ListTasksBySession is scoped to the session.
+func TestTaskServingReadsBySession(t *testing.T) {
+	runAgainstBoth(t, "task serving reads", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		other := "sess-" + uid(t)
+		seedSession(t, s, sess)
+		seedSession(t, s, other)
+
+		task := model.NewTask(sess, "tool-"+uid(t), `{}`)
+		if err := s.SaveTask(ctx, task); err != nil {
+			t.Fatalf("seed task: %v", err)
+		}
+		otherTask := model.NewTask(other, "tool-"+uid(t), `{}`)
+		if err := s.SaveTask(ctx, otherTask); err != nil {
+			t.Fatalf("seed other task: %v", err)
+		}
+
+		got, err := s.GetTaskByID(ctx, task.ID)
+		if err != nil || got == nil {
+			t.Fatalf("get task: task=%+v err=%v", got, err)
+		}
+		if got.SessionID != sess || got.ToolName != task.ToolName {
+			t.Fatalf("get task mismatch: %+v", got)
+		}
+		if missing, err := s.GetTaskByID(ctx, "no-such-task-"+uid(t)); err != nil || missing != nil {
+			t.Fatalf("missing task: got=%+v err=%v", missing, err)
+		}
+
+		tasks, err := s.ListTasksBySession(ctx, sess)
+		if err != nil {
+			t.Fatalf("list tasks: %v", err)
+		}
+		if len(tasks) != 1 || tasks[0].ID != task.ID {
+			t.Fatalf("list tasks: n=%d first=%+v", len(tasks), tasks)
+		}
+		otherTasks, err := s.ListTasksBySession(ctx, other)
+		if err != nil || len(otherTasks) != 1 || otherTasks[0].ID != otherTask.ID {
+			t.Fatalf("list tasks (other session): %+v err=%v", otherTasks, err)
+		}
+	})
+}
