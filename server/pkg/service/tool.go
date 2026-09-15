@@ -351,8 +351,24 @@ func (s *ToolService) GetToolByName(sessionID, name string) (*model.Tool, error)
 		tool, err := s.store.GetToolByName(ctx, sessionID, name)
 		cancel()
 		if err != nil {
+			// Only a store error degrades to the cache. A successful miss is
+			// authoritative: the row is gone (cross-replica delete), so the
+			// stale local mirror is dropped and NOT_FOUND is returned rather
+			// than silently serving the deleted tool.
 			log.Printf("tool read-through failed: %v", err)
-		} else if tool != nil {
+		} else {
+			s.toolsMutex.Lock()
+			if sessionTools, ok := s.tools[sessionID]; ok {
+				for id, t := range sessionTools {
+					if t != nil && t.Name == name {
+						delete(sessionTools, id)
+					}
+				}
+			}
+			s.toolsMutex.Unlock()
+			if tool == nil {
+				return nil, wrapf(ErrNotFound, "tool %s not found in session %s", name, sessionID)
+			}
 			s.cacheTool(sessionID, tool)
 			return tool, nil
 		}

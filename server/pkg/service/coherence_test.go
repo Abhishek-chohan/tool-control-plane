@@ -488,6 +488,17 @@ func TestToolAndMachineReadsSeeOtherReplicaRegistrations(t *testing.T) {
 		t.Fatalf("B resolved wrong tool: %+v", tool)
 	}
 
+	// End to end, and FIRST: B creates a request for the foreign-registered
+	// tool without any prior machine read on B — provider resolution must
+	// read through the owning machine itself.
+	req, err := requestSvcB.CreateRequest(sessionID, "echo", `{}`, 0, "")
+	if err != nil {
+		t.Fatalf("CreateRequest on B for tool registered on A: %v", err)
+	}
+	if req.ToolName != "echo" {
+		t.Fatalf("unexpected request tool %q", req.ToolName)
+	}
+
 	// Tool listing.
 	tools, err := toolSvcB.ListTools(sessionID)
 	if err != nil || len(tools) != 1 {
@@ -501,15 +512,5 @@ func TestToolAndMachineReadsSeeOtherReplicaRegistrations(t *testing.T) {
 	}
 	if _, err := machineSvcB.GetMachineByID(sessionID, "machine-reg-a"); err != nil {
 		t.Fatalf("GetMachineByID on B: %v", err)
-	}
-
-	// End to end: B creates a request for the foreign-registered tool —
-	// this previously failed because the local registry missed.
-	req, err := requestSvcB.CreateRequest(sessionID, "echo", `{}`, 0, "")
-	if err != nil {
-		t.Fatalf("CreateRequest on B for tool registered on A: %v", err)
-	}
-	if req.ToolName != "echo" {
-		t.Fatalf("unexpected request tool %q", req.ToolName)
 	}
 }

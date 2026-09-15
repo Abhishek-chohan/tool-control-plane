@@ -301,15 +301,25 @@ func (s *MachinesService) SetRequestTracker(tracker machineDrainRequestTracker) 
 // GetMachineByID gets a machine by ID
 func (s *MachinesService) GetMachineByID(sessionID, machineID string) (*model.Machine, error) {
 	// Store-first: a machine registered on another replica resolves here
-	// instead of missing, and mirrors into the local registry. Store errors
-	// degrade to the cache.
+	// and mirrors into the local registry. A successful store miss (or a
+	// session mismatch) is authoritative — any stale local mirror is
+	// dropped and NOT_FOUND returned, so cross-replica deletes and moves
+	// are honored immediately. Only store errors degrade to the cache.
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		stored, err := s.store.GetMachine(ctx, machineID)
 		cancel()
 		if err != nil {
 			log.Printf("machine read-through failed: %v", err)
-		} else if stored != nil && stored.SessionID == sessionID {
+		} else {
+			s.machinesMutex.Lock()
+			if machines, ok := s.machines[sessionID]; ok {
+				delete(machines, machineID)
+			}
+			s.machinesMutex.Unlock()
+			if stored == nil || stored.SessionID != sessionID {
+				return nil, wrapf(ErrNotFound, "machine %s not found in session %s", machineID, sessionID)
+			}
 			s.machinesMutex.Lock()
 			if _, ok := s.machines[sessionID]; !ok {
 				s.machines[sessionID] = make(map[string]*model.Machine)
@@ -538,9 +548,6 @@ func (s *MachinesService) UnregisterMachine(sessionID, machineID string) error {
 
 // FindMachinesWithTool finds machines that have a specific tool
 func (s *MachinesService) FindMachinesWithTool(sessionID, toolName string) ([]*model.Machine, error) {
-	s.machinesMutex.RLock()
-	defer s.machinesMutex.RUnlock()
-
 	tool, err := s.toolService.GetToolByName(sessionID, toolName)
 	if err != nil {
 		return nil, wrapf(ErrNotFound, "tool not found: %v", err)
@@ -550,14 +557,35 @@ func (s *MachinesService) FindMachinesWithTool(sessionID, toolName string) ([]*m
 		return nil, wrapf(ErrNoProviderAvailable, "tool %s is not associated with any machine", toolName)
 	}
 
+	// Local registry first; on a miss, read the owning machine through the
+	// store (a registration made on another replica is not in this
+	// instance's map, and the tool read-through above does not hydrate
+	// machines). No store-backed lock is held across the query.
+	s.machinesMutex.RLock()
 	sessionMachines, ok := s.machines[sessionID]
-	if !ok {
-		return nil, wrapf(ErrNoProviderAvailable, "no machines found for session %s", sessionID)
-	}
+	machine := sessionMachines[tool.MachineID]
+	s.machinesMutex.RUnlock()
 
-	machine, ok := sessionMachines[tool.MachineID]
-	if !ok {
-		return nil, wrapf(ErrNoProviderAvailable, "machine %s for tool %s not registered", tool.MachineID, toolName)
+	if !ok || machine == nil {
+		if s.store != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			stored, err := s.store.GetMachine(ctx, tool.MachineID)
+			cancel()
+			if err != nil {
+				log.Printf("machine read-through failed: %v", err)
+			} else if stored != nil && stored.SessionID == sessionID {
+				s.machinesMutex.Lock()
+				if _, ok := s.machines[sessionID]; !ok {
+					s.machines[sessionID] = make(map[string]*model.Machine)
+				}
+				s.machines[sessionID][stored.ID] = stored
+				s.machinesMutex.Unlock()
+				machine = stored
+			}
+		}
+		if machine == nil {
+			return nil, wrapf(ErrNoProviderAvailable, "machine %s for tool %s not registered", tool.MachineID, toolName)
+		}
 	}
 
 	return []*model.Machine{machine}, nil
