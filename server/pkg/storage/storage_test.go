@@ -397,6 +397,106 @@ func TestMachineDrainFlag_PersistedCoherent(t *testing.T) {
 	})
 }
 
+// TestMachineDrainFlag_WriteOwnership pins the drain flag's write ownership:
+// only Set/ClearMachineDraining (and deleting the row) may move it. A
+// heartbeat or credential bind landing mid-drain must never re-admit the
+// machine on other replicas, so both are column-scoped writes, and a full
+// SaveMachine upsert preserves the persisted flag.
+func TestMachineDrainFlag_WriteOwnership(t *testing.T) {
+	runAgainstBoth(t, "drain flag write ownership", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		mach := "mach-" + uid(t)
+		seedSession(t, s, sess)
+		m := seedMachine(t, s, sess, mach, time.Now())
+		// Token-less row: NewMachine mints a credential, but the bind path
+		// under test starts from an unbound machine.
+		m.TokenHash = ""
+		if err := s.SaveMachine(ctx, m); err != nil {
+			t.Fatalf("seed unbound machine: %v", err)
+		}
+
+		requireDraining := func(want bool, step string) {
+			t.Helper()
+			draining, err := s.IsMachineDraining(ctx, mach)
+			if err != nil {
+				t.Fatalf("%s: is machine draining: %v", step, err)
+			}
+			if draining != want {
+				t.Fatalf("%s: draining=%v want %v", step, draining, want)
+			}
+		}
+
+		if err := s.SetMachineDraining(ctx, sess, mach); err != nil {
+			t.Fatalf("set draining: %v", err)
+		}
+		requireDraining(true, "after set")
+
+		// Heartbeat: column-scoped ping advances only last_ping_at.
+		pinged := time.Now().Add(time.Minute)
+		if err := s.TouchMachineLastPing(ctx, sess, mach, pinged); err != nil {
+			t.Fatalf("touch last ping: %v", err)
+		}
+		stored, err := s.GetMachine(ctx, mach)
+		if err != nil {
+			t.Fatalf("reload machine: %v", err)
+		}
+		// The column keeps microseconds; Go time carries nanoseconds.
+		if stored == nil || stored.LastPingAt.Sub(pinged).Abs() > time.Millisecond {
+			t.Fatalf("heartbeat did not advance last_ping_at: %+v", stored)
+		}
+		requireDraining(true, "after heartbeat")
+
+		// Credential bind: compare-and-set on the token_hash column only.
+		won, err := s.BindMachineToken(ctx, mach, "bound-hash")
+		if err != nil {
+			t.Fatalf("bind token: %v", err)
+		}
+		if !won {
+			t.Fatalf("first bind reported lost")
+		}
+		stored, err = s.GetMachine(ctx, mach)
+		if err != nil {
+			t.Fatalf("reload machine after bind: %v", err)
+		}
+		if stored == nil || stored.TokenHash != "bound-hash" {
+			t.Fatalf("bind did not persist token hash: %+v", stored)
+		}
+		requireDraining(true, "after bind")
+
+		// A second bind cannot steal the first credential.
+		won, err = s.BindMachineToken(ctx, mach, "other-hash")
+		if err != nil {
+			t.Fatalf("second bind: %v", err)
+		}
+		if won {
+			t.Fatalf("second bind overwrote the first credential")
+		}
+		stored, err = s.GetMachine(ctx, mach)
+		if err != nil {
+			t.Fatalf("reload machine after lost bind: %v", err)
+		}
+		if stored == nil || stored.TokenHash != "bound-hash" {
+			t.Fatalf("lost bind overwrote the winning hash: %+v", stored)
+		}
+		requireDraining(true, "after lost bind")
+
+		// Full upsert (registration path): preserves the persisted flag.
+		// Re-registration of a draining machine is refused at the service
+		// layer, so the upsert never has a legitimate reason to clear it.
+		m.TokenHash = "bound-hash"
+		if err := s.SaveMachine(ctx, m); err != nil {
+			t.Fatalf("resave machine: %v", err)
+		}
+		requireDraining(true, "after full upsert")
+
+		if err := s.ClearMachineDraining(ctx, mach); err != nil {
+			t.Fatalf("clear draining: %v", err)
+		}
+		requireDraining(false, "after clear")
+	})
+}
+
 // TestLeasePendingRequest_NoDoubleLease is a regression guard for the existing
 // multi-instance-safe lease path: leasing consumes the pending request so a
 // second lease returns nil.

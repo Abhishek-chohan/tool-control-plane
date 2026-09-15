@@ -136,6 +136,16 @@ type Storer interface {
 	// read-through.
 	GetMachine(ctx context.Context, machineID string) (*model.Machine, error)
 	SaveMachine(ctx context.Context, machine *model.Machine) error
+	// TouchMachineLastPing advances only the heartbeat timestamp. Heartbeats
+	// arrive continuously while a machine may be mid-drain, so this write is
+	// deliberately column-scoped: drain state is owned exclusively by
+	// SetMachineDraining / ClearMachineDraining (and registration).
+	TouchMachineLastPing(ctx context.Context, sessionID, machineID string, at time.Time) error
+	// BindMachineToken persists a machine's credential hash only when none is
+	// bound yet, and reports whether this call won the bind. Two replicas
+	// racing to bind the first credential cannot both win; the loser
+	// re-validates the presented credential against the winning hash.
+	BindMachineToken(ctx context.Context, machineID, tokenHash string) (bool, error)
 	DeleteMachine(ctx context.Context, machineID string) error
 	ListStaleMachines(ctx context.Context, cutoff time.Time, limit int) ([]*model.Machine, error)
 	ReclaimMachine(ctx context.Context, machineID string, cutoff time.Time) (string, []ToolOwnershipUpdate, bool, error)

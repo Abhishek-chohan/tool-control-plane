@@ -193,7 +193,6 @@ func TestDrainFlagVisibleAcrossReplicas(t *testing.T) {
 	store := memory.New()
 	toolSvc := NewToolService(trace.NopTracer(), store)
 	machineSvcA := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), store)
-	machineSvcB := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), store)
 
 	const sessionID = "sess-coherence-drain"
 	const machineID = "machine-coherence-drain"
@@ -204,6 +203,10 @@ func TestDrainFlagVisibleAcrossReplicas(t *testing.T) {
 	}, ""); err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
+
+	// Replica B starts after the registration, so its startup hydration sees
+	// the machine row and its heartbeats for the machine are accepted.
+	machineSvcB := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), store)
 
 	// Hold one claimed request so the drain waits instead of finishing
 	// immediately.
@@ -242,6 +245,20 @@ func TestDrainFlagVisibleAcrossReplicas(t *testing.T) {
 		t.Fatal("replica B does not observe the drain through the store")
 	}
 
+	// A heartbeat through replica B mid-drain is a column-scoped ping and
+	// must not erase the persisted flag: a full upsert here once re-admitted
+	// the machine for dispatch on every replica.
+	if _, err := machineSvcB.UpdateMachinePing(sessionID, machineID); err != nil {
+		t.Fatalf("heartbeat through replica B: %v", err)
+	}
+	draining, err := store.IsMachineDraining(ctx, machineID)
+	if err != nil {
+		t.Fatalf("post-heartbeat drain check: %v", err)
+	}
+	if !draining {
+		t.Fatal("heartbeat through replica B erased the persisted drain flag")
+	}
+
 	// Release the held work so the drain can complete and unregister.
 	if _, err := store.RequeueRequestFenced(ctx, sessionID, held.ID, machineID, claimedHeld.LeaseEpoch, "test release", time.Second); err != nil {
 		t.Fatalf("release held request: %v", err)
@@ -257,7 +274,7 @@ func TestDrainFlagVisibleAcrossReplicas(t *testing.T) {
 	}
 
 	// The machine row is gone, so the flag is gone with it.
-	draining, err := store.IsMachineDraining(ctx, machineID)
+	draining, err = store.IsMachineDraining(ctx, machineID)
 	if err != nil {
 		t.Fatalf("post-drain check: %v", err)
 	}

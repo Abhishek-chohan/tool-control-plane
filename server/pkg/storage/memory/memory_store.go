@@ -355,6 +355,32 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
 	return nil
 }
 
+// TouchMachineLastPing mirrors the Postgres store's column-scoped heartbeat
+// update: only last_ping_at moves; drain state and credentials are untouched.
+func (s *Store) TouchMachineLastPing(ctx context.Context, sessionID, machineID string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.machines[machineID]
+	if !ok || m == nil || m.SessionID != sessionID {
+		return nil
+	}
+	m.LastPingAt = at
+	return nil
+}
+
+// BindMachineToken mirrors the Postgres store's compare-and-set bind: only
+// the credential hash moves, and only while none is bound.
+func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.machines[machineID]
+	if !ok || m == nil || m.TokenHash != "" {
+		return false, nil
+	}
+	m.TokenHash = tokenHash
+	return true, nil
+}
+
 func (s *Store) DeleteMachine(ctx context.Context, machineID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

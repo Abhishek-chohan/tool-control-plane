@@ -260,16 +260,29 @@ func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token stri
 		if token == "" {
 			return nil // first post-upgrade call; registration binds the token
 		}
-		s.machinesMutex.Lock()
-		machine.TokenHash = model.HashAPIKeySecret(token)
-		s.machinesMutex.Unlock()
+		presented := model.HashAPIKeySecret(token)
 		if s.store != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 			defer cancel()
-			if err := s.store.SaveMachine(ctx, machine); err != nil {
+			// Column-scoped compare-and-set: only the token hash moves, and
+			// only while none is bound. A replica that read a token-less row
+			// can lose the bind to another replica's first credential.
+			bound, err := s.store.BindMachineToken(ctx, machineID, presented)
+			if err != nil {
 				log.Printf("persist machine token bind failed: %v", err)
+			} else if !bound {
+				// The winning hash is authoritative: accept only when the
+				// presented credential matches it, never overwrite it.
+				stored, err := s.store.GetMachine(ctx, machineID)
+				if err != nil || stored == nil || !stored.MatchesMachineToken(token) {
+					return fmt.Errorf("%w: machine %s first credential was bound elsewhere and the presented credential does not match", ErrMachineCredentialRejected, machineID)
+				}
+				presented = stored.TokenHash
 			}
 		}
+		s.machinesMutex.Lock()
+		machine.TokenHash = presented
+		s.machinesMutex.Unlock()
 		return nil
 	}
 	if !machine.MatchesMachineToken(token) {
@@ -413,7 +426,11 @@ func (s *MachinesService) UpdateMachinePing(sessionID, machineID string) (*model
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
-		if err := s.store.SaveMachine(ctx, machine); err != nil {
+		// Column-scoped on purpose: a heartbeat is a continuous background
+		// write and must not rewrite the row — a full upsert here would
+		// clear the persisted drain flag mid-drain and re-admit the machine
+		// for dispatch on the other replicas.
+		if err := s.store.TouchMachineLastPing(ctx, sessionID, machineID, machine.LastPingAt); err != nil {
 			log.Printf("persist machine ping failed: %v", err)
 		}
 	}
