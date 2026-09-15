@@ -106,12 +106,16 @@ func (m *CircuitBreakerManager) Begin() (func(success bool), func(), time.Durati
 
 	m.totalAccepted.Add(1)
 	doneWrapper := func(success bool) {
-		// Only a successful response proves the backend channel works; a
-		// failing response must not latch the cold-start guard.
+		// Finish the breaker bookkeeping before latching. A failure that
+		// completes before the first success has counted against the
+		// unlatched guard (and is ignored by ReadyToTrip); a failure that
+		// completes after it starts from a reset counter. Storing the latch
+		// first would let a concurrent pre-success failure see the latch as
+		// active and trip on cold-start noise.
+		done(success)
 		if success {
 			m.sawSuccess.Store(true)
 		}
-		done(success)
 	}
 	release := func() {
 		m.inflight.Add(-1)
