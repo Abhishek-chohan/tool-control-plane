@@ -1284,7 +1284,10 @@ createRequest: {
   // ClaimNextRequest atomically leases the oldest claimable pending request
 // for the given machine and tool set. This is the provider poll primitive:
 // one round-trip instead of a list-then-claim race, and an idle queue is a
-// claimed=false response rather than an error.
+// claimed=false response rather than an error. Machine-tool ownership is
+// enforced: only requests whose tool the machine registered are leasable,
+// and empty tool_names means every tool this machine registered (never
+// every tool in the session).
 claimNextRequest: {
     path: '/api.v1.RequestsService/ClaimNextRequest',
     requestStream: false,

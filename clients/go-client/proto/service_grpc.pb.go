@@ -1469,7 +1469,10 @@ type RequestsServiceClient interface {
 	// ClaimNextRequest atomically leases the oldest claimable pending request
 	// for the given machine and tool set. This is the provider poll primitive:
 	// one round-trip instead of a list-then-claim race, and an idle queue is a
-	// claimed=false response rather than an error.
+	// claimed=false response rather than an error. Machine-tool ownership is
+	// enforced: only requests whose tool the machine registered are leasable,
+	// and empty tool_names means every tool this machine registered (never
+	// every tool in the session).
 	ClaimNextRequest(ctx context.Context, in *ClaimNextRequestRequest, opts ...grpc.CallOption) (*ClaimNextRequestResponse, error)
 	CancelRequest(ctx context.Context, in *CancelRequestRequest, opts ...grpc.CallOption) (*CancelRequestResponse, error)
 	SubmitRequestResult(ctx context.Context, in *SubmitRequestResultRequest, opts ...grpc.CallOption) (*SubmitRequestResultResponse, error)
@@ -1620,7 +1623,10 @@ type RequestsServiceServer interface {
 	// ClaimNextRequest atomically leases the oldest claimable pending request
 	// for the given machine and tool set. This is the provider poll primitive:
 	// one round-trip instead of a list-then-claim race, and an idle queue is a
-	// claimed=false response rather than an error.
+	// claimed=false response rather than an error. Machine-tool ownership is
+	// enforced: only requests whose tool the machine registered are leasable,
+	// and empty tool_names means every tool this machine registered (never
+	// every tool in the session).
 	ClaimNextRequest(context.Context, *ClaimNextRequestRequest) (*ClaimNextRequestResponse, error)
 	CancelRequest(context.Context, *CancelRequestRequest) (*CancelRequestResponse, error)
 	SubmitRequestResult(context.Context, *SubmitRequestResultRequest) (*SubmitRequestResultResponse, error)

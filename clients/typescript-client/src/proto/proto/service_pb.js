@@ -3109,7 +3109,7 @@ proto.api.v1.Session.prototype.setNamespace = function(value) {
  * @private {!Array<number>}
  * @const
  */
-proto.api.v1.ApiKey.repeatedFields_ = [8];
+proto.api.v1.ApiKey.repeatedFields_ = [8,10];
 
 
 
@@ -3150,7 +3150,8 @@ proto.api.v1.ApiKey.toObject = function(includeInstance, msg) {
     createdBy: jspb.Message.getFieldWithDefault(msg, 6, ""),
     revokedAt: (f = msg.getRevokedAt()) && google_protobuf_timestamp_pb.Timestamp.toObject(includeInstance, f),
     capabilitiesList: (f = jspb.Message.getRepeatedField(msg, 8)) == null ? undefined : f,
-    keyPreview: jspb.Message.getFieldWithDefault(msg, 9, "")
+    keyPreview: jspb.Message.getFieldWithDefault(msg, 9, ""),
+    allowedToolsList: (f = jspb.Message.getRepeatedField(msg, 10)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -3224,6 +3225,10 @@ proto.api.v1.ApiKey.deserializeBinaryFromReader = function(msg, reader) {
     case 9:
       var value = /** @type {string} */ (reader.readString());
       msg.setKeyPreview(value);
+      break;
+    case 10:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addAllowedTools(value);
       break;
     default:
       reader.skipField();
@@ -3316,6 +3321,13 @@ proto.api.v1.ApiKey.serializeBinaryToWriter = function(message, writer) {
   if (f.length > 0) {
     writer.writeString(
       9,
+      f
+    );
+  }
+  f = message.getAllowedToolsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      10,
       f
     );
   }
@@ -3538,6 +3550,43 @@ proto.api.v1.ApiKey.prototype.getKeyPreview = function() {
  */
 proto.api.v1.ApiKey.prototype.setKeyPreview = function(value) {
   return jspb.Message.setProto3StringField(this, 9, value);
+};
+
+
+/**
+ * repeated string allowed_tools = 10;
+ * @return {!Array<string>}
+ */
+proto.api.v1.ApiKey.prototype.getAllowedToolsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 10));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.api.v1.ApiKey} returns this
+ */
+proto.api.v1.ApiKey.prototype.setAllowedToolsList = function(value) {
+  return jspb.Message.setField(this, 10, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.api.v1.ApiKey} returns this
+ */
+proto.api.v1.ApiKey.prototype.addAllowedTools = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 10, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.api.v1.ApiKey} returns this
+ */
+proto.api.v1.ApiKey.prototype.clearAllowedToolsList = function() {
+  return this.setAllowedToolsList([]);
 };
 
 
@@ -9267,7 +9316,7 @@ proto.api.v1.DeleteSessionResponse.prototype.setSuccess = function(value) {
  * @private {!Array<number>}
  * @const
  */
-proto.api.v1.CreateApiKeyRequest.repeatedFields_ = [3];
+proto.api.v1.CreateApiKeyRequest.repeatedFields_ = [3,4];
 
 
 
@@ -9302,7 +9351,8 @@ proto.api.v1.CreateApiKeyRequest.toObject = function(includeInstance, msg) {
   var f, obj = {
     sessionId: jspb.Message.getFieldWithDefault(msg, 1, ""),
     name: jspb.Message.getFieldWithDefault(msg, 2, ""),
-    capabilitiesList: (f = jspb.Message.getRepeatedField(msg, 3)) == null ? undefined : f
+    capabilitiesList: (f = jspb.Message.getRepeatedField(msg, 3)) == null ? undefined : f,
+    allowedToolsList: (f = jspb.Message.getRepeatedField(msg, 4)) == null ? undefined : f
   };
 
   if (includeInstance) {
@@ -9351,6 +9401,10 @@ proto.api.v1.CreateApiKeyRequest.deserializeBinaryFromReader = function(msg, rea
       var value = /** @type {string} */ (reader.readString());
       msg.addCapabilities(value);
       break;
+    case 4:
+      var value = /** @type {string} */ (reader.readString());
+      msg.addAllowedTools(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -9398,6 +9452,13 @@ proto.api.v1.CreateApiKeyRequest.serializeBinaryToWriter = function(message, wri
   if (f.length > 0) {
     writer.writeRepeatedString(
       3,
+      f
+    );
+  }
+  f = message.getAllowedToolsList();
+  if (f.length > 0) {
+    writer.writeRepeatedString(
+      4,
       f
     );
   }
@@ -9474,6 +9535,43 @@ proto.api.v1.CreateApiKeyRequest.prototype.addCapabilities = function(value, opt
  */
 proto.api.v1.CreateApiKeyRequest.prototype.clearCapabilitiesList = function() {
   return this.setCapabilitiesList([]);
+};
+
+
+/**
+ * repeated string allowed_tools = 4;
+ * @return {!Array<string>}
+ */
+proto.api.v1.CreateApiKeyRequest.prototype.getAllowedToolsList = function() {
+  return /** @type {!Array<string>} */ (jspb.Message.getRepeatedField(this, 4));
+};
+
+
+/**
+ * @param {!Array<string>} value
+ * @return {!proto.api.v1.CreateApiKeyRequest} returns this
+ */
+proto.api.v1.CreateApiKeyRequest.prototype.setAllowedToolsList = function(value) {
+  return jspb.Message.setField(this, 4, value || []);
+};
+
+
+/**
+ * @param {string} value
+ * @param {number=} opt_index
+ * @return {!proto.api.v1.CreateApiKeyRequest} returns this
+ */
+proto.api.v1.CreateApiKeyRequest.prototype.addAllowedTools = function(value, opt_index) {
+  return jspb.Message.addToRepeatedField(this, 4, value, opt_index);
+};
+
+
+/**
+ * Clears the list making it empty but non-null.
+ * @return {!proto.api.v1.CreateApiKeyRequest} returns this
+ */
+proto.api.v1.CreateApiKeyRequest.prototype.clearAllowedToolsList = function() {
+  return this.setAllowedToolsList([]);
 };
 
 

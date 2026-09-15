@@ -564,13 +564,16 @@ type ApiKey struct {
 	Name  string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// Secret material is only returned from CreateApiKey.
 	// ListApiKeys returns metadata with this field empty.
-	Key           string                 `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
-	SessionId     string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	CreatedBy     string                 `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
-	RevokedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
-	Capabilities  []string               `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	KeyPreview    string                 `protobuf:"bytes,9,opt,name=key_preview,json=keyPreview,proto3" json:"key_preview,omitempty"`
+	Key          string                 `protobuf:"bytes,3,opt,name=key,proto3" json:"key,omitempty"`
+	SessionId    string                 `protobuf:"bytes,4,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	CreatedAt    *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedBy    string                 `protobuf:"bytes,6,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	RevokedAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=revoked_at,json=revokedAt,proto3" json:"revoked_at,omitempty"`
+	Capabilities []string               `protobuf:"bytes,8,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	KeyPreview   string                 `protobuf:"bytes,9,opt,name=key_preview,json=keyPreview,proto3" json:"key_preview,omitempty"`
+	// Optional per-key tool allowlist, enforced on every invocation. Empty
+	// means the key may invoke every tool in its session.
+	AllowedTools  []string `protobuf:"bytes,10,rep,name=allowed_tools,json=allowedTools,proto3" json:"allowed_tools,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -666,6 +669,13 @@ func (x *ApiKey) GetKeyPreview() string {
 		return x.KeyPreview
 	}
 	return ""
+}
+
+func (x *ApiKey) GetAllowedTools() []string {
+	if x != nil {
+		return x.AllowedTools
+	}
+	return nil
 }
 
 // Machine definition
@@ -2421,7 +2431,11 @@ type CreateApiKeyRequest struct {
 	// Supported values are read, invoke, provide, and admin. Capabilities are
 	// REQUIRED: an empty list is rejected with INVALID_ARGUMENT so keys are
 	// always minted least-privilege and explicit.
-	Capabilities  []string `protobuf:"bytes,3,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Capabilities []string `protobuf:"bytes,3,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	// Optional per-key tool allowlist. Empty or omitted means the key may
+	// invoke every tool in its session; non-empty restricts invocation to
+	// exactly these tool names. Entries are trimmed and de-duplicated.
+	AllowedTools  []string `protobuf:"bytes,4,rep,name=allowed_tools,json=allowedTools,proto3" json:"allowed_tools,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2473,6 +2487,13 @@ func (x *CreateApiKeyRequest) GetName() string {
 func (x *CreateApiKeyRequest) GetCapabilities() []string {
 	if x != nil {
 		return x.Capabilities
+	}
+	return nil
+}
+
+func (x *CreateApiKeyRequest) GetAllowedTools() []string {
+	if x != nil {
+		return x.AllowedTools
 	}
 	return nil
 }
@@ -3698,8 +3719,10 @@ func (x *ClaimRequestRequest) GetMachineId() string {
 	return ""
 }
 
-// ClaimNextRequestRequest: the provider poll primitive. Empty tool_names
-// matches every tool registered in the session.
+// ClaimNextRequestRequest: the provider poll primitive. Machine-tool
+// ownership applies: empty tool_names matches every tool the machine
+// registered, and tool_names entries the machine did not register match
+// nothing.
 type ClaimNextRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
@@ -4953,7 +4976,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"created_by\x18\x05 \x01(\tR\tcreatedBy\x12\x1c\n" +
-	"\tnamespace\x18\x06 \x01(\tR\tnamespace\"\xb7\x02\n" +
+	"\tnamespace\x18\x06 \x01(\tR\tnamespace\"\xdc\x02\n" +
 	"\x06ApiKey\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x10\n" +
@@ -4968,7 +4991,9 @@ const file_proto_service_proto_rawDesc = "" +
 	"revoked_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\trevokedAt\x12\"\n" +
 	"\fcapabilities\x18\b \x03(\tR\fcapabilities\x12\x1f\n" +
 	"\vkey_preview\x18\t \x01(\tR\n" +
-	"keyPreview\"\xaa\x02\n" +
+	"keyPreview\x12#\n" +
+	"\rallowed_tools\x18\n" +
+	" \x03(\tR\fallowedTools\"\xaa\x02\n" +
 	"\aMachine\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -5109,12 +5134,13 @@ const file_proto_service_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"1\n" +
 	"\x15DeleteSessionResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess\"l\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\"\x91\x01\n" +
 	"\x13CreateApiKeyRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\"\n" +
-	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\"3\n" +
+	"\fcapabilities\x18\x03 \x03(\tR\fcapabilities\x12#\n" +
+	"\rallowed_tools\x18\x04 \x03(\tR\fallowedTools\"3\n" +
 	"\x12ListApiKeysRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"@\n" +
