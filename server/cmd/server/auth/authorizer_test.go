@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
+	protobuf "google.golang.org/protobuf/proto"
 	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
 	proto "toolplane/proto"
@@ -273,11 +273,11 @@ func (s *fakeServerStream) RecvMsg(m interface{}) error {
 		return io.EOF
 	}
 	s.sent++
-	dst, ok := m.(proto.Message)
+	dst, ok := m.(protobuf.Message)
 	if !ok {
 		return fmt.Errorf("fakeServerStream: unsupported message type %T", m)
 	}
-	proto.Merge(dst, s.msgs[s.sent-1].(proto.Message))
+	protobuf.Merge(dst, s.msgs[s.sent-1].(protobuf.Message))
 	return nil
 }
 
