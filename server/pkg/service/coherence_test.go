@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -512,5 +513,119 @@ func TestToolAndMachineReadsSeeOtherReplicaRegistrations(t *testing.T) {
 	}
 	if _, err := machineSvcB.GetMachineByID(sessionID, "machine-reg-a"); err != nil {
 		t.Fatalf("GetMachineByID on B: %v", err)
+	}
+}
+
+// TestCrossReplicaTaskReadsAndCancel pins the task-side coherence contract:
+// a task created (and executing) on replica A is visible to replica B, and
+// CancelTask on B stops the executing attempt through the task row's durable
+// current_request_id. Also pins attempt-scoped idempotency propagation for
+// task-created requests.
+func TestCrossReplicaTaskReadsAndCancel(t *testing.T) {
+	store := memory.New()
+	toolSvcA := NewToolService(trace.NopTracer(), store)
+	machineSvcA := NewMachinesService(context.Background(), toolSvcA, trace.NopTracer(), store)
+	requestSvcA := NewRequestsService(context.Background(), toolSvcA, machineSvcA, trace.NopTracer(), store)
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+	taskSvcA := NewTasksService(taskCtx, toolSvcA, machineSvcA, requestSvcA, trace.NopTracer(), store)
+
+	// Replica B: fresh stacks over the same store, nothing hydrated.
+	toolSvcB := NewToolService(trace.NopTracer(), store)
+	machineSvcB := NewMachinesService(context.Background(), toolSvcB, trace.NopTracer(), store)
+	requestSvcB := NewRequestsService(context.Background(), toolSvcB, machineSvcB, trace.NopTracer(), store)
+	taskSvcB := NewTasksService(taskCtx, toolSvcB, machineSvcB, requestSvcB, trace.NopTracer(), store)
+
+	const sessionID = "sess-coherence-task"
+	if _, err := machineSvcA.RegisterMachine(sessionID, "machine-task-a", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-task-a", "slow", "slow tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine on A: %v", err)
+	}
+
+	// Provider on A: claim and hold the request without completing.
+	stopProvider := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopProvider:
+				return
+			default:
+			}
+			claimed, err := requestSvcA.ClaimPendingRequest(sessionID, "machine-task-a", []string{"slow"})
+			if err != nil || claimed == nil {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			_, _ = requestSvcA.UpdateRequest(sessionID, claimed.ID, "machine-task-a", claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
+			<-stopProvider
+			return
+		}
+	}()
+	defer close(stopProvider)
+
+	task, err := taskSvcA.CreateTask(sessionID, "slow", `{"work":true}`, "idem-x")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	// Wait until the attempt is running on A and the durable link exists.
+	var requestID string
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		stored, err := store.GetTaskByID(context.Background(), task.ID)
+		if err == nil && stored != nil && stored.CurrentRequestID != "" {
+			requestID = stored.CurrentRequestID
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("task attempt never started: %+v", stored)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	// B sees the foreign-created task through read-through.
+	if _, err := taskSvcB.GetTaskByID(sessionID, task.ID); err != nil {
+		t.Fatalf("GetTaskByID on B: %v", err)
+	}
+	listed, err := taskSvcB.ListTasks(sessionID)
+	if err != nil || len(listed) == 0 {
+		t.Fatalf("ListTasks on B: n=%d err=%v", len(listed), err)
+	}
+
+	// The task-created request carries the attempt-scoped idempotency key.
+	storedReq, err := store.GetRequest(context.Background(), requestID)
+	if err != nil || storedReq == nil {
+		t.Fatalf("load executing request: %v", err)
+	}
+	if !strings.HasPrefix(storedReq.IdempotencyKey, "idem-x#attempt-") {
+		t.Fatalf("request idempotency key %q want idem-x#attempt-*", storedReq.IdempotencyKey)
+	}
+
+	// Cancel through replica B: the durable current_request_id routes the
+	// fenced cancel to the executing attempt on A.
+	if err := taskSvcB.CancelTask(sessionID, task.ID); err != nil {
+		t.Fatalf("CancelTask on B: %v", err)
+	}
+
+	cancelled, err := store.GetRequest(context.Background(), requestID)
+	if err != nil || cancelled == nil {
+		t.Fatalf("reload cancelled request: %v", err)
+	}
+	if cancelled.Status != model.RequestStatusFailed {
+		t.Fatalf("executing request not cancelled via replica B: status=%s", cancelled.Status)
+	}
+
+	// The store row stays cancelled: A's executor cannot resurrect it.
+	giveUp := time.Now().Add(2 * time.Second)
+	for time.Now().Before(giveUp) {
+		stored, err := store.GetTaskByID(context.Background(), task.ID)
+		if err != nil || stored == nil {
+			t.Fatalf("post-cancel task read: %v", err)
+		}
+		if stored.Status != model.StatusCancelled {
+			t.Fatalf("task resurrected to %s", stored.Status)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }

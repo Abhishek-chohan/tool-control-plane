@@ -525,6 +525,30 @@ func (s *Store) AllTasks(ctx context.Context) ([]*model.Task, error) {
 	return out, nil
 }
 
+// GetTaskByID returns the task with the given ID, or nil.
+func (s *Store) GetTaskByID(ctx context.Context, taskID string) (*model.Task, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	t, ok := s.tasks[taskID]
+	if !ok || t == nil {
+		return nil, nil
+	}
+	return cloneTask(t), nil
+}
+
+// ListTasksBySession returns the session's tasks.
+func (s *Store) ListTasksBySession(ctx context.Context, sessionID string) ([]*model.Task, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*model.Task
+	for _, t := range s.tasks {
+		if t != nil && t.SessionID == sessionID {
+			out = append(out, cloneTask(t))
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) GetTaskByIdempotencyKey(ctx context.Context, sessionID, idempotencyKey string) (*model.Task, error) {
 	if idempotencyKey == "" {
 		return nil, nil

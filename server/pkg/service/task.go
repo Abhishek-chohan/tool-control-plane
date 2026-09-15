@@ -324,8 +324,34 @@ func (s *TasksService) GetTask(taskID string) (*model.Task, error) {
 	return task.Clone(), nil
 }
 
-// GetTaskByID gets a task by ID for a specific session
+// GetTaskByID gets a task by ID for a specific session. Store-first when a
+// store is configured: a task created on another replica resolves here, and
+// the local map gains entries it never hydrated (mirror-if-absent, so the
+// executing replica's live object is never replaced mid-run). Store errors
+// degrade to the cache; a successful miss is authoritative.
 func (s *TasksService) GetTaskByID(sessionID, taskID string) (*model.Task, error) {
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := s.store.GetTaskByID(ctx, taskID)
+		cancel()
+		if err != nil {
+			log.Printf("task read-through failed: %v", err)
+		} else {
+			s.tasksMutex.Lock()
+			if _, ok := s.tasks[taskID]; !ok && stored != nil {
+				s.tasks[taskID] = stored
+			}
+			s.tasksMutex.Unlock()
+			if stored == nil {
+				return nil, wrapf(ErrNotFound, "task with ID %s not found", taskID)
+			}
+			if stored.SessionID != sessionID {
+				return nil, wrapf(ErrNotFound, "task with ID %s not found in session %s", taskID, sessionID)
+			}
+			return stored.Clone(), nil
+		}
+	}
+
 	s.tasksMutex.RLock()
 	defer s.tasksMutex.RUnlock()
 
@@ -342,8 +368,32 @@ func (s *TasksService) GetTaskByID(sessionID, taskID string) (*model.Task, error
 	return task.Clone(), nil
 }
 
-// ListTasks lists all tasks for a session
+// ListTasks lists all tasks for a session. Store-first when a store is
+// configured so listings include tasks created on other replicas; entries
+// absent locally are mirrored. Store errors degrade to the cache.
 func (s *TasksService) ListTasks(sessionID string) ([]*model.Task, error) {
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := s.store.ListTasksBySession(ctx, sessionID)
+		cancel()
+		if err != nil {
+			log.Printf("task list read-through failed: %v", err)
+		} else {
+			s.tasksMutex.Lock()
+			for _, task := range stored {
+				if _, ok := s.tasks[task.ID]; !ok {
+					s.tasks[task.ID] = task
+				}
+			}
+			s.tasksMutex.Unlock()
+			cloned := make([]*model.Task, 0, len(stored))
+			for _, task := range stored {
+				cloned = append(cloned, task.Clone())
+			}
+			return cloned, nil
+		}
+	}
+
 	s.tasksMutex.RLock()
 	defer s.tasksMutex.RUnlock()
 
@@ -366,6 +416,21 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	s.tasksMutex.Lock()
 
 	task, ok := s.tasks[taskID]
+	if !ok && s.store != nil {
+		// Read-through: the task may have been created on another replica
+		// that never hydrated it here. The store row is authoritative for
+		// both existence and the durable current_request_id used below.
+		ctx, cc := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := s.store.GetTaskByID(ctx, taskID)
+		cc()
+		if err != nil {
+			log.Printf("task %s cancel read-through failed: %v", taskID, err)
+		} else if stored != nil {
+			s.tasks[taskID] = stored
+			task = stored
+			ok = true
+		}
+	}
 	if !ok {
 		s.tasksMutex.Unlock()
 		return wrapf(ErrNotFound, "task with ID %s not found", taskID)
@@ -401,13 +466,32 @@ func (s *TasksService) CancelTask(sessionID, taskID string) error {
 	}
 
 	requestID, cancel := s.taskExecutionSnapshot(taskID)
+	if requestID == "" && s.store != nil {
+		// Cross-replica cancel: the executor lives on another instance, so
+		// the local execution snapshot is empty. The task row's durable
+		// current_request_id (persisted at attempt start) names the request
+		// to stop.
+		ctx, cc := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := s.store.GetTaskByID(ctx, taskID)
+		cc()
+		if err != nil {
+			log.Printf("task %s cancel: durable request lookup failed: %v", taskID, err)
+		} else if stored != nil {
+			requestID = stored.CurrentRequestID
+		}
+	}
 	s.tasksMutex.RLock()
 	s.recordTaskEvent(task, trace.EventTaskCancelled, map[string]any{
 		"requestID": requestID,
 	})
 	s.tasksMutex.RUnlock()
 	if requestID != "" {
-		_ = s.requestsService.CancelRequest(sessionID, requestID)
+		// The fenced cancel stops the executing attempt wherever it runs;
+		// the store row is already cancelled, so its terminal guard drops
+		// any late state the executor tries to persist.
+		if err := s.requestsService.CancelRequest(sessionID, requestID); err != nil {
+			log.Printf("task %s: cancel of executing request %s failed: %v", taskID, requestID, err)
+		}
 	}
 	if cancel != nil {
 		cancel()
@@ -643,9 +727,17 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 	}
 
 	// Give the underlying request the same absolute timeout as the task
-	// attempt so the lease reaper does not reclaim the request before the task
-	// deadline is reached (0 keeps the server default).
-	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input, task.TimeoutSeconds, "")
+	// attempt so the lease reaper does not reclaim the request before the
+	// task deadline is reached (0 keeps the server default). The attempt-
+	// scoped idempotency key (task key + attempt number) dedupes a lost
+	// adoption race: whichever replica creates the request for an attempt
+	// first wins, and the other waits on the same request instead of
+	// double-executing.
+	idempotencyKey := ""
+	if task.IdempotencyKey != "" {
+		idempotencyKey = fmt.Sprintf("%s#attempt-%d", task.IdempotencyKey, task.Attempts)
+	}
+	request, err := s.requestsService.CreateRequest(task.SessionID, task.ToolName, task.Input, task.TimeoutSeconds, idempotencyKey)
 	if err != nil {
 		return err
 	}

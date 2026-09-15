@@ -1653,7 +1653,12 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 			// GetRequestByID observes it on this ticker.
 			watch = s.subscribeRequest(requestID)
 		case <-ctx.Done():
-			_ = s.CancelRequest(sessionID, requestID)
+			// The caller (task attempt deadline, lease loss, shutdown) is
+			// walking away: durably cancel the request so it does not keep
+			// executing after the caller was told the wait ended.
+			if err := s.CancelRequest(sessionID, requestID); err != nil {
+				log.Printf("request %s: cancel on waiter deadline failed: %v", requestID, err)
+			}
 			return nil, ctx.Err()
 		}
 	}
@@ -1714,7 +1719,11 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 		case <-poll.C:
 			watch = s.subscribeRequest(requestID)
 		case <-ctx.Done():
-			_ = s.CancelRequest(sessionID, requestID)
+			// Same contract as the primary waiter: a departing caller
+			// durably cancels the request rather than orphaning execution.
+			if err := s.CancelRequest(sessionID, requestID); err != nil {
+				log.Printf("request %s: cancel on waiter deadline failed: %v", requestID, err)
+			}
 			return nil, ctx.Err()
 		}
 	}
