@@ -266,7 +266,9 @@ func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token stri
 		if s.store != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 			defer cancel()
-			if err := s.store.SaveMachine(ctx, machine); err != nil {
+			// Column-scoped: the bind must not rewrite the rest of the row
+			// (drain state included).
+			if err := s.store.BindMachineToken(ctx, machineID, machine.TokenHash); err != nil {
 				log.Printf("persist machine token bind failed: %v", err)
 			}
 		}
@@ -413,7 +415,11 @@ func (s *MachinesService) UpdateMachinePing(sessionID, machineID string) (*model
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 		defer cancel()
-		if err := s.store.SaveMachine(ctx, machine); err != nil {
+		// Column-scoped on purpose: a heartbeat is a continuous background
+		// write and must not rewrite the row — a full upsert here would
+		// clear the persisted drain flag mid-drain and re-admit the machine
+		// for dispatch on the other replicas.
+		if err := s.store.TouchMachineLastPing(ctx, sessionID, machineID, machine.LastPingAt); err != nil {
 			log.Printf("persist machine ping failed: %v", err)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"toolplane/pkg/model"
+	"toolplane/pkg/storage/memory"
 	"toolplane/pkg/trace"
 )
 
@@ -204,5 +205,52 @@ func TestMachinesServiceDrainMachineIsIdempotentForMissingMachine(t *testing.T) 
 
 	if err := machineService.DrainMachine(ctx, "missing-session", "missing-machine"); err != nil {
 		t.Fatalf("expected idempotent drain for missing machine, got %v", err)
+	}
+}
+
+// TestAuthorizeMachineTokenBindPreservesDrainFlag: the first-credential bind
+// on a token-less machine is a column-scoped write, so the persisted drain
+// flag survives it and the machine keeps refusing claims mid-drain.
+func TestAuthorizeMachineTokenBindPreservesDrainFlag(t *testing.T) {
+	store := memory.New()
+	toolService := NewToolService(trace.NopTracer(), store)
+	machineService := NewMachinesService(context.Background(), toolService, trace.NopTracer(), store)
+
+	const sessionID = "session-bind-drain"
+	const machineID = "machine-bind-drain"
+	ctx := context.Background()
+
+	// Legacy token-less machine: registered before machine tokens existed.
+	legacy := model.NewMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1")
+	legacy.TokenHash = ""
+	legacy.Token = ""
+	if err := store.SaveMachine(ctx, legacy); err != nil {
+		t.Fatalf("seed legacy machine: %v", err)
+	}
+
+	if err := store.SetMachineDraining(ctx, sessionID, machineID); err != nil {
+		t.Fatalf("set draining: %v", err)
+	}
+
+	// First provider call presents the credential: the bind path must persist
+	// only the token hash. The machine arrives through the cross-replica
+	// read-through, so this also covers the hydrated-registry shape.
+	if err := machineService.AuthorizeMachineToken(sessionID, machineID, "first-credential"); err != nil {
+		t.Fatalf("authorize (bind): %v", err)
+	}
+
+	draining, err := store.IsMachineDraining(ctx, machineID)
+	if err != nil {
+		t.Fatalf("post-bind drain check: %v", err)
+	}
+	if !draining {
+		t.Fatal("token bind erased the persisted drain flag")
+	}
+
+	if err := machineService.AuthorizeMachineToken(sessionID, machineID, "first-credential"); err != nil {
+		t.Fatalf("authorize after bind: %v", err)
+	}
+	if err := machineService.AuthorizeMachineToken(sessionID, machineID, "wrong-credential"); err == nil {
+		t.Fatal("expected credential mismatch after bind")
 	}
 }

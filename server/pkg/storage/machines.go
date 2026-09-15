@@ -91,7 +91,7 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
             created_at = EXCLUDED.created_at,
             last_ping_at = EXCLUDED.last_ping_at,
             token_hash = EXCLUDED.token_hash,
-            draining = false -- fresh registration: clear any stale drain flag
+            draining = machines.draining -- drain state is written only by Set/ClearMachineDraining
     `, machine.ID, machine.SessionID, nullString(machine.SDKVersion), nullString(machine.SDKLanguage), nullString(machine.IP), machine.CreatedAt, machine.LastPingAt, nullString(machine.TokenHash))
 	if err != nil {
 		return fmt.Errorf("upsert machine: %w", err)
@@ -105,6 +105,32 @@ func (s *Store) DeleteMachine(ctx context.Context, machineID string) error {
 	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM machines WHERE id=$1`, machineID); err != nil {
 		return fmt.Errorf("delete machine: %w", err)
+	}
+	return nil
+}
+
+// TouchMachineLastPing advances only the heartbeat timestamp. A heartbeat is
+// a continuous background write and must never rewrite the rest of the row:
+// drain state belongs to SetMachineDraining / ClearMachineDraining, and
+// credentials to BindMachineToken.
+func (s *Store) TouchMachineLastPing(ctx context.Context, sessionID, machineID string, at time.Time) error {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE machines SET last_ping_at=$3 WHERE id=$1 AND session_id=$2`, machineID, sessionID, at); err != nil {
+		return fmt.Errorf("touch machine last ping: %w", err)
+	}
+	return nil
+}
+
+// BindMachineToken persists the machine's credential hash alone; the
+// first-authentication bind must not rewrite the rest of the row.
+func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) error {
+	if s == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE machines SET token_hash=$2 WHERE id=$1`, machineID, nullString(tokenHash)); err != nil {
+		return fmt.Errorf("bind machine token: %w", err)
 	}
 	return nil
 }
