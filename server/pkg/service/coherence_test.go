@@ -391,10 +391,11 @@ func TestWaitForRequestTerminalObservesCrossReplicaCompletion(t *testing.T) {
 // intersected with the caller's filter, and explicit claims reject foreign
 // tools with ErrMachineNotToolOwner.
 func TestClaimOwnershipServicePath(t *testing.T) {
-	store := memory.New()
-	toolSvc := NewToolService(trace.NopTracer(), store)
-	machineSvc := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), store)
-	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, trace.NopTracer(), store)
+	// Nil store on purpose: this test exercises the no-store service branch
+	// (in-memory claims) that mirrors the store-level ownership rule.
+	toolSvc := NewToolService(trace.NopTracer(), nil)
+	machineSvc := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), nil)
+	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, trace.NopTracer(), nil)
 
 	const sessionID = "sess-claim-ownership"
 

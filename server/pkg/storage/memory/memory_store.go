@@ -154,10 +154,13 @@ func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 }
 
 // machineProvidesToolLocked reports whether the machine registered toolName
-// in the session. Callers hold s.mu.
+// in the session. Derived from the current tool records, not the machineTools
+// index: the index is not maintained when ownership transfers, so an old
+// owner could otherwise still pass while the new owner would not. Callers
+// hold s.mu.
 func (s *Store) machineProvidesToolLocked(sessionID, machineID, toolName string) bool {
-	for toolID := range s.machineTools[machineID] {
-		if t := s.tools[toolID]; t != nil && t.SessionID == sessionID && t.Name == toolName {
+	for _, t := range s.tools {
+		if t != nil && t.SessionID == sessionID && t.MachineID == machineID && t.Name == toolName {
 			return true
 		}
 	}
@@ -171,11 +174,13 @@ func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID st
 	// Machine↔tool ownership mirrors the Postgres path: an empty requested
 	// filter means "every tool this machine registered", a non-empty one is
 	// intersected with that set, and without a machine identity (or with no
-	// registered tools) nothing is leasable — fail closed.
+	// registered tools) nothing is leasable — fail closed. Ownership is
+	// derived from the current tool records, not the machineTools index,
+	// which is not maintained across ownership transfers.
 	owned := make(map[string]struct{})
 	if machineID != "" {
-		for toolID := range s.machineTools[machineID] {
-			if t := s.tools[toolID]; t != nil && t.SessionID == sessionID {
+		for _, t := range s.tools {
+			if t != nil && t.SessionID == sessionID && t.MachineID == machineID {
 				owned[t.Name] = struct{}{}
 			}
 		}

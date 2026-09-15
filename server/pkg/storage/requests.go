@@ -472,7 +472,12 @@ func (s *Store) ClaimRequest(ctx context.Context, sessionID, requestID, machineI
 			return nil
 		}
 		// Machine↔tool ownership, checked under the same row lock: the
-		// claiming machine must have registered the request's tool.
+		// claiming machine must have registered the request's tool. An empty
+		// machine identity satisfies an EXISTS against a malformed
+		// machine_id='' registry row, so it is rejected before the query.
+		if machineID == "" {
+			return ErrMachineNotToolOwner
+		}
 		var owned bool
 		if err := tx.QueryRowContext(ctx,
 			`SELECT EXISTS(SELECT 1 FROM tools WHERE session_id=$1 AND machine_id=$2 AND name=$3)`,
