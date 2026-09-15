@@ -234,19 +234,23 @@ func TestStatusCarriesMachineReadableReason(t *testing.T) {
 			if !ok {
 				t.Fatal("expected a gRPC status")
 			}
-			found := false
+			foundReason := false
+			foundRetry := tc.wantCode != codes.ResourceExhausted
 			for _, detail := range st.Details() {
-				if info, ok := detail.(*errdetails.ErrorInfo); ok && info.Reason == tc.wantReason {
-					found = true
-				}
-				if tc.wantCode == codes.ResourceExhausted {
-					if _, ok := detail.(*errdetails.RetryInfo); !ok {
-						continue
+				switch info := detail.(type) {
+				case *errdetails.ErrorInfo:
+					if info.Reason == tc.wantReason {
+						foundReason = true
 					}
+				case *errdetails.RetryInfo:
+					foundRetry = true
 				}
 			}
-			if !found {
+			if !foundReason {
 				t.Fatalf("status details missing reason %s: %+v", tc.wantReason, st.Details())
+			}
+			if !foundRetry {
+				t.Fatal("capacity rejection missing RetryInfo")
 			}
 			if status.Code(st.Err()) != tc.wantCode {
 				t.Fatalf("code=%v want %v", status.Code(st.Err()), tc.wantCode)
