@@ -24,6 +24,7 @@ func TestAppendRequestChunksFenced_TableBackedWindow(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, mach, time.Now())
+		seedOwnedTool(t, s, sess, mach, tool)
 		seedPendingRequest(t, s, sess, reqID, tool)
 
 		// Claim so the append's lease fence accepts the write.

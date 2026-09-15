@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -161,8 +162,11 @@ func TestReserveMachineSlotEnforcesStoreBackedCapacity(t *testing.T) {
 	ctx := context.Background()
 
 	// Register through the service so the local machine map is populated;
-	// the capacity check must still consult the store for foreign load.
-	if _, err := machineSvc.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", nil, ""); err != nil {
+	// the capacity check must still consult the store for foreign load. The
+	// tool registration matters too: claims enforce machine-tool ownership.
+	if _, err := machineSvc.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "echo", "echo tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
 		t.Fatalf("register machine: %v", err)
 	}
 	if ok := machineSvc.ReserveMachineSlot(sessionID, machineID); !ok {
@@ -379,5 +383,74 @@ func TestWaitForRequestTerminalObservesCrossReplicaCompletion(t *testing.T) {
 		t.Fatalf("waiter failed: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("waiter did not observe the cross-replica completion within 5s")
+	}
+}
+
+// TestClaimOwnershipServicePath pins the claim-path ownership rule at the
+// service level: the leasable set is the machine's registered tools
+// intersected with the caller's filter, and explicit claims reject foreign
+// tools with ErrMachineNotToolOwner.
+func TestClaimOwnershipServicePath(t *testing.T) {
+	store := memory.New()
+	toolSvc := NewToolService(trace.NopTracer(), store)
+	machineSvc := NewMachinesService(context.Background(), toolSvc, trace.NopTracer(), store)
+	requestSvc := NewRequestsService(context.Background(), toolSvc, machineSvc, trace.NopTracer(), store)
+
+	const sessionID = "sess-claim-ownership"
+
+	if _, err := machineSvc.RegisterMachine(sessionID, "mach-alpha", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "mach-alpha", "alpha", "d", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register mach-alpha: %v", err)
+	}
+	if _, err := machineSvc.RegisterMachine(sessionID, "mach-beta", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "mach-beta", "beta", "d", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register mach-beta: %v", err)
+	}
+
+	if _, err := requestSvc.CreateRequest(sessionID, "alpha", `{}`, 0, ""); err != nil {
+		t.Fatalf("create alpha request: %v", err)
+	}
+	if _, err := requestSvc.CreateRequest(sessionID, "beta", `{}`, 0, ""); err != nil {
+		t.Fatalf("create beta request: %v", err)
+	}
+	// mach-beta's empty filter leases only its own tool's request.
+	claimed, err := requestSvc.ClaimPendingRequest(sessionID, "mach-beta", nil)
+	if err != nil {
+		t.Fatalf("mach-beta claim: %v", err)
+	}
+	if claimed.ToolName != "beta" {
+		t.Fatalf("mach-beta claimed tool %q, want beta", claimed.ToolName)
+	}
+
+	// A name the machine does not own matches nothing.
+	if _, err := requestSvc.CreateRequest(sessionID, "alpha", `{}`, 0, ""); err != nil {
+		t.Fatalf("create second alpha request: %v", err)
+	}
+	if _, err := requestSvc.ClaimPendingRequest(sessionID, "mach-beta", []string{"alpha"}); !errors.Is(err, ErrNoPendingRequests) {
+		t.Fatalf("mach-beta claim for alpha: err=%v (want ErrNoPendingRequests)", err)
+	}
+
+	// Explicit claim of a foreign tool's request is rejected. A fresh beta
+	// request: the original was claimed above, and only pending requests are
+	// claimable at all.
+	foreignBeta, err := requestSvc.CreateRequest(sessionID, "beta", `{}`, 0, "")
+	if err != nil {
+		t.Fatalf("create beta request for foreign claim: %v", err)
+	}
+	if _, err := requestSvc.ClaimRequest(sessionID, foreignBeta.ID, "mach-alpha"); !errors.Is(err, ErrMachineNotToolOwner) {
+		t.Fatalf("mach-alpha claiming beta request: err=%v (want ErrMachineNotToolOwner)", err)
+	}
+
+	// Without a machine identity nothing is leasable.
+	if _, err := requestSvc.ClaimPendingRequest(sessionID, "", nil); !errors.Is(err, ErrNoPendingRequests) {
+		t.Fatalf("claim without machine identity: err=%v", err)
+	}
+
+	// The owner still claims its own.
+	alphaClaimed, err := requestSvc.ClaimPendingRequest(sessionID, "mach-alpha", nil)
+	if err != nil || alphaClaimed.ToolName != "alpha" {
+		t.Fatalf("mach-alpha claim: req=%+v err=%v", alphaClaimed, err)
 	}
 }

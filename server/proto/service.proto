@@ -326,7 +326,10 @@ service RequestsService {
   // ClaimNextRequest atomically leases the oldest claimable pending request
   // for the given machine and tool set. This is the provider poll primitive:
   // one round-trip instead of a list-then-claim race, and an idle queue is a
-  // claimed=false response rather than an error.
+  // claimed=false response rather than an error. Machine-tool ownership is
+  // enforced: only requests whose tool the machine registered are leasable,
+  // and empty tool_names means every tool this machine registered (never
+  // every tool in the session).
   rpc ClaimNextRequest(ClaimNextRequestRequest) returns (ClaimNextRequestResponse) {
     option (google.api.http) = {
       post: "/api.v1/ClaimNextRequest";
@@ -821,8 +824,10 @@ message ClaimRequestRequest {
   string machine_id = 3;
 }
 
-// ClaimNextRequestRequest: the provider poll primitive. Empty tool_names
-// matches every tool registered in the session.
+// ClaimNextRequestRequest: the provider poll primitive. Machine-tool
+// ownership applies: empty tool_names matches every tool the machine
+// registered, and tool_names entries the machine did not register match
+// nothing.
 message ClaimNextRequestRequest {
   string session_id = 1;
   string machine_id = 2;

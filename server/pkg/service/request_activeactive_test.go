@@ -130,6 +130,10 @@ func TestActiveActive_CapacityCapHoldsAcrossInstances(t *testing.T) {
 	machine := model.NewMachine("sess-aa", "machine-a", "1.0", "go", "127.0.0.1")
 	_ = store.SaveMachine(ctx, machine)
 
+	// The tool registry row makes the seed claims legal: claim-path
+	// ownership requires the claiming machine to provide the tool.
+	_ = store.SaveTool(ctx, model.NewTool("sess-aa", "machine-a", "echo", "d", `{}`, nil, nil))
+
 	// Manually seed maxMachineConcurrentRequests pending requests and claim them
 	// directly through the store so they all count against machine-a's capacity.
 	for i := 0; i < maxMachineConcurrentRequests; i++ {

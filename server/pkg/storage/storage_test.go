@@ -139,6 +139,11 @@ func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
+		seedMachine(t, s, sess, machB, time.Now())
+		toolRow := model.NewTool(sess, machA, tool, "test tool", `{}`, nil, nil)
+		if err := s.SaveTool(ctx, toolRow); err != nil {
+			t.Fatalf("seed tool: %v", err)
+		}
 		seedPendingRequest(t, s, sess, reqID, tool)
 
 		lease := 30 * time.Second
@@ -154,6 +159,12 @@ func TestClaimRequest_GuardedRejectsSecondClaimant(t *testing.T) {
 		}
 
 		// A second claim for the same request must be rejected without error.
+		// MachB owns the tool by now (a takeover), so the rejection comes
+		// from the lease, not from ownership.
+		toolRow.MachineID = machB
+		if err := s.SaveTool(ctx, toolRow); err != nil {
+			t.Fatalf("transfer tool to machB: %v", err)
+		}
 		_, claimed2, err := s.ClaimRequest(ctx, sess, reqID, machB, lease)
 		if err != nil {
 			t.Fatalf("second claim errored: %v", err)
@@ -216,6 +227,7 @@ func TestReclaimExpiredRequest_SingleRequeue(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
+		seedOwnedTool(t, s, sess, machA, tool)
 		seedPendingRequest(t, s, sess, reqID, tool)
 
 		// Claim it, then force the lease into the past.
@@ -276,6 +288,7 @@ func TestReclaimExpiredRequest_DeadLettersAfterMaxAttempts(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
+		seedOwnedTool(t, s, sess, machA, tool)
 		seedPendingRequest(t, s, sess, reqID, tool)
 
 		claimed, ok, err := s.ClaimRequest(ctx, sess, reqID, machA, 30*time.Second)
@@ -315,6 +328,7 @@ func TestMachineInFlightCount(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
+		seedOwnedTool(t, s, sess, machA, tool)
 
 		count, err := s.MachineInFlightCount(ctx, sess, machA)
 		if err != nil {
@@ -509,6 +523,7 @@ func TestLeasePendingRequest_NoDoubleLease(t *testing.T) {
 		tool := "tool-" + uid(t)
 		seedSession(t, s, sess)
 		seedMachine(t, s, sess, machA, time.Now())
+		seedOwnedTool(t, s, sess, machA, tool)
 		seedPendingRequest(t, s, sess, reqID, tool)
 
 		first, err := s.LeasePendingRequest(ctx, sess, machA, []string{tool}, 30*time.Second)
@@ -754,4 +769,82 @@ func TestClaimTaskForAdoptionRejectsTerminal(t *testing.T) {
 			t.Fatalf("adopt pending task: ok=%v err=%v, want ok=true", ok, err)
 		}
 	})
+}
+
+// TestClaimEnforcesMachineToolOwnership pins the claim-path ownership rule:
+// a machine may only lease or explicitly claim requests whose tool it
+// registered. The filter is derived from the tools registry inside the claim
+// transaction; caller-supplied names can only narrow it.
+func TestClaimEnforcesMachineToolOwnership(t *testing.T) {
+	runAgainstBoth(t, "claim ownership", func(t *testing.T, s storage.Storer) {
+		ctx := context.Background()
+		sess := "sess-" + uid(t)
+		machA := "machA-" + uid(t)
+		machB := "machB-" + uid(t)
+		seedSession(t, s, sess)
+		seedMachine(t, s, sess, machA, time.Now())
+		seedMachine(t, s, sess, machB, time.Now())
+
+		toolA := model.NewTool(sess, machA, "alpha-"+uid(t), "d", `{}`, nil, nil)
+		toolB := model.NewTool(sess, machB, "beta-"+uid(t), "d", `{}`, nil, nil)
+		if err := s.SaveTool(ctx, toolA); err != nil {
+			t.Fatalf("save tool alpha: %v", err)
+		}
+		if err := s.SaveTool(ctx, toolB); err != nil {
+			t.Fatalf("save tool beta: %v", err)
+		}
+
+		reqA := seedPendingRequest(t, s, sess, "req-"+uid(t), toolA.Name)
+		reqB := seedPendingRequest(t, s, sess, "req-"+uid(t), toolB.Name)
+
+		// Empty filter means "every tool THIS machine registered".
+		leasedA, err := s.LeasePendingRequest(ctx, sess, machA, nil, 30*time.Second)
+		if err != nil {
+			t.Fatalf("lease for machA: %v", err)
+		}
+		if leasedA == nil || leasedA.ID != reqA.ID {
+			t.Fatalf("machA lease: got %+v want request %s", leasedA, reqA.ID)
+		}
+		leasedB, err := s.LeasePendingRequest(ctx, sess, machB, nil, 30*time.Second)
+		if err != nil {
+			t.Fatalf("lease for machB: %v", err)
+		}
+		if leasedB == nil || leasedB.ID != reqB.ID {
+			t.Fatalf("machB lease: got %+v want request %s", leasedB, reqB.ID)
+		}
+
+		// A caller-supplied name the machine does not own matches nothing.
+		idleB, err := s.LeasePendingRequest(ctx, sess, machB, []string{toolA.Name}, 30*time.Second)
+		if err != nil {
+			t.Fatalf("machB lease with foreign tool name: %v", err)
+		}
+		if idleB != nil {
+			t.Fatalf("machB leased a foreign tool's request: %+v", idleB)
+		}
+
+		// No machine identity: ownership cannot be established, fail closed.
+		idleNone, err := s.LeasePendingRequest(ctx, sess, "", nil, 30*time.Second)
+		if err != nil || idleNone != nil {
+			t.Fatalf("lease without machine identity: req=%+v err=%v", idleNone, err)
+		}
+
+		// Explicit claim by ID enforces the same rule under the row lock.
+		reqA2 := seedPendingRequest(t, s, sess, "req-"+uid(t), toolA.Name)
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqA2.ID, machB, 30*time.Second); !errors.Is(err, storage.ErrMachineNotToolOwner) {
+			t.Fatalf("machB claiming machA's tool request: ok=%v err=%v (want ErrMachineNotToolOwner)", ok, err)
+		}
+		if _, ok, err := s.ClaimRequest(ctx, sess, reqA2.ID, machA, 30*time.Second); err != nil || !ok {
+			t.Fatalf("machA claiming own tool request: ok=%v err=%v", ok, err)
+		}
+	})
+}
+
+// seedOwnedTool registers toolName in the tools registry as owned by the
+// machine, so claim-path ownership checks accept requests for it.
+func seedOwnedTool(t *testing.T, s storage.Storer, sessionID, machineID, toolName string) {
+	t.Helper()
+	tool := model.NewTool(sessionID, machineID, toolName, "test tool", `{}`, nil, nil)
+	if err := s.SaveTool(context.Background(), tool); err != nil {
+		t.Fatalf("seed tool: %v", err)
+	}
 }

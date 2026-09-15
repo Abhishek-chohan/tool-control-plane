@@ -371,6 +371,32 @@ func (s *ToolService) findToolByName(sessionID, name string) *model.Tool {
 	return nil
 }
 
+// ToolNamesForMachine returns the names of the session's tools the machine
+// registered. Claim-time ownership is derived from this registry, never from
+// caller-supplied filters alone.
+func (s *ToolService) ToolNamesForMachine(sessionID, machineID string) []string {
+	s.toolsMutex.RLock()
+	defer s.toolsMutex.RUnlock()
+
+	var names []string
+	for _, tool := range s.tools[sessionID] {
+		if tool != nil && tool.MachineID == machineID {
+			names = append(names, tool.Name)
+		}
+	}
+	return names
+}
+
+// MachineProvidesTool reports whether the machine registered the named tool
+// in the session.
+func (s *ToolService) MachineProvidesTool(sessionID, machineID, toolName string) bool {
+	s.toolsMutex.RLock()
+	defer s.toolsMutex.RUnlock()
+
+	tool := s.findToolByName(sessionID, toolName)
+	return tool != nil && tool.MachineID == machineID
+}
+
 // ListTools lists all tools in a session
 func (s *ToolService) ListTools(sessionID string) ([]*model.Tool, error) {
 	log.Printf("ToolService.ListTools called for sessionID: %s", sessionID)

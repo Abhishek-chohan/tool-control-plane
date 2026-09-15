@@ -3694,8 +3694,10 @@ func (x *ClaimRequestRequest) GetMachineId() string {
 	return ""
 }
 
-// ClaimNextRequestRequest: the provider poll primitive. Empty tool_names
-// matches every tool registered in the session.
+// ClaimNextRequestRequest: the provider poll primitive. Machine-tool
+// ownership applies: empty tool_names matches every tool the machine
+// registered, and tool_names entries the machine did not register match
+// nothing.
 type ClaimNextRequestRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
