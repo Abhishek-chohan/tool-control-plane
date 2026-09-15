@@ -300,6 +300,26 @@ func (s *MachinesService) SetRequestTracker(tracker machineDrainRequestTracker) 
 
 // GetMachineByID gets a machine by ID
 func (s *MachinesService) GetMachineByID(sessionID, machineID string) (*model.Machine, error) {
+	// Store-first: a machine registered on another replica resolves here
+	// instead of missing, and mirrors into the local registry. Store errors
+	// degrade to the cache.
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := s.store.GetMachine(ctx, machineID)
+		cancel()
+		if err != nil {
+			log.Printf("machine read-through failed: %v", err)
+		} else if stored != nil && stored.SessionID == sessionID {
+			s.machinesMutex.Lock()
+			if _, ok := s.machines[sessionID]; !ok {
+				s.machines[sessionID] = make(map[string]*model.Machine)
+			}
+			s.machines[sessionID][machineID] = stored
+			s.machinesMutex.Unlock()
+			return stored, nil
+		}
+	}
+
 	s.machinesMutex.RLock()
 	defer s.machinesMutex.RUnlock()
 
@@ -391,8 +411,30 @@ func (s *MachinesService) IsMachineDraining(sessionID, machineID string) bool {
 	return false
 }
 
-// ListMachines lists all machines in a session
+// ListMachines lists all machines in a session. Store-first when a store is
+// configured so listings include registrations made on other replicas, with
+// each row mirrored into the local registry; store errors degrade to the
+// cache.
 func (s *MachinesService) ListMachines(sessionID string) ([]*model.Machine, error) {
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		machines, err := s.store.ListMachinesBySession(ctx, sessionID)
+		cancel()
+		if err != nil {
+			log.Printf("machine list read-through failed: %v", err)
+		} else {
+			s.machinesMutex.Lock()
+			if _, ok := s.machines[sessionID]; !ok {
+				s.machines[sessionID] = make(map[string]*model.Machine)
+			}
+			for _, machine := range machines {
+				s.machines[sessionID][machine.ID] = machine
+			}
+			s.machinesMutex.Unlock()
+			return machines, nil
+		}
+	}
+
 	s.machinesMutex.RLock()
 	defer s.machinesMutex.RUnlock()
 

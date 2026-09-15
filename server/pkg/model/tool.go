@@ -212,6 +212,9 @@ func (k *ApiKey) CloneWithoutSecret() *ApiKey {
 	if len(k.Capabilities) > 0 {
 		copyKey.Capabilities = append([]APIKeyCapability(nil), k.Capabilities...)
 	}
+	if len(k.AllowedTools) > 0 {
+		copyKey.AllowedTools = append([]string(nil), k.AllowedTools...)
+	}
 	return &copyKey
 }
 

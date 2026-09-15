@@ -141,6 +141,9 @@ type Storer interface {
 	// returns nil when absent. Used by the machine-token gate's cross-replica
 	// read-through.
 	GetMachine(ctx context.Context, machineID string) (*model.Machine, error)
+	// ListMachinesBySession returns the machines registered in a session. It
+	// backs serving-time machine reads so answers are not partition-dependent.
+	ListMachinesBySession(ctx context.Context, sessionID string) ([]*model.Machine, error)
 	SaveMachine(ctx context.Context, machine *model.Machine) error
 	// TouchMachineLastPing advances only the heartbeat timestamp. Heartbeats
 	// arrive continuously while a machine may be mid-drain, so this write is
@@ -224,6 +227,13 @@ type Storer interface {
 
 	// Tools
 	AllTools(ctx context.Context) ([]*model.Tool, error)
+	// GetToolByName fetches a tool row by session and name (nil when
+	// absent). It backs serving-time tool reads so CreateRequest on a
+	// replica that never saw the registration still resolves.
+	GetToolByName(ctx context.Context, sessionID, name string) (*model.Tool, error)
+	// ListToolsBySession returns the session's tools. It backs serving-time
+	// listing so answers are not partition-dependent.
+	ListToolsBySession(ctx context.Context, sessionID string) ([]*model.Tool, error)
 	SaveTool(ctx context.Context, tool *model.Tool) error
 	DeleteTool(ctx context.Context, toolID string) error
 	DeleteToolsByMachine(ctx context.Context, machineID string) ([]ToolOwnershipUpdate, error)

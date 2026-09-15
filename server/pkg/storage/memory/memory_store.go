@@ -378,6 +378,19 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	return out, nil
 }
 
+// ListMachinesBySession returns the machines registered in a session.
+func (s *Store) ListMachinesBySession(ctx context.Context, sessionID string) ([]*model.Machine, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*model.Machine
+	for _, m := range s.machines {
+		if m != nil && m.SessionID == sessionID {
+			out = append(out, cloneMachine(m))
+		}
+	}
+	return out, nil
+}
+
 func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machine, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -810,6 +823,32 @@ func (s *Store) AllTools(ctx context.Context) ([]*model.Tool, error) {
 	out := make([]*model.Tool, 0, len(s.tools))
 	for _, t := range s.tools {
 		out = append(out, cloneTool(t))
+	}
+	return out, nil
+}
+
+// GetToolByName mirrors the Postgres query: the session's tool row with the
+// given name, or nil.
+func (s *Store) GetToolByName(ctx context.Context, sessionID, name string) (*model.Tool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, t := range s.tools {
+		if t != nil && t.SessionID == sessionID && t.Name == name {
+			return cloneTool(t), nil
+		}
+	}
+	return nil, nil
+}
+
+// ListToolsBySession returns the session's tools.
+func (s *Store) ListToolsBySession(ctx context.Context, sessionID string) ([]*model.Tool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*model.Tool
+	for _, t := range s.tools {
+		if t != nil && t.SessionID == sessionID {
+			out = append(out, cloneTool(t))
+		}
 	}
 	return out, nil
 }

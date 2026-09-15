@@ -15,16 +15,9 @@ type ToolOwnershipUpdate struct {
 	SessionID string
 }
 
-func (s *Store) AllTools(ctx context.Context) ([]*model.Tool, error) {
-	if s == nil {
-		return nil, nil
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, machine_id, name, description, schema, config, tags, created_at, last_ping_at FROM tools`)
-	if err != nil {
-		return nil, fmt.Errorf("query tools: %w", err)
-	}
+// scanToolRows centralizes the tool-row decoding shared by the tool reads.
+func scanToolRows(rows *sql.Rows) ([]*model.Tool, error) {
 	defer rows.Close()
-
 	var tools []*model.Tool
 	for rows.Next() {
 		t := &model.Tool{}
@@ -54,6 +47,51 @@ func (s *Store) AllTools(ctx context.Context) ([]*model.Tool, error) {
 		tools = append(tools, t)
 	}
 	return tools, rows.Err()
+}
+
+const toolColumns = `SELECT id, session_id, machine_id, name, description, schema, config, tags, created_at, last_ping_at FROM tools`
+
+func (s *Store) AllTools(ctx context.Context) ([]*model.Tool, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, toolColumns)
+	if err != nil {
+		return nil, fmt.Errorf("query tools: %w", err)
+	}
+	return scanToolRows(rows)
+}
+
+// GetToolByName fetches a single tool row by session and name (nil when
+// absent), so serving-time reads resolve registrations made on other replicas.
+func (s *Store) GetToolByName(ctx context.Context, sessionID, name string) (*model.Tool, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, toolColumns+` WHERE session_id=$1 AND name=$2`, sessionID, name)
+	if err != nil {
+		return nil, fmt.Errorf("get tool by name: %w", err)
+	}
+	tools, err := scanToolRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	if len(tools) == 0 {
+		return nil, nil
+	}
+	return tools[0], nil
+}
+
+// ListToolsBySession returns the session's tools.
+func (s *Store) ListToolsBySession(ctx context.Context, sessionID string) ([]*model.Tool, error) {
+	if s == nil {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, toolColumns+` WHERE session_id=$1`, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("list tools by session: %w", err)
+	}
+	return scanToolRows(rows)
 }
 
 func (s *Store) SaveTool(ctx context.Context, tool *model.Tool) error {
