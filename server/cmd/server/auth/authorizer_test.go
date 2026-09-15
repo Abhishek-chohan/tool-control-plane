@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"sync"
 	"testing"
 
@@ -9,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 	"toolplane/pkg/model"
 	"toolplane/pkg/trace"
 	proto "toolplane/proto"
@@ -209,3 +212,73 @@ func TestPerKeyToolAllowlist(t *testing.T) {
 		t.Fatalf("unrestricted key invoke: %v", err)
 	}
 }
+
+// TestPerKeyToolAllowlistStreamAndTask covers the two bypass surfaces: task
+// creation carries a tool name like invocation does, and the streaming
+// execute path checks the first received message.
+func TestPerKeyToolAllowlistStreamAndTask(t *testing.T) {
+	authorizer := NewAPIKeyAuthorizer(func(_ context.Context, token string) (*model.AuthPrincipal, error) {
+		return &model.AuthPrincipal{
+			Mode:         model.AuthModeSessionKey,
+			SessionID:    "session-1",
+			KeyID:        token,
+			Capabilities: []model.APIKeyCapability{model.APIKeyCapabilityInvoke},
+			AllowedTools: []string{"alpha"},
+		}, nil
+	}, trace.NopTracer())
+
+	// Task creation is an execution entry point and is allowlist-checked.
+	unary := authorizer.UnaryInterceptor()
+	handler := func(_ context.Context, _ interface{}) (interface{}, error) { return nil, nil }
+	info := &grpc.UnaryServerInfo{FullMethod: "/api.v1.TasksService/CreateTask"}
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer test-key"))
+	if _, err := unary(ctx, &proto.CreateTaskRequest{SessionId: "session-1", ToolName: "gamma"}, info, handler); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("CreateTask for foreign tool: err=%v, want PermissionDenied", err)
+	}
+	if _, err := unary(ctx, &proto.CreateTaskRequest{SessionId: "session-1", ToolName: "alpha"}, info, handler); err != nil {
+		t.Fatalf("CreateTask for allowed tool: %v", err)
+	}
+
+	// Streaming execute checks the first received message.
+	streamInterceptor := authorizer.StreamInterceptor()
+	streamHandler := func(srv interface{}, stream grpc.ServerStream) error {
+		var first proto.ExecuteToolRequest
+		return stream.RecvMsg(&first)
+	}
+	recv := func(toolName string) error {
+		ss := &fakeServerStream{ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("authorization", "bearer test-key"))}
+		ss.msgs = append(ss.msgs, &proto.ExecuteToolRequest{SessionId: "session-1", ToolName: toolName})
+		info := &grpc.StreamServerInfo{FullMethod: "/api.v1.ToolService/StreamExecuteTool"}
+		return streamInterceptor(nil, ss, info, streamHandler)
+	}
+	if err := recv("beta"); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("stream foreign tool: err=%v, want PermissionDenied", err)
+	}
+	if err := recv("alpha"); err != nil {
+		t.Fatalf("stream allowed tool: %v", err)
+	}
+}
+
+type fakeServerStream struct {
+	grpc.ServerStream
+	ctx  context.Context
+	msgs []interface{}
+	sent int
+}
+
+func (s *fakeServerStream) Context() context.Context { return s.ctx }
+
+func (s *fakeServerStream) RecvMsg(m interface{}) error {
+	if s.sent >= len(s.msgs) {
+		return io.EOF
+	}
+	s.sent++
+	dst, ok := m.(proto.Message)
+	if !ok {
+		return fmt.Errorf("fakeServerStream: unsupported message type %T", m)
+	}
+	proto.Merge(dst, s.msgs[s.sent-1].(proto.Message))
+	return nil
+}
+
+func (s *fakeServerStream) SendMsg(interface{}) error { return nil }

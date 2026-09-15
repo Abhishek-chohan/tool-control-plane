@@ -971,6 +971,9 @@ func cloneApiKey(k *model.ApiKey) *model.ApiKey {
 	if k.Capabilities != nil {
 		c.Capabilities = append([]model.APIKeyCapability(nil), k.Capabilities...)
 	}
+	if k.AllowedTools != nil {
+		c.AllowedTools = append([]string(nil), k.AllowedTools...)
+	}
 	if k.RevokedAt != nil {
 		t := *k.RevokedAt
 		c.RevokedAt = &t
