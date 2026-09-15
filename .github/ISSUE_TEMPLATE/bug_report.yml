@@ -1,0 +1,61 @@
+name: Bug report
+description: Something doesn't work the way the docs say it does
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this. Security issues should not be reported here — use private vulnerability reporting per [SECURITY.md](https://github.com/Abhishek-chohan/tool-control-plane/blob/main/SECURITY.md).
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - server (Go control plane)
+        - proxy / HTTP gateway
+        - MCP gateway / adapter
+        - python-client
+        - typescript-client
+        - typescript-mcp-adapter
+        - go-client
+        - conformance fixtures
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Commands, requests, or a minimal snippet that shows the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Version or commit, OS, and deployment mode (`TOOLPLANE_STORAGE_MODE` / `TOOLPLANE_AUTH_MODE`).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Debug-level server or client logs, trimmed to the relevant window.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for a duplicate.
+          required: true
+        - label: This is not a security issue (those go through [SECURITY.md](https://github.com/Abhishek-chohan/tool-control-plane/blob/main/SECURITY.md)).
+          required: true
