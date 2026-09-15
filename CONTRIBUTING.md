@@ -10,13 +10,15 @@ Toolplane is a gRPC control plane that gives agents structured access to tools �
 ## Getting oriented
 
 - [README.md](README.md) — what Toolplane is, quickstart, architecture, and repository layout.
-- [server/docs/local-development.md](server/docs/local-development.md) — the supported local bootstrap (server, Postgres, generated stubs).
+- [server/docs/local-development.md](server/docs/local-development.md) — the supported local bootstrap: server and gateways with development defaults (memory storage, fixed dev key). Postgres belongs to the [reference deployment](server/docs/reference-deployment.md), not the local path.
 - [server/DOCUMENTATION.md](server/DOCUMENTATION.md) — runtime semantics and the request lifecycle.
 - [server/docs/compatibility-policy.md](server/docs/compatibility-policy.md) — protobuf, gateway, and SDK compatibility rules; `api.v1` is the version boundary.
 
 ## Checks
 
-Run the checks that touch your change, from `server/`:
+Run the checks that touch your change.
+
+Makefile targets run from `server/`:
 
 | Command | What it does |
 | --- | --- |
@@ -24,23 +26,23 @@ Run the checks that touch your change, from `server/`:
 | `make python-unit` | Python SDK unit tests |
 | `make conformance-python` | Shared-fixture conformance over gRPC + HTTP (auto-boots a server) |
 | `make conformance-python-mcp` | Adds the MCP transport (boots the MCP gateway) |
-| `make release-gate` | Authoritative gate: Postgres-backed end-to-end, multi-instance, and MCP slices |
+| `make release-gate` | Conformance, observability, and runtime slices; storage legs run on memory unless `TOOLPLANE_DATABASE_URL` is set |
 | `make check-proto-drift` | Regenerated stubs must match what's committed |
 
-The minimum for any pull request is `make test-race`, `make conformance-python`, and `make check-proto-drift`. Release Gate runs in CI on every PR and is the authoritative gate.
+The minimum for any pull request is `make test-race`, `make conformance-python`, and `make check-proto-drift`. CI's Release Gate runs the same target against a Postgres service and adds separate multi-instance and MCP steps, so it — not a local memory-backed run — is the authoritative result.
 
-Lint also runs in CI on every PR:
+Other checks run from their own working directories:
 
-- **Python** (`clients/python-client`): install with `pip install -e ".[dev]"`, then `black --check toolplane`, `isort --check-only toolplane`, and `flake8 toolplane` (configured in `clients/python-client/.flake8`). mypy runs advisories-only in CI.
-- **Go** (`server`, `clients/go-client`): golangci-lint.
-- **TypeScript** (`clients/typescript-client`, `clients/typescript-mcp-adapter`): `npm ci && npm run lint`.
-- **SDK README drift**: `python tools/gen_sdk_readmes.py --check` (run it without `--check` to regenerate).
+- **Python lint** (`clients/python-client`): install with `pip install -e ".[dev]"`, then `black --check toolplane`, `isort --check-only toolplane`, and `flake8 toolplane` (configured in `clients/python-client/.flake8`). mypy runs advisories-only in CI.
+- **Go lint** (`server`, `clients/go-client`): golangci-lint.
+- **TypeScript lint** (`clients/typescript-client`, `clients/typescript-mcp-adapter`): `npm ci && npm run lint`.
+- **SDK README drift** (repository root): `python tools/gen_sdk_readmes.py --check` (run it without `--check` to regenerate).
 
 ## Making changes
 
 ### Proto changes
 
-`server/proto/service.proto` is the wire contract. Changes stay additive; the compatibility rules in [server/docs/compatibility-policy.md](server/docs/compatibility-policy.md) apply. Regenerate stubs following [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md) (it pins the tool versions) and keep `make check-proto-drift` green. Generated client code ships in-repo, so it is part of the same PR.
+`server/proto/service.proto` is the wire contract. On the current `api.v1` line, changes stay additive; wire-breaking changes require an explicit `v2` boundary rather than an in-place edit. The full rules are in [server/docs/compatibility-policy.md](server/docs/compatibility-policy.md). Regenerate stubs following [server/docs/proto_regeneration.md](server/docs/proto_regeneration.md) (it pins the tool versions) and keep `make check-proto-drift` green. Generated client code ships in-repo, so it is part of the same PR.
 
 ### SDK surface changes
 

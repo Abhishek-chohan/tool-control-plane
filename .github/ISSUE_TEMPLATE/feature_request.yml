@@ -27,7 +27,7 @@ body:
       label: Surface impact
       description: Which surfaces would this touch? Helps route review; not binding.
       options:
-        - label: proto / wire contract (changes stay additive per the [compatibility policy](https://github.com/Abhishek-chohan/tool-control-plane/blob/main/server/docs/compatibility-policy.md))
+        - label: proto / wire contract (stays additive within the current `api.v1` line; breaking changes need a `v2` boundary per the [compatibility policy](https://github.com/Abhishek-chohan/tool-control-plane/blob/main/server/docs/compatibility-policy.md))
         - label: SDK surface (Python / TypeScript / Go — SDK_MAP.md and CHANGELOG.md move in the same PR)
         - label: server behavior only
         - label: docs / operational only

@@ -1,5 +1,5 @@
 name: Bug report
-description: Something doesn't work the way the docs say it does
+description: Report a regression, an undocumented failure, or a mismatch between the docs and the behavior
 labels: [bug]
 body:
   - type: markdown
