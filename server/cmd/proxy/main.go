@@ -24,6 +24,9 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	gw "toolplane/proto"
+	// Registers google.rpc.ErrorInfo so the gateway can marshal status
+	// details attached by the server.
+	_ "google.golang.org/genproto/googleapis/rpc/errdetails"
 )
 
 // corsMiddleware applies explicit development or production CORS behavior.
