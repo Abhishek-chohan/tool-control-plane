@@ -1,0 +1,33 @@
+name: Feature or design proposal
+description: Suggest an addition or a change to behavior
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: What you're trying to do and where things fall short today. State the goal before the mechanism.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What would change, from the caller's or operator's point of view (API, SDK, CLI, or deployment).
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed, and why this one wins.
+  - type: checkboxes
+    id: surface
+    attributes:
+      label: Surface impact
+      description: Which surfaces would this touch? Helps route review; not binding.
+      options:
+        - label: proto / wire contract (stays additive within the current `api.v1` line; breaking changes need a `v2` boundary per the [compatibility policy](https://github.com/Abhishek-chohan/tool-control-plane/blob/main/server/docs/compatibility-policy.md))
+        - label: SDK surface (Python / TypeScript / Go — SDK_MAP.md and CHANGELOG.md move in the same PR)
+        - label: server behavior only
+        - label: docs / operational only
