@@ -292,7 +292,10 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		if _, ok := s.requests[sessionID]; !ok {
 			s.requests[sessionID] = make(map[string]*model.Request)
 		}
-		s.requests[sessionID][request.ID] = request
+		// Insert a clone: the map entry is mutated by concurrent claimers
+		// (SetClaimedBy under the same lock), while the code below keeps
+		// reading the local object after the lock drops.
+		s.requests[sessionID][request.ID] = request.Clone()
 	}
 	s.requestsMutex.Unlock()
 
