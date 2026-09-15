@@ -123,16 +123,23 @@ func (s *Store) TouchMachineLastPing(ctx context.Context, sessionID, machineID s
 	return nil
 }
 
-// BindMachineToken persists the machine's credential hash alone; the
-// first-authentication bind must not rewrite the rest of the row.
-func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) error {
+// BindMachineToken claims the machine's credential slot: the write lands only
+// while no hash is bound, and the return reports whether this call won. A
+// plain overwrite would let two replicas bind different first credentials and
+// each keep accepting its own.
+func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) (bool, error) {
 	if s == nil {
-		return nil
+		return false, nil
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE machines SET token_hash=$2 WHERE id=$1`, machineID, nullString(tokenHash)); err != nil {
-		return fmt.Errorf("bind machine token: %w", err)
+	res, err := s.db.ExecContext(ctx, `UPDATE machines SET token_hash=$2 WHERE id=$1 AND (token_hash IS NULL OR token_hash='')`, machineID, nullString(tokenHash))
+	if err != nil {
+		return false, fmt.Errorf("bind machine token: %w", err)
 	}
-	return nil
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("bind machine token: %w", err)
+	}
+	return n > 0, nil
 }
 
 func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit int) ([]*model.Machine, error) {

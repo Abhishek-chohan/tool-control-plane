@@ -368,17 +368,17 @@ func (s *Store) TouchMachineLastPing(ctx context.Context, sessionID, machineID s
 	return nil
 }
 
-// BindMachineToken mirrors the Postgres store's column-scoped bind: only the
-// credential hash moves.
-func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) error {
+// BindMachineToken mirrors the Postgres store's compare-and-set bind: only
+// the credential hash moves, and only while none is bound.
+func (s *Store) BindMachineToken(ctx context.Context, machineID, tokenHash string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	m, ok := s.machines[machineID]
-	if !ok || m == nil {
-		return nil
+	if !ok || m == nil || m.TokenHash != "" {
+		return false, nil
 	}
 	m.TokenHash = tokenHash
-	return nil
+	return true, nil
 }
 
 func (s *Store) DeleteMachine(ctx context.Context, machineID string) error {

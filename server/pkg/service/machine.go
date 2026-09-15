@@ -260,18 +260,29 @@ func (s *MachinesService) AuthorizeMachineToken(sessionID, machineID, token stri
 		if token == "" {
 			return nil // first post-upgrade call; registration binds the token
 		}
-		s.machinesMutex.Lock()
-		machine.TokenHash = model.HashAPIKeySecret(token)
-		s.machinesMutex.Unlock()
+		presented := model.HashAPIKeySecret(token)
 		if s.store != nil {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
 			defer cancel()
-			// Column-scoped: the bind must not rewrite the rest of the row
-			// (drain state included).
-			if err := s.store.BindMachineToken(ctx, machineID, machine.TokenHash); err != nil {
+			// Column-scoped compare-and-set: only the token hash moves, and
+			// only while none is bound. A replica that read a token-less row
+			// can lose the bind to another replica's first credential.
+			bound, err := s.store.BindMachineToken(ctx, machineID, presented)
+			if err != nil {
 				log.Printf("persist machine token bind failed: %v", err)
+			} else if !bound {
+				// The winning hash is authoritative: accept only when the
+				// presented credential matches it, never overwrite it.
+				stored, err := s.store.GetMachine(ctx, machineID)
+				if err != nil || stored == nil || !stored.MatchesMachineToken(token) {
+					return fmt.Errorf("%w: machine %s first credential was bound elsewhere and the presented credential does not match", ErrMachineCredentialRejected, machineID)
+				}
+				presented = stored.TokenHash
 			}
 		}
+		s.machinesMutex.Lock()
+		machine.TokenHash = presented
+		s.machinesMutex.Unlock()
 		return nil
 	}
 	if !machine.MatchesMachineToken(token) {

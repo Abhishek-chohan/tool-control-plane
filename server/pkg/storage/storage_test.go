@@ -409,6 +409,12 @@ func TestMachineDrainFlag_WriteOwnership(t *testing.T) {
 		mach := "mach-" + uid(t)
 		seedSession(t, s, sess)
 		m := seedMachine(t, s, sess, mach, time.Now())
+		// Token-less row: NewMachine mints a credential, but the bind path
+		// under test starts from an unbound machine.
+		m.TokenHash = ""
+		if err := s.SaveMachine(ctx, m); err != nil {
+			t.Fatalf("seed unbound machine: %v", err)
+		}
 
 		requireDraining := func(want bool, step string) {
 			t.Helper()
@@ -441,9 +447,13 @@ func TestMachineDrainFlag_WriteOwnership(t *testing.T) {
 		}
 		requireDraining(true, "after heartbeat")
 
-		// Credential bind: column-scoped token_hash write.
-		if err := s.BindMachineToken(ctx, mach, "bound-hash"); err != nil {
+		// Credential bind: compare-and-set on the token_hash column only.
+		won, err := s.BindMachineToken(ctx, mach, "bound-hash")
+		if err != nil {
 			t.Fatalf("bind token: %v", err)
+		}
+		if !won {
+			t.Fatalf("first bind reported lost")
 		}
 		stored, err = s.GetMachine(ctx, mach)
 		if err != nil {
@@ -453,6 +463,23 @@ func TestMachineDrainFlag_WriteOwnership(t *testing.T) {
 			t.Fatalf("bind did not persist token hash: %+v", stored)
 		}
 		requireDraining(true, "after bind")
+
+		// A second bind cannot steal the first credential.
+		won, err = s.BindMachineToken(ctx, mach, "other-hash")
+		if err != nil {
+			t.Fatalf("second bind: %v", err)
+		}
+		if won {
+			t.Fatalf("second bind overwrote the first credential")
+		}
+		stored, err = s.GetMachine(ctx, mach)
+		if err != nil {
+			t.Fatalf("reload machine after lost bind: %v", err)
+		}
+		if stored == nil || stored.TokenHash != "bound-hash" {
+			t.Fatalf("lost bind overwrote the winning hash: %+v", stored)
+		}
+		requireDraining(true, "after lost bind")
 
 		// Full upsert (registration path): preserves the persisted flag.
 		// Re-registration of a draining machine is refused at the service
