@@ -26,10 +26,12 @@ type CircuitBreakerManager struct {
 	breaker       *gobreaker.TwoStepCircuitBreaker
 	maxConcurrent int64
 
-	// sawSuccess latches the first successful backend request: startup
-	// failures before any success (lazy channel dial racing the readiness
-	// probe) are cold-start noise, not a backend going bad, and must not
-	// trip the breaker.
+	// sawSuccess latches the first successful backend request. ReadyToTrip
+	// consumes it: startup failures before any success (lazy channel dial
+	// racing the readiness probe) are cold-start noise, not a backend going
+	// bad, and must not open the breaker — an open breaker on a healthy-but-
+	// cold gateway fails the readiness probe and turns the rollout into a
+	// restart loop.
 	sawSuccess atomic.Bool
 
 	openTimeout  time.Duration
@@ -63,7 +65,10 @@ func NewCircuitBreakerManager(maxConcurrent int64) *CircuitBreakerManager {
 		Interval:    time.Minute,
 		MaxRequests: uint32(halfOpenProbes),
 		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			return counts.ConsecutiveFailures >= 5
+			// The cold-start latch: no breaker decision until a backend
+			// response has proven the channel. Post-latch, 5 consecutive
+			// gateway-visible failures open the breaker as before.
+			return manager.sawSuccess.Load() && counts.ConsecutiveFailures >= 5
 		},
 		OnStateChange: manager.onStateChange,
 	}
@@ -101,11 +106,11 @@ func (m *CircuitBreakerManager) Begin() (func(success bool), func(), time.Durati
 
 	m.totalAccepted.Add(1)
 	doneWrapper := func(success bool) {
-		// Any completed response proves the backend channel works: latch on
-		// the first one. Failures before the latch are cold-start noise
-		// (readiness polls racing the lazy backend dial) and must not trip
-		// the breaker.
-		m.sawSuccess.Store(true)
+		// Only a successful response proves the backend channel works; a
+		// failing response must not latch the cold-start guard.
+		if success {
+			m.sawSuccess.Store(true)
+		}
 		done(success)
 	}
 	release := func() {
