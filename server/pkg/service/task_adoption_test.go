@@ -193,7 +193,9 @@ func TestTaskCreateDispatchesThroughFenceAndCompletes(t *testing.T) {
 			t.Fatalf("get task: %v", getErr)
 		}
 		if task.Status == model.StatusCompleted {
-			if task.Result != "dispatched-done" {
+			// The waiter serves results as JSON, identical to the ExecuteTool
+			// long-poll: a submitted string result carries its JSON encoding.
+			if task.Result != `"dispatched-done"` {
 				t.Fatalf("task completed with the wrong result: %q", task.Result)
 			}
 			// Terminal: ownership released so the sweep does not consider it.

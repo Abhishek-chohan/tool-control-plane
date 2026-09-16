@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -331,5 +334,216 @@ func TestTasksServiceDoesNotClaimRequest(t *testing.T) {
 	claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"echo"})
 	if err != nil || claimed == nil || claimed.ID != requestID {
 		t.Fatalf("provider claim after task create: claimed=%v err=%v", claimed, err)
+	}
+}
+
+// TestTasksServiceTaskResultIsJSON pins the durable task result as JSON: a
+// structured tool result must land in tasks.result as the JSON encoding of
+// the submitted value — the same bytes the ExecuteTool long-poll serves —
+// not Go's %v rendering of the decoded map.
+func TestTasksServiceTaskResultIsJSON(t *testing.T) {
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	tracer := &recordingTracer{}
+	toolService := NewToolService(tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
+	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
+
+	const sessionID = "session-task-result-json"
+	const machineID = "machine-task-result-json"
+
+	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "report", "report tool", `{"type":"object"}`, nil, nil),
+	}, "")
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	// Provider submits a structured result, exactly as the SDK runtimes do
+	// after json.dumps-ing the tool's return value.
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"report"})
+			if err != nil || claimed == nil {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			if _, err := requestService.UpdateRequest(sessionID, claimed.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
+				t.Errorf("provider running update: %v", err)
+				return
+			}
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, machineID, claimed.LeaseEpoch,
+				map[string]interface{}{"items": []interface{}{"a", "b"}, "count": 2}, model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+
+	task, err := tasksService.CreateTask(sessionID, "report", `{}`, "")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 10*time.Second)
+
+	completed, err := tasksService.GetTaskByID(sessionID, task.ID)
+	if err != nil {
+		t.Fatalf("get completed task: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal([]byte(completed.Result), &decoded); err != nil {
+		t.Fatalf("task result is not JSON: %q (err %v)", completed.Result, err)
+	}
+	if decoded["count"] != float64(2) {
+		t.Fatalf("task result count = %v, want 2", decoded["count"])
+	}
+	items, ok := decoded["items"].([]interface{})
+	if !ok || len(items) != 2 || items[0] != "a" || items[1] != "b" {
+		t.Fatalf("task result items = %v, want [a b]", decoded["items"])
+	}
+}
+
+// TestTasksServiceTaskResultStringRoundTrip pins the string-result identity:
+// a tool returning a plain string is submitted by the SDKs as a JSON string,
+// so the task result must carry the same JSON encoding the ExecuteTool
+// long-poll serves, not the raw %v rendering.
+func TestTasksServiceTaskResultStringRoundTrip(t *testing.T) {
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	tracer := &recordingTracer{}
+	toolService := NewToolService(tracer, nil)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, nil)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, nil)
+	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, nil)
+
+	const sessionID = "session-task-result-string"
+	const machineID = "machine-task-result-string"
+
+	_, err := machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "greet", "greet tool", `{"type":"object"}`, nil, nil),
+	}, "")
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"greet"})
+			if err != nil || claimed == nil {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			if _, err := requestService.UpdateRequest(sessionID, claimed.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
+				t.Errorf("provider running update: %v", err)
+				return
+			}
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, machineID, claimed.LeaseEpoch,
+				"hello world", model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+
+	task, err := tasksService.CreateTask(sessionID, "greet", `{}`, "")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 10*time.Second)
+
+	completed, err := tasksService.GetTaskByID(sessionID, task.ID)
+	if err != nil {
+		t.Fatalf("get completed task: %v", err)
+	}
+	// json.dumps("hello world") on the provider side, json.Marshal on the
+	// waiter side: identical bytes.
+	if completed.Result != `"hello world"` {
+		t.Fatalf("task result = %q, want the JSON encoding %q", completed.Result, `"hello world"`)
+	}
+}
+
+// TestTasksServiceTaskResultIsJSONPersisted repeats the structured-result
+// check against the durable row: tasks.result in the store must hold the
+// same JSON, since the task API serves the persisted value after restarts.
+func TestTasksServiceTaskResultIsJSONPersisted(t *testing.T) {
+	databaseURL := strings.TrimSpace(os.Getenv("TOOLPLANE_DATABASE_URL"))
+	if databaseURL == "" {
+		t.Skip("TOOLPLANE_DATABASE_URL not set")
+	}
+
+	t.Setenv("TOOLPLANE_STORAGE_MODE", "postgres")
+	t.Setenv("TOOLPLANE_DATABASE_URL", databaseURL)
+
+	store := openPersistentStoreForTest(t)
+	defer func() {
+		if err := store.Close(); err != nil {
+			t.Fatalf("close store: %v", err)
+		}
+	}()
+
+	taskCtx, shutdown := context.WithCancel(context.Background())
+	defer shutdown()
+
+	tracer := &recordingTracer{}
+	sessionService := NewSessionsService(tracer, store)
+	toolService := NewToolService(tracer, store)
+	machineService := NewMachinesService(context.Background(), toolService, tracer, store)
+	requestService := NewRequestsService(context.Background(), toolService, machineService, tracer, store)
+	tasksService := NewTasksService(taskCtx, toolService, machineService, requestService, tracer, store)
+
+	session, err := sessionService.CreateSession("task-result-user", "Task Result Persistence", "", "", "")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = sessionService.DeleteSession(session.ID)
+	})
+	sessionID := session.ID
+	const machineID = "machine-task-result-persisted"
+
+	_, err = machineService.RegisterMachine(sessionID, machineID, "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, machineID, "report", "report tool", `{"type":"object"}`, nil, nil),
+	}, "")
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	go func() {
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, machineID, []string{"report"})
+			if err != nil || claimed == nil {
+				time.Sleep(20 * time.Millisecond)
+				continue
+			}
+			if _, err := requestService.UpdateRequest(sessionID, claimed.ID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, ""); err != nil {
+				t.Errorf("provider running update: %v", err)
+				return
+			}
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, machineID, claimed.LeaseEpoch,
+				map[string]interface{}{"answer": 42}, model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+
+	task, err := tasksService.CreateTask(sessionID, "report", `{}`, "")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 15*time.Second)
+
+	readCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+	defer cancel()
+	stored, err := store.GetTaskByID(readCtx, task.ID)
+	if err != nil {
+		t.Fatalf("read stored task: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal([]byte(stored.Result), &decoded); err != nil {
+		t.Fatalf("stored task result is not JSON: %q (err %v)", stored.Result, err)
+	}
+	if decoded["answer"] != float64(42) {
+		t.Fatalf("stored task result answer = %v, want 42", decoded["answer"])
 	}
 }
