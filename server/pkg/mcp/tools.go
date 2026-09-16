@@ -144,7 +144,7 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 	if err != nil {
 		return nil, backendError("create request for tool "+params.Name, err)
 	}
-	s.trackCall(sessionID, req.ID, request.Id)
+	s.trackCall(apiKey, sessionID, req.ID, request.Id)
 
 	if meta.clientSupportsTasks() {
 		return createTaskResult(request), nil
@@ -203,11 +203,7 @@ func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, 
 		RequestId: request.Id,
 	}); err == nil && len(window.Chunks) > 0 {
 		text := strings.Join(window.Chunks, "\n")
-		if over := len(text) - maxRenderedTextBytes; over > 0 {
-			text = text[:len(text)-over] + "\n... [output truncated at " +
-				fmt.Sprint(maxRenderedTextBytes) + " bytes; use tasks/get paging to re-read] ..."
-		}
-		result["content"] = []any{textBlock(text)}
+		result["content"] = []any{textBlock(capRenderedText(text))}
 	}
 	result["_meta"] = metaMap{TaskIDDataKey: request.Id}
 	return result
@@ -332,13 +328,15 @@ func (s *Server) handleLegacyToolsCall(ctx context.Context, req *Request, apiKey
 	}
 
 	request, err := s.requests.CreateRequest(ctx, &gw.CreateRequestRequest{
-		SessionId: sessionID,
-		ToolName:  params.Name,
-		Input:     string(input),
+		SessionId:      sessionID,
+		ToolName:       params.Name,
+		Input:          string(input),
+		IdempotencyKey: deriveCallIdempotencyKey(req.ID, params.Name, input),
 	})
 	if err != nil {
 		return nil, backendError("create request for tool "+params.Name, err)
 	}
+	s.trackCall(apiKey, sessionID, req.ID, request.Id)
 
 	result, rpcErr := s.awaitSyncResult(ctx, sessionID, request.Id)
 	if rpcErr != nil {
@@ -380,28 +378,32 @@ func normalizeJSONRPCID(raw json.RawMessage) string {
 	return string(trimmed)
 }
 
-// trackCall records the JSON-RPC id → (session, request) mapping so a later
-// notifications/cancelled can fence the executing request. The map is bounded:
-// oldest entries beyond the cap are dropped.
-func (s *Server) trackCall(sessionID string, jsonrpcID json.RawMessage, requestID string) {
-	key := normalizeJSONRPCID(jsonrpcID)
+// trackCall records the JSON-RPC id -> (session, request) mapping so a later
+// notifications/cancelled can fence the executing request. The key is scoped
+// to the authenticated caller: JSON-RPC ids are only unique per client, and
+// two sessions can concurrently use the same id. The map is bounded with FIFO
+// eviction.
+func (s *Server) trackCall(apiKey, sessionID string, jsonrpcID json.RawMessage, requestID string) {
+	key := trackingKey(apiKey, jsonrpcID)
 	if key == "" || requestID == "" {
 		return
 	}
 	s.callsMu.Lock()
 	defer s.callsMu.Unlock()
 	if _, exists := s.trackedCalls[key]; !exists && len(s.trackedCalls) >= maxTrackedCalls {
-		for old := range s.trackedCalls {
-			delete(s.trackedCalls, old)
-			break
-		}
+		delete(s.trackedCalls, s.trackedOrder[0])
+		s.trackedOrder = s.trackedOrder[1:]
+	}
+	if _, exists := s.trackedCalls[key]; !exists {
+		s.trackedOrder = append(s.trackedOrder, key)
 	}
 	s.trackedCalls[key] = trackedCall{sessionID: sessionID, requestID: requestID}
 }
 
-// trackedCallFor returns the session and request recorded for a JSON-RPC id.
-func (s *Server) trackedCallFor(jsonrpcID json.RawMessage) (string, string) {
-	key := normalizeJSONRPCID(jsonrpcID)
+// trackedCallFor resolves the session and request recorded for a JSON-RPC id
+// from the same authenticated caller.
+func (s *Server) trackedCallFor(apiKey string, jsonrpcID json.RawMessage) (string, string) {
+	key := trackingKey(apiKey, jsonrpcID)
 	s.callsMu.Lock()
 	defer s.callsMu.Unlock()
 	call, ok := s.trackedCalls[key]
@@ -411,12 +413,24 @@ func (s *Server) trackedCallFor(jsonrpcID json.RawMessage) (string, string) {
 	return call.sessionID, call.requestID
 }
 
+// trackingKey scopes a JSON-RPC id to its authenticated caller using a short
+// hash of the credential, the stable per-caller scope available on both the
+// tools/call and the cancelled notification.
+func trackingKey(apiKey string, jsonrpcID json.RawMessage) string {
+	id := normalizeJSONRPCID(jsonrpcID)
+	if id == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(apiKey))
+	return hex.EncodeToString(digest[:])[:16] + ":" + id
+}
+
 // handleCancelledNotification maps notifications/cancelled to a fenced
 // CancelRequest. The MCP spec's params.requestId names the JSON-RPC id of the
 // call being stopped; the gateway's tracking resolves it to the durable
 // request. Unknown ids (already completed, foreign, or never tracked) are
 // dropped silently — the notification is still acknowledged with 202.
-func (s *Server) handleCancelledNotification(ctx context.Context, req *Request) {
+func (s *Server) handleCancelledNotification(ctx context.Context, req *Request, callerCredential string) {
 	var params struct {
 		RequestId json.RawMessage `json:"requestId"`
 	}
@@ -426,7 +440,7 @@ func (s *Server) handleCancelledNotification(ctx context.Context, req *Request) 
 		}
 	}
 
-	sessionID, requestID := s.trackedCallFor(params.RequestId)
+	sessionID, requestID := s.trackedCallFor(callerCredential, params.RequestId)
 	if requestID == "" {
 		return
 	}

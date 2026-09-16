@@ -60,6 +60,7 @@ type Server struct {
 	// the executing attempt. Bounded to keep memory flat.
 	callsMu      sync.Mutex
 	trackedCalls map[string]trackedCall
+	trackedOrder []string
 }
 
 // trackedCall is one sync tools/call's mapping from its JSON-RPC id to the
@@ -197,7 +198,7 @@ func (s *Server) serveMCP(w http.ResponseWriter, r *http.Request) {
 		// the gateway created for that JSON-RPC id.
 		if req.Method == "notifications/cancelled" {
 			ctx := metadata.NewOutgoingContext(r.Context(), authMetadata(r))
-			s.handleCancelledNotification(ctx, &req)
+			s.handleCancelledNotification(ctx, &req, apiKeyForCache(r))
 		}
 		w.WriteHeader(http.StatusAccepted)
 		return

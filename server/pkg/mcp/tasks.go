@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -149,7 +150,9 @@ func detailedTask(request *gw.Request) taskPayload {
 
 // callToolResultFromRequest renders the terminal request outcome as an MCP
 // CallToolResult: content blocks plus optional structuredContent, with
-// isError set for failures and cancellations.
+// isError set for failures and cancellations. The text block is capped so
+// unbounded provider output (bash-style dumps) cannot flow into a model
+// context unbounded.
 func callToolResultFromRequest(request *gw.Request) map[string]any {
 	result := map[string]any{
 		"resultType": ResultTypeComplete,
@@ -159,7 +162,7 @@ func callToolResultFromRequest(request *gw.Request) map[string]any {
 	content := []any{}
 	if request.Status == gw.RequestStatus_REQUEST_STATUS_DONE {
 		if text := strings.TrimSpace(request.Result); text != "" {
-			content = append(content, textBlock(text))
+			content = append(content, textBlock(capRenderedText(text)))
 		}
 		if structured := parseJSONValue(request.Result); structured != nil {
 			result["structuredContent"] = structured
@@ -171,6 +174,16 @@ func callToolResultFromRequest(request *gw.Request) map[string]any {
 	}
 	result["content"] = content
 	return result
+}
+
+// capRenderedText clips text to maxRenderedTextBytes with a marker pointing
+// at tasks/get paging for re-reading.
+func capRenderedText(text string) string {
+	if over := len(text) - maxRenderedTextBytes; over > 0 {
+		return text[:len(text)-over] + "\n... [output truncated at " +
+			fmt.Sprint(maxRenderedTextBytes) + " bytes; use tasks/get paging to re-read] ..."
+	}
+	return text
 }
 
 func textBlock(text string) map[string]any {
