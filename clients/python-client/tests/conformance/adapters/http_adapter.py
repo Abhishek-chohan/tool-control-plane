@@ -128,6 +128,21 @@ class HttpConformanceAdapter:
             tags=["conformance"],
         )
 
+
+    def register_failing_tool(self, session_id: str, tool_name: str, description: str):
+        context = self._ensure_context_machine(session_id)
+
+        def _failing_tool(**_: Any):
+            raise RuntimeError("intentional tool failure for conformance")
+
+        context.register_tool(
+            name=tool_name,
+            func=_failing_tool,
+            description=description,
+            stream=False,
+            tags=["conformance"],
+        )
+
     def register_stream_tool(self, session_id: str, tool_name: str, description: str):
         def _stream_tool(prefix: str = "chunk", count: int = 5, **_: Any):
             for index in range(int(count)):

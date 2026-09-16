@@ -45,9 +45,20 @@ except ImportError:
     # Fallback for when running as standalone
     from execute_bash import run_command
     from finish import submit as finish_submit
+    from read_file import read_file
     from search import search_in_directory, search_in_file
     from str_replace_editor import StrReplaceEditor, load_history, save_history
     from submit import submit as simple_submit
+
+
+class ToolExecutionError(RuntimeError):
+    """A tool failed while executing.
+
+    Raised — never returned as text — so the provider submits a rejection
+    and the request records FAILED: models, eval scoring, and retry
+    heuristics see the failure instead of parsing output strings.
+    """
+
 
 
 #!/usr/bin/env python3
@@ -341,10 +352,10 @@ class CreateDirectoryTool(BaseTool):
             if success:
                 return f"Directory created successfully: {dir_path}"
             else:
-                return f"Failed to create directory: {dir_path}"
+                raise ToolExecutionError(f"Failed to create directory: {dir_path}")
 
         except Exception as e:
-            return f"Error creating directory: {str(e)}"
+            raise ToolExecutionError(f"Error creating directory: {str(e)}")
 
 
 class WriteFileTool(BaseTool):
@@ -387,10 +398,10 @@ class WriteFileTool(BaseTool):
             if success:
                 return f"File created successfully: {file_path}"
             else:
-                return f"Failed to create file: {file_path}"
+                raise ToolExecutionError(f"Failed to create file: {file_path}")
 
         except Exception as e:
-            return f"Error creating file: {str(e)}"
+            raise ToolExecutionError(f"Error creating file: {str(e)}")
 
 
 class FileSearchTool(BaseTool):
@@ -450,7 +461,7 @@ class FileSearchTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error searching files: {str(e)}"
+            raise ToolExecutionError(f"Error searching files: {str(e)}")
 
 
 class GrepSearchTool(BaseTool):
@@ -524,7 +535,7 @@ class GrepSearchTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error searching with grep: {str(e)}"
+            raise ToolExecutionError(f"Error searching with grep: {str(e)}")
 
 
 class ListDirTool(BaseTool):
@@ -598,7 +609,7 @@ class ListDirTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error listing directory: {str(e)}"
+            raise ToolExecutionError(f"Error listing directory: {str(e)}")
 
 
 class ReadFileTool(BaseTool):
@@ -641,7 +652,7 @@ class ReadFileTool(BaseTool):
             )
 
             if not result["success"]:
-                return f"Error: {result['error']}"
+                raise ToolExecutionError(f"Error: {result['error']}")
 
             # Format output
             output = []
@@ -673,7 +684,7 @@ class ReadFileTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error reading file: {str(e)}"
+            raise ToolExecutionError(f"Error reading file: {str(e)}")
 
 
 class ReplaceStringTool(BaseTool):
@@ -716,7 +727,7 @@ class ReplaceStringTool(BaseTool):
             )
 
             if not result["success"]:
-                return f"Error: {result['error']}"
+                raise ToolExecutionError(f"Error: {result['error']}")
 
             output = [result["message"]]
 
@@ -735,7 +746,7 @@ class ReplaceStringTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error replacing string: {str(e)}"
+            raise ToolExecutionError(f"Error replacing string: {str(e)}")
 
 
 class SemanticSearchTool(BaseTool):
@@ -803,7 +814,7 @@ class SemanticSearchTool(BaseTool):
             return "\n".join(output)
 
         except Exception as e:
-            return f"Error performing semantic search: {str(e)}"
+            raise ToolExecutionError(f"Error performing semantic search: {str(e)}")
 
 
 def search_directory_for_term(search_term: str, directory: str = "."):
@@ -811,7 +822,7 @@ def search_directory_for_term(search_term: str, directory: str = "."):
     import os
 
     if not os.path.isdir(directory):
-        return f"Directory {directory} not found"
+        raise ToolExecutionError(f"Directory {directory} not found")
 
     directory = os.path.realpath(directory)
     matches = {}
@@ -967,7 +978,7 @@ class FileEditorTool(BaseTool):
                 sys.stdout = old_stdout
 
         except Exception as e:
-            return f"Error running file editor: {str(e)}"
+            raise ToolExecutionError(f"Error running file editor: {str(e)}")
 
 
 class SearchTool(BaseTool):
@@ -1008,7 +1019,7 @@ class SearchTool(BaseTool):
                 sys.stdout = old_stdout
 
         except Exception as e:
-            return f"Error running search: {str(e)}"
+            raise ToolExecutionError(f"Error running search: {str(e)}")
 
 
 class SearchDirTool(BaseTool):
@@ -1043,7 +1054,7 @@ class SearchDirTool(BaseTool):
         try:
             return search_directory_for_term(search_term, directory)
         except Exception as e:
-            return f"Error running search_dir: {str(e)}"
+            raise ToolExecutionError(f"Error running search_dir: {str(e)}")
 
 
 class BashInput(BaseModel):
@@ -1075,12 +1086,15 @@ class BashTool(BaseTool):
             result = run_command(command)
 
             if result.returncode != 0:
+                # A nonzero exit is a tool failure: raise so the provider
+                # submits a rejection and the durable record says FAILED,
+                # keeping the captured output in the message for the model.
                 output = "Error executing command:\n"
                 output += "[STDOUT]\n"
                 output += result.stdout.strip() + "\n"
                 output += "[STDERR]\n"
                 output += result.stderr.strip()
-                return output
+                raise ToolExecutionError(output)
 
             output = "[STDOUT]\n"
             output += result.stdout.strip() + "\n"
@@ -1088,8 +1102,10 @@ class BashTool(BaseTool):
             output += result.stderr.strip()
             return output
 
+        except ToolExecutionError:
+            raise
         except Exception as e:
-            return f"Error running bash command: {str(e)}"
+            raise ToolExecutionError(f"Error running bash command: {e}")
 
 
 class FinishTool(BaseTool):
@@ -1125,7 +1141,7 @@ class FinishTool(BaseTool):
                 sys.stdout = old_stdout
 
         except Exception as e:
-            return f"Error running finish: {str(e)}"
+            raise ToolExecutionError(f"Error running finish: {str(e)}")
 
 
 class SubmitTool(BaseTool):
@@ -1160,7 +1176,7 @@ class SubmitTool(BaseTool):
                 sys.stdout = old_stdout
 
         except Exception as e:
-            return f"Error running submit: {str(e)}"
+            raise ToolExecutionError(f"Error running submit: {str(e)}")
 
 
 def get_swe_toolkit() -> List[BaseTool]:

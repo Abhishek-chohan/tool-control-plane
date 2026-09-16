@@ -75,6 +75,9 @@ class McpConformanceAdapter:
     def register_unary_echo_tool(self, session_id: str, tool_name: str, description: str):
         self._management.register_unary_echo_tool(session_id, tool_name, description)
 
+    def register_failing_tool(self, session_id: str, tool_name: str, description: str):
+        self._management.register_failing_tool(session_id, tool_name, description)
+
     def register_stream_tool(self, session_id: str, tool_name: str, description: str):
         self._management.register_stream_tool(session_id, tool_name, description)
 
