@@ -708,6 +708,29 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                         transport,
                     )
 
+            # Registration ownership contract: same-machine re-register is
+            # an upsert that preserves the tool ID; a rival live machine
+            # registering the same name gets the ownership conflict.
+            if expected.get("reregister_preserves_tool_id", False):
+                adapter.register_unary_echo_tool(
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    description=str(
+                        request.get("tool_description", "conformance tool discovery tool")
+                    ),
+                )
+                reregistered = adapter.get_tool_by_name(session_id, tool_name)
+                assert_tool_field_equals(
+                    reregistered, "id", tool_id, case_id, transport
+                )
+            if "rival_register_error_code" in expected:
+                rival = adapter.register_tool_from_second_machine(
+                    session_id, tool_name, "rival registration"
+                )
+                assert_error_code_equals(
+                    rival, expected["rival_register_error_code"], case_id, transport
+                )
+
             deleted = adapter.delete_tool(session_id, tool_id)
             if expected.get("delete_success", False):
                 assert_success_true(deleted, "tool delete result", case_id, transport)

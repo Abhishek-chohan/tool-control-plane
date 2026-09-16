@@ -49,6 +49,19 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **RegisterTool error contract**: tool registration is an upsert —
+  same-machine re-register and stale-owner takeover return `OK` with the
+  tool ID preserved — and the one real conflict (a name owned by another
+  live machine) now surfaces as `FAILED_PRECONDITION` naming the owner,
+  never `ALREADY_EXISTS`. The old handler catch-all mislabeled *every*
+  failure (Postgres outage, deadline) as `ALREADY_EXISTS`; failures now
+  keep their real codes, with `DEADLINE_EXCEEDED` added to the taxonomy
+  for persistence deadlines. Both storage modes share one sentinel, two
+  memory-store divergences from the Postgres claim were fixed, and
+  Python's reconnect walk no longer string-match-swallows registration
+  failures (conflicts log as warnings). See
+  `server/docs/release-notes/2026-09-16-register-tool-error-contract.md`.
+
 - **Backlog cap enforced durably across replicas**: the per-session
   pending-request ceiling (512) is now counted and enforced inside the
   store's insert transaction on both backends — previously the check ran

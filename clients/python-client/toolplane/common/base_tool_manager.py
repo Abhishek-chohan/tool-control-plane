@@ -313,8 +313,10 @@ class BaseToolManager(ABC):
                     session_id, machine_id, tool_name, schema
                 )
             except Exception as exc:
-                if "ALREADY_EXISTS" in str(exc).upper():
-                    continue
+                # Registration is an upsert: same-machine re-register never
+                # conflicts, so every failure here is real (including a name
+                # owned by another live machine, which the server reports as
+                # FAILED_PRECONDITION) and surfaces as a warning.
                 logger.warning(
                     "Failed to re-register tool %s for session %s: %s",
                     tool_name,
