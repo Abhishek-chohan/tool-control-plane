@@ -5,6 +5,13 @@
 # values above it with OUT_OF_RANGE / TIMEOUT_ABOVE_MAX.
 WAIT_TIMEOUT_MAX_SECONDS = 3600
 
+# gRPC message-size ladder, sized from the server's chunk limits: replay
+# window reads (8 MiB) and chunk batch writes (16 MiB) plus envelope
+# headroom. The gRPC defaults (4 MiB receive) reject a full window read at
+# the client before it reaches application code.
+GRPC_MAX_RECEIVE_MESSAGE_LENGTH = 9 * 1024 * 1024
+GRPC_MAX_SEND_MESSAGE_LENGTH = 17 * 1024 * 1024
+
 # Default configuration values
 DEFAULT_HEARTBEAT_INTERVAL = 60
 DEFAULT_MAX_WORKERS = 10

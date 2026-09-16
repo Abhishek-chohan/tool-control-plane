@@ -49,6 +49,22 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **A full replay window is readable everywhere**: the server retains an
+  8 MiB chunk window, but both gateways and every SDK default capped
+  messages at 4 MiB — stored chunk data was unreadable through any
+  mediated path, and the Python client silently swallowed the chunk-read
+  failure. The gateways' `max-msg-size` default is now sized from the
+  ladder (16 MiB batch + headroom), all three SDKs set explicit receive
+  (9 MiB) / send (17 MiB) channel limits, `AppendRequestChunks` rejects
+  over-ceiling batch totals with a clear `INVALID_ARGUMENT` (an
+  exactly-full 16 MiB batch was always over the wire limit once the
+  envelope rode on top — the old "a full max-size batch fits" comment
+  was wrong), and Python surfaces chunk-read failures
+  (`streamResultsError`) instead of dropping `streamResults`. A new
+  `request_recovery_full_window` conformance fixture proves the ladder
+  end to end. See
+  `server/docs/release-notes/2026-09-16-message-size-ladder.md`.
+
 - **wait_timeout_seconds gets a ceiling (3600s)**: the server-side
   long-poll on ExecuteTool/InvokeTool had no bound — an unclaimed PENDING
   request is immortal, so an over-max wait could pin an RPC forever.

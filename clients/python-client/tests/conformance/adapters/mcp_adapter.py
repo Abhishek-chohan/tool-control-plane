@@ -88,6 +88,9 @@ class McpConformanceAdapter:
     def register_stream_tool(self, session_id: str, tool_name: str, description: str):
         self._management.register_stream_tool(session_id, tool_name, description)
 
+    def register_sized_stream_tool(self, session_id: str, tool_name: str, description: str):
+        self._management.register_sized_stream_tool(session_id, tool_name, description)
+
     def get_tool_by_id(self, session_id: str, tool_id: str) -> Dict[str, Any]:
         return self._management.get_tool_by_id(session_id, tool_id)
 

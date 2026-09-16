@@ -184,6 +184,14 @@ func dialGRPCWithCredentials(ctx context.Context, address string, transportCrede
 	conn, err := grpc.NewClient(
 		address,
 		grpc.WithTransportCredentials(transportCredentials),
+		// Sized from the server's chunk ladder: replay-window reads
+		// (8 MiB) and chunk-batch writes (16 MiB) plus envelope headroom.
+		// The gRPC default (4 MiB receive) rejects a full window read at
+		// the client before it reaches application code.
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(9<<20),
+			grpc.MaxCallSendMsgSize(17<<20),
+		),
 	)
 	if err != nil {
 		return nil, err

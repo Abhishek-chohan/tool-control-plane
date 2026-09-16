@@ -154,11 +154,18 @@ def _execute_request_recovery_case(
     transport: str,
 ) -> None:
     tool_name = request["tool_name"]
-    adapter.register_stream_tool(
-        session_id=session_id,
-        tool_name=tool_name,
-        description=request.get("tool_description", "conformance request recovery tool"),
-    )
+    if request.get("sized_chunks", False):
+        adapter.register_sized_stream_tool(
+            session_id=session_id,
+            tool_name=tool_name,
+            description=request.get("tool_description", "conformance request recovery tool"),
+        )
+    else:
+        adapter.register_stream_tool(
+            session_id=session_id,
+            tool_name=tool_name,
+            description=request.get("tool_description", "conformance request recovery tool"),
+        )
 
     request_id = adapter.start_streaming_request(
         session_id, tool_name, request.get("params", {})
@@ -194,6 +201,21 @@ def _execute_request_recovery_case(
         assert_chunk_window_length(
             chunk_window, _number_value(expected["chunk_count_equals"], 0), case_id, transport
         )
+    if "chunk_bytes_equals" in expected:
+        want_bytes = _number_value(expected["chunk_bytes_equals"], 0)
+        for index, chunk in enumerate(chunk_window.get("chunks", [])):
+            if len(str(chunk)) != want_bytes:
+                raise AssertionError(
+                    f"[{transport}] {case_id}: chunk {index} is {len(str(chunk))} bytes, want {want_bytes}"
+                )
+    if "window_bytes_at_least" in expected:
+        total = sum(len(str(chunk)) for chunk in chunk_window.get("chunks", []))
+        want_total = _number_value(expected["window_bytes_at_least"], 0)
+        if total < want_total:
+            raise AssertionError(
+                f"[{transport}] {case_id}: window carries {total} bytes, want at least {want_total} "
+                "(the message-size ladder must carry a full window in one response)"
+            )
     if "start_seq_equals" in expected:
         assert_chunk_window_field_equals(
             chunk_window, "startSeq", expected["start_seq_equals"], case_id, transport

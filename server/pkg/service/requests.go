@@ -1215,11 +1215,20 @@ func (s *RequestsService) AppendRequestChunks(
 	resultType model.ResultType,
 ) error {
 	// Payload bound: reject oversized chunks before touching state so a
-	// provider cannot park unbounded bytes in the retained window.
+	// provider cannot park unbounded bytes in the retained window. The
+	// batch-total bound keeps the summed payload under the transport
+	// ceiling minus envelope headroom — an over-limit batch gets a clear
+	// INVALID_ARGUMENT here instead of a transport ResourceExhausted on
+	// the wire.
+	batchTotal := 0
 	for _, chunk := range chunks {
 		if len(chunk) > model.MaxRequestChunkBytes {
 			return wrapf(ErrInvalidArgument, "chunk %d bytes exceeds the %d byte limit", len(chunk), model.MaxRequestChunkBytes)
 		}
+		batchTotal += len(chunk)
+	}
+	if batchTotal > model.MaxChunkBatchPayloadBytes {
+		return wrapf(ErrInvalidArgument, "chunk batch total %d bytes exceeds the %d byte limit", batchTotal, model.MaxChunkBatchPayloadBytes)
 	}
 
 	// Store-first: see SubmitRequestResult — the store write runs without the

@@ -13,6 +13,10 @@ def _ensure_python_client_on_path() -> None:
 
 _ensure_python_client_on_path()
 
+from toolplane.common.constants import (
+    GRPC_MAX_RECEIVE_MESSAGE_LENGTH,
+    GRPC_MAX_SEND_MESSAGE_LENGTH,
+)
 from toolplane.core.config import ClientConfig
 from toolplane.core.connection import ToolplaneConnectionError, ConnectionManager
 
@@ -22,7 +26,9 @@ class _FakeChannel:
         return None
 
 
-def test_connection_manager_uses_secure_channel_when_tls_is_enabled(monkeypatch, tmp_path):
+def test_connection_manager_uses_secure_channel_when_tls_is_enabled(
+    monkeypatch, tmp_path
+):
     ca_path = tmp_path / "ca.crt"
     ca_path.write_text("dummy-ca", encoding="utf-8")
 
@@ -34,7 +40,9 @@ def test_connection_manager_uses_secure_channel_when_tls_is_enabled(monkeypatch,
         captured["options"] = options
         return _FakeChannel()
 
-    monkeypatch.setattr("toolplane.core.connection.grpc.secure_channel", fake_secure_channel)
+    monkeypatch.setattr(
+        "toolplane.core.connection.grpc.secure_channel", fake_secure_channel
+    )
     monkeypatch.setattr(
         "toolplane.core.connection.grpc.ssl_channel_credentials",
         lambda **kwargs: kwargs,
@@ -56,6 +64,8 @@ def test_connection_manager_uses_secure_channel_when_tls_is_enabled(monkeypatch,
     assert captured["target"] == "localhost:9001"
     assert captured["credentials"]["root_certificates"] == b"dummy-ca"
     assert captured["options"] == [
+        ("grpc.max_receive_message_length", GRPC_MAX_RECEIVE_MESSAGE_LENGTH),
+        ("grpc.max_send_message_length", GRPC_MAX_SEND_MESSAGE_LENGTH),
         ("grpc.ssl_target_name_override", "server"),
         ("grpc.default_authority", "server"),
     ]
@@ -69,7 +79,9 @@ def test_connection_manager_uses_insecure_channel_when_tls_is_disabled(monkeypat
         captured["options"] = options
         return _FakeChannel()
 
-    monkeypatch.setattr("toolplane.core.connection.grpc.insecure_channel", fake_insecure_channel)
+    monkeypatch.setattr(
+        "toolplane.core.connection.grpc.insecure_channel", fake_insecure_channel
+    )
 
     manager = ConnectionManager(ClientConfig(server_host="localhost", server_port=9001))
 
@@ -77,7 +89,10 @@ def test_connection_manager_uses_insecure_channel_when_tls_is_disabled(monkeypat
 
     assert isinstance(channel, _FakeChannel)
     assert captured["target"] == "localhost:9001"
-    assert captured["options"] == []
+    assert captured["options"] == [
+        ("grpc.max_receive_message_length", GRPC_MAX_RECEIVE_MESSAGE_LENGTH),
+        ("grpc.max_send_message_length", GRPC_MAX_SEND_MESSAGE_LENGTH),
+    ]
 
 
 def test_connection_manager_rejects_partial_client_tls_identity(tmp_path):
@@ -96,7 +111,10 @@ def test_connection_manager_rejects_partial_client_tls_identity(tmp_path):
     try:
         manager._create_channel("localhost:9001")
     except ToolplaneConnectionError as exc:
-        assert str(exc) == "TLS client authentication requires both certificate and key files"
+        assert (
+            str(exc)
+            == "TLS client authentication requires both certificate and key files"
+        )
         return
 
     raise AssertionError("expected partial client TLS identity to fail")
