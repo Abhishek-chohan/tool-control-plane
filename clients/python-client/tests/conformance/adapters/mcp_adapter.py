@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .http_adapter import HttpConformanceAdapter
 
-
 PROTOCOL_VERSION = "2026-07-28"
 TASKS_EXTENSION_ID = "io.modelcontextprotocol/tasks"
 SESSION_META_KEY = "dev.toolplane/session_id"

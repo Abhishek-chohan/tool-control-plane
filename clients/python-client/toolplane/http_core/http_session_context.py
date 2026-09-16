@@ -129,7 +129,8 @@ class HTTPSessionContext:
             deadline = time.monotonic() + wait_for
 
             transport_budget = max(
-                5, int(getattr(self.connection_manager.config, "request_timeout", 30)) - 5
+                5,
+                int(getattr(self.connection_manager.config, "request_timeout", 30)) - 5,
             )
             http_wait = min(wait_for, transport_budget)
 
@@ -150,9 +151,7 @@ class HTTPSessionContext:
                     f"Request was cancelled (request_id={request_id})"
                 )
             if terminal_status == "failed":
-                raise ToolplaneError(
-                    f"Tool execution failed (request_id={request_id})"
-                )
+                raise ToolplaneError(f"Tool execution failed (request_id={request_id})")
             remaining = max(1, int(deadline - time.monotonic()))
             return self._wait_for_completion(request_id, timeout=remaining)
 

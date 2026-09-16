@@ -131,9 +131,7 @@ class SessionContext:
                     f"Request was cancelled (request_id={request_id})"
                 )
             if terminal_status == "failed":
-                raise ToolplaneError(
-                    f"Tool execution failed (request_id={request_id})"
-                )
+                raise ToolplaneError(f"Tool execution failed (request_id={request_id})")
 
             # Still in flight after the server-side wait: poll for the
             # remaining budget only, so the documented cap is a total.

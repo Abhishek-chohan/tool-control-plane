@@ -1,5 +1,5 @@
-import time
 import json
+import time
 from typing import Any, Dict, List, Tuple
 
 import grpc
