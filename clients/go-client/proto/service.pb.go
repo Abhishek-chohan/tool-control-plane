@@ -3077,8 +3077,13 @@ type ExecuteToolRequest struct {
 	IdempotencyKey string `protobuf:"bytes,5,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
 	// Optional server-side wait: when positive, the RPC blocks until the
 	// request reaches a terminal state (returning its result/error) or this
-	// many seconds elapse (returning the current PENDING state). The wait
+	// many seconds elapse (returning the current in-flight state). The wait
 	// never cancels the request. Zero keeps fire-and-forget semantics.
+	// Values above the server maximum (3600s, the same ceiling as
+	// timeout_seconds) are rejected with OUT_OF_RANGE / TIMEOUT_ABOVE_MAX
+	// before anything is created. Ingress paths may apply tighter transport
+	// budgets of their own (the HTTP gateway bounds non-wait calls; the MCP
+	// gateway applies its sync timeout).
 	WaitTimeoutSeconds int32 `protobuf:"varint,6,opt,name=wait_timeout_seconds,json=waitTimeoutSeconds,proto3" json:"wait_timeout_seconds,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache

@@ -17,6 +17,7 @@ from ..core.errors import (
     ToolplaneTimeoutError,
     normalize_status_name,
 )
+from ..core.session_context import derive_wait_for
 from .http_connection import HTTPConnectionManager
 from .http_machine import HTTPMachineManager
 from .http_request import HTTPRequestManager
@@ -120,11 +121,9 @@ class HTTPSessionContext:
             # must complete inside the transport deadline — a wait that
             # outlives it times out, gets retried, and duplicates the
             # invocation — so the long-poll is clamped to the transport
-            # budget and the local poller covers the remainder.
-            if wait_timeout is None:
-                wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
-            else:
-                wait_for = wait_timeout
+            # budget and the local poller covers the remainder. The shared
+            # derivation clamps derived waits to the server's wait ceiling.
+            wait_for = derive_wait_for(timeout_seconds, wait_timeout)
 
             deadline = time.monotonic() + wait_for
 

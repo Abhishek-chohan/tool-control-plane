@@ -49,6 +49,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **wait_timeout_seconds gets a ceiling (3600s)**: the server-side
+  long-poll on ExecuteTool/InvokeTool had no bound — an unclaimed PENDING
+  request is immortal, so an over-max wait could pin an RPC forever.
+  Values above 3600s (the timeout_seconds ceiling) are now rejected with
+  `OUT_OF_RANGE` / `TIMEOUT_ABOVE_MAX` before anything is created. The
+  Python SDK clamps its derived wait (`timeout_seconds + 15`) to the
+  ceiling; explicit waits pass through and surface the rejection. The
+  proto field comment documents the max and the per-ingress transport
+  budgets. See
+  `server/docs/release-notes/2026-09-16-wait-timeout-ceiling.md`.
+
 - **Cancelled requests wake their waiters**: `WaitForRequestTerminal`
   handled done/failed/stalled only, so a third-party `CancelRequest`
   (gRPC, MCP `notifications/cancelled`, `tasks/cancel`) left the waiter

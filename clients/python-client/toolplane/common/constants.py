@@ -1,5 +1,10 @@
 """Constants used across Toolplane client implementations."""
 
+# Server-side ceiling for wait_timeout_seconds on the synchronous execution
+# entrypoints (the same ceiling as timeout_seconds). The server rejects
+# values above it with OUT_OF_RANGE / TIMEOUT_ABOVE_MAX.
+WAIT_TIMEOUT_MAX_SECONDS = 3600
+
 # Default configuration values
 DEFAULT_HEARTBEAT_INTERVAL = 60
 DEFAULT_MAX_WORKERS = 10
