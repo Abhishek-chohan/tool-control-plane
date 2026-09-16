@@ -8,6 +8,14 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **Task results as durable JSON**: completed tasks record and serve their
+  result as the JSON encoding of the tool's return value — identical bytes
+  to the synchronous InvokeTool long-poll — instead of Go's `%v` rendering,
+  which corrupted structured results in `tasks.result` (`{"a":1}` landed as
+  `map[a:1]`). String results now carry their JSON encoding, matching what
+  provider SDKs submit. See
+  `server/docs/release-notes/2026-09-16-task-result-json.md`.
+
 - **Failure fidelity end to end (SWE toolkit)**: toolkit wrappers raise on
   failure — including nonzero command exits — instead of returning error
   text. Provider submissions now record FAILED with the failure message,

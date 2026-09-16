@@ -1578,95 +1578,6 @@ func (s *RequestsService) reclaimExpired(req *model.Request, now time.Time) (*mo
 	return reclaimed, true, nil
 }
 
-// ExecuteTool executes a tool on a specific machine
-func (s *RequestsService) ExecuteTool(sessionID, machineID, toolName, input string) (*model.ToolResult, error) {
-	// Create a new request with the default absolute timeout.
-	request, err := s.CreateRequest(sessionID, toolName, input, 0, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
-	}
-
-	return s.ExecuteRequest(context.Background(), sessionID, machineID, request.ID)
-}
-
-// ExecuteRequest claims and runs an existing request until it reaches a terminal state or the context is cancelled.
-func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machineID, requestID string) (*model.ToolResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		timeoutCtx, cancel := context.WithTimeout(ctx, requestTimeout)
-		defer cancel()
-		ctx = timeoutCtx
-	}
-
-	if err := ctx.Err(); err != nil {
-		_ = s.CancelRequest(sessionID, requestID)
-		return nil, err
-	}
-
-	// Claim the request for the specified machine
-	claimed, err := s.ClaimRequest(sessionID, requestID, machineID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to claim request: %v", err)
-	}
-
-	// Update request status to running, presenting the lease grant from the
-	// claim so the fenced write is accepted.
-	_, err = s.UpdateRequest(sessionID, requestID, machineID, claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to update request status: %v", err)
-	}
-
-	watch := s.subscribeRequest(requestID)
-	poll := time.NewTicker(waitPollInterval)
-	defer poll.Stop()
-
-	for {
-		req, err := s.GetRequestByID(sessionID, requestID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get request: %v", err)
-		}
-
-		switch req.Status {
-		case model.RequestStatusDone:
-			s.releaseRequestSignal(req.ID)
-			return &model.ToolResult{
-				RequestID:  req.ID,
-				Result:     fmt.Sprintf("%v", req.Result),
-				ResultType: string(req.ResultType),
-			}, nil
-		case model.RequestStatusFailed:
-			s.releaseRequestSignal(req.ID)
-			if req.Error != "" {
-				return nil, fmt.Errorf("tool execution failed: %s", req.Error)
-			}
-			return nil, fmt.Errorf("tool execution failed")
-		case model.RequestStatusStalled:
-			return nil, fmt.Errorf("tool execution stalled")
-		}
-
-		select {
-		case <-watch:
-			watch = s.subscribeRequest(requestID)
-		case <-poll.C:
-			// Cross-instance fallback: a provider on another replica completes
-			// the request without any local signal; the store-first read in
-			// GetRequestByID observes it on this ticker.
-			watch = s.subscribeRequest(requestID)
-		case <-ctx.Done():
-			// The caller (task attempt deadline, lease loss, shutdown) is
-			// walking away: durably cancel the request so it does not keep
-			// executing after the caller was told the wait ended.
-			if err := s.CancelRequest(sessionID, requestID); err != nil {
-				log.Printf("request %s: cancel on waiter deadline failed: %v", requestID, err)
-			}
-			return nil, ctx.Err()
-		}
-	}
-}
-
 // WaitForRequestState waits (without ever cancelling) until the request
 // reaches a terminal state and returns its snapshot. The InvokeTool
 // long-poll uses it: a server-side wait timeout must return the request
@@ -1743,7 +1654,7 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 			s.releaseRequestSignal(req.ID)
 			return &model.ToolResult{
 				RequestID:  req.ID,
-				Result:     fmt.Sprintf("%v", req.Result),
+				Result:     marshalExecuteToolResult(req.Result),
 				ResultType: string(req.ResultType),
 			}, nil
 		case model.RequestStatusFailed:
