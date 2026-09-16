@@ -1667,6 +1667,46 @@ func (s *RequestsService) ExecuteRequest(ctx context.Context, sessionID, machine
 	}
 }
 
+// WaitForRequestState waits (without ever cancelling) until the request
+// reaches a terminal state and returns its snapshot. The InvokeTool
+// long-poll uses it: a server-side wait timeout must return the request
+// still in flight, never tear the execution down.
+func (s *RequestsService) WaitForRequestState(ctx context.Context, sessionID, requestID string) (*model.Request, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeoutCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		defer cancel()
+		ctx = timeoutCtx
+	}
+
+	watch := s.subscribeRequest(requestID)
+	poll := time.NewTicker(waitPollInterval)
+	defer poll.Stop()
+
+	for {
+		req, readErr := s.waitForRequestState(ctx, sessionID, requestID)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if model.IsTerminalStatus(req.Status) {
+			s.releaseRequestSignal(req.ID)
+			return req, nil
+		}
+
+		select {
+		case <-watch:
+			watch = s.subscribeRequest(requestID)
+		case <-poll.C:
+			watch = s.subscribeRequest(requestID)
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
 // WaitForRequestTerminal waits for an existing request to reach a terminal
 // state without claiming it. Pending requests are executed by provider
 // machines that poll and claim; a synchronous waiter that claimed the request

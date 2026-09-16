@@ -93,6 +93,7 @@ import {
   RegisterToolRequest as RegisterToolMessage,
   RegisterToolResponse as RegisterToolResponseMessage,
   Request as ProtoRequest,
+  Request as RequestMessage,
   RequestStatus,
   Session as ProtoSession,
   SubmitRequestResultRequest as SubmitRequestResultMessage,
@@ -154,6 +155,14 @@ function normalizeRequestStatus(status: number): string {
     default:
       return '';
   }
+}
+
+function isTerminalRequestStatus(status: number): boolean {
+  return (
+    status === RequestStatus.REQUEST_STATUS_DONE ||
+    status === RequestStatus.REQUEST_STATUS_FAILED ||
+    status === RequestStatus.REQUEST_STATUS_CANCELLED
+  );
 }
 
 function requestStatusForWire(status?: string): number {
@@ -1142,21 +1151,49 @@ export class ToolplaneClient {
     request.setToolName(toolName);
     request.setInput(JSON.stringify(params));
     request.setIdempotencyKey(idempotencyKey);
+    // Server-side long-poll: stay inside the client deadline with a small
+    // margin so the call itself never trips it.
+    request.setWaitTimeoutSeconds(Math.max(1, Math.floor(this.timeoutMs / 1000) - 2));
 
     const response = await this.invokeGRPCUnary<ExecuteToolResponseMessage>(
       (metadata, options, callback) => this.toolClient!.invokeTool(request, metadata, options, callback),
       `failed to execute tool ${toolName}`,
     );
 
-    if (response.getError()) {
-      throw new ToolplaneError(`Tool execution failed: ${response.getError()}`);
-    }
-
     const requestId = response.getRequestId();
     if (!requestId) {
       throw new ProtocolError('Tool execution did not return a request ID');
     }
 
+    // Terminal classification runs BEFORE the generic error guard: the
+    // long-poll response carries error text for FAILED/CANCELLED, and
+    // callers need the typed errors (with the request id) they describe.
+    if (isTerminalRequestStatus(response.getStatus())) {
+      if (response.getStatus() === RequestStatus.REQUEST_STATUS_CANCELLED) {
+        throw new CancelledError(`request ${requestId} was cancelled`, { requestId, status: 'cancelled' });
+      }
+      if (response.getStatus() === RequestStatus.REQUEST_STATUS_FAILED) {
+        throw new FailedPreconditionError(
+          response.getError() || `request ${requestId} failed`,
+          { requestId, status: 'failure' },
+        );
+      }
+      // Synthesize the Request model the callers expect from the response.
+      const synthetic = new RequestMessage();
+      synthetic.setId(requestId);
+      synthetic.setStatus(response.getStatus());
+      synthetic.setResult(response.getResult());
+      synthetic.setError(response.getError());
+      return synthetic;
+    }
+
+    // Non-terminal responses never carry an error; keep the guard for
+    // defensive parity with the fire-and-forget contract.
+    if (response.getError()) {
+      throw new ToolplaneError(`Tool execution failed: ${response.getError()}`);
+    }
+
+    // Still in flight: fall back to local polling.
     return this.waitForRequestCompletion(this.getRequiredSessionId('tool execution'), requestId);
   }
 

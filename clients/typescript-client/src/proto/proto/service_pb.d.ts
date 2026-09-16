@@ -1322,6 +1322,8 @@ export class ExecuteToolRequest extends jspb.Message {
     setTimeoutSeconds(value: number): ExecuteToolRequest;
     getIdempotencyKey(): string;
     setIdempotencyKey(value: string): ExecuteToolRequest;
+    getWaitTimeoutSeconds(): number;
+    setWaitTimeoutSeconds(value: number): ExecuteToolRequest;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): ExecuteToolRequest.AsObject;
@@ -1340,6 +1342,7 @@ export namespace ExecuteToolRequest {
         input: string,
         timeoutSeconds: number,
         idempotencyKey: string,
+        waitTimeoutSeconds: number,
     }
 }
 

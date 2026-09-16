@@ -961,7 +961,10 @@ resumeStream: {
     responseSerialize: serialize_api_v1_ExecuteToolChunk,
     responseDeserialize: deserialize_api_v1_ExecuteToolChunk,
   },
-  // InvokeTool is the v1 name for synchronous tool invocation.
+  // InvokeTool is the v1 name for synchronous tool invocation. The call
+// creates the request and, when wait_timeout_seconds is positive, blocks
+// server-side until the request reaches a terminal state (returning
+// result/error) or the wait elapses (returning the in-flight state).
 invokeTool: {
     path: '/api.v1.ToolService/InvokeTool',
     requestStream: false,

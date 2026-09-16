@@ -170,7 +170,10 @@ class ToolServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def InvokeTool(self, request, context):
-        """InvokeTool is the v1 name for synchronous tool invocation.
+        """InvokeTool is the v1 name for synchronous tool invocation. The call
+        creates the request and, when wait_timeout_seconds is positive, blocks
+        server-side until the request reaches a terminal state (returning
+        result/error) or the wait elapses (returning the in-flight state).
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')

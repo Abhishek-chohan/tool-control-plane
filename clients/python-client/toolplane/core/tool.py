@@ -12,7 +12,16 @@ from toolplane.proto.service_pb2 import (
     GetToolByNameRequest,
     ListToolsRequest,
     RegisterToolRequest,
+    RequestStatus,
 )
+
+# Wire enum -> normalized status name; UNSPECIFIED maps to None so an
+# in-flight long-poll return is distinguishable from a terminal one.
+_REQUEST_STATUS_NAMES = {
+    RequestStatus.REQUEST_STATUS_DONE: "done",
+    RequestStatus.REQUEST_STATUS_FAILED: "failed",
+    RequestStatus.REQUEST_STATUS_CANCELLED: "cancelled",
+}
 
 from ..common.base_tool_manager import BaseToolManager
 from ..common.utils import parse_json_safe, timestamp_to_iso
@@ -217,8 +226,17 @@ class ToolManager(BaseToolManager):
         params: Dict,
         idempotency_key: str = "",
         timeout_seconds: int = 0,
-    ) -> str:
-        """Execute tool on server."""
+        wait_timeout_seconds: int = 0,
+    ):
+        """Execute tool on server.
+
+        Returns ``(request_id, terminal_status, result)`` where
+        ``terminal_status`` is the normalized status name when the
+        server-side long-poll (a positive ``wait_timeout_seconds``) observed
+        a terminal state (``result`` carries the parsed result value for a
+        successful run), and both are ``None`` when the request is still in
+        flight.
+        """
         try:
             self.connection_manager.ensure_connected()
 
@@ -228,16 +246,34 @@ class ToolManager(BaseToolManager):
                 input=json.dumps(params),
                 idempotency_key=idempotency_key,
                 timeout_seconds=timeout_seconds,
+                wait_timeout_seconds=wait_timeout_seconds,
             )
 
             response = self.connection_manager.tool_stub.InvokeTool(
                 request, metadata=self.connection_manager.get_metadata()
             )
 
+            # Classify the terminal status BEFORE the generic error check:
+            # server-side FAILED/CANCELLED long-poll responses carry an
+            # error, and callers need the typed tuple (with the request id)
+            # rather than a generic ToolError.
+            status_name = _REQUEST_STATUS_NAMES.get(response.status)
+            if wait_timeout_seconds > 0 and status_name in (
+                "done",
+                "failed",
+                "cancelled",
+            ):
+                result_value = None
+                if status_name == "done" and response.result:
+                    try:
+                        result_value = json.loads(response.result)
+                    except (TypeError, ValueError):
+                        result_value = response.result
+                return response.request_id, status_name, result_value
+
             if response.error:
                 raise ToolError(f"Tool execution failed: {response.error}")
-
-            return response.request_id
+            return response.request_id, None, None
 
         except grpc.RpcError as rpc_error:
             self._handle_rpc_error(rpc_error)
