@@ -8,6 +8,39 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **Failure fidelity end to end (SWE toolkit)**: toolkit wrappers raise on
+  failure — including nonzero command exits — instead of returning error
+  text. Provider submissions now record FAILED with the failure message,
+  and MCP clients see `isError: true`, so retry heuristics and eval
+  scoring read the failure from the status rather than parsing output.
+  See `server/docs/release-notes/2026-09-16-tool-failure-fidelity.md`.
+
+- **MCP edge as a durable client**: tools/call derives a request
+  idempotency key from the JSON-RPC id (identical retries dedup instead
+  of double-executing), `_meta.dev.toolplane/timeout_seconds` forwards a
+  per-call execution timeout, `notifications/cancelled` fences the
+  executing request (scoped to the authenticated caller), and sync tool
+  results render their content exactly once with a 256 KiB cap. See
+  `server/docs/release-notes/2026-09-16-mcp-durable-knobs.md`.
+
+- **Typed errors on the wire**: cancellation is the first-class
+  `REQUEST_STATUS_CANCELLED` status (plus a legacy error-string
+  fallback), and failures carry stable machine-readable reasons as
+  google.rpc.ErrorInfo details (`TIMEOUT_ABOVE_MAX`,
+  `REPLAY_WINDOW_EXPIRED`, `CAPACITY_EXHAUSTED`, `SESSION_BACKLOG_FULL`)
+  with RetryInfo on capacity rejections. The Go client exposes the
+  reason on errors; Python raises `ToolplaneCancelledError` for
+  cancelled requests; TypeScript maps cancellation to `CancelledError`.
+  See `server/docs/release-notes/2026-09-15-typed-errors-and-cancelled-status.md`.
+
+- **Synchronous InvokeTool**: `ExecuteToolRequest.wait_timeout_seconds`
+  makes InvokeTool block server-side until the request is terminal —
+  returning result/error for the first time — or return the in-flight
+  state on wait expiry without cancelling the work. SDKs send the wait
+  and keep local polling only as the in-flight fallback.
+
+### Changed (earlier)
+
 - **SDK timeout cliff closed (Python)**: `invoke`/`stream`/`ainvoke`/
   `astream` accept `timeout_seconds`, wired through to the request's
   absolute per-attempt timeout on the wire. `invoke` now returns the
