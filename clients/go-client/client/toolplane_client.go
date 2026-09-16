@@ -386,28 +386,22 @@ func (c *ToolplaneClient) executeToolGRPC(ctx context.Context, toolName string, 
 		return nil, fmt.Errorf("tool execution did not return a request ID")
 	}
 
-	// Terminal inside the wait budget: use the response directly.
+	// Terminal inside the wait budget: fetch the full request so the
+	// returned model carries the same metadata the polling path provides.
 	switch response.Status {
-	case pb.RequestStatus_REQUEST_STATUS_DONE:
-		return &pb.Request{
-			Id:     response.RequestId,
-			Status: pb.RequestStatus_REQUEST_STATUS_DONE,
-			Result: response.Result,
-		}, nil
-	case pb.RequestStatus_REQUEST_STATUS_CANCELLED:
-		return nil, &Error{
-			Op:        "execute tool",
-			RequestID: response.RequestId,
-			Code:      codes.Canceled,
-			Message:   "tool execution was cancelled",
+	case pb.RequestStatus_REQUEST_STATUS_DONE,
+		pb.RequestStatus_REQUEST_STATUS_CANCELLED,
+		pb.RequestStatus_REQUEST_STATUS_FAILED:
+		requestCtx, requestCancel := c.grpcContext(ctx, defaultGRPCCallTimeout)
+		defer requestCancel()
+		full, err := c.requestsClient.GetRequest(requestCtx, &pb.GetRequestRequest{
+			SessionId: c.sessionID,
+			RequestId: response.RequestId,
+		})
+		if err != nil {
+			return nil, FromGRPC("fetch request", response.RequestId, err)
 		}
-	case pb.RequestStatus_REQUEST_STATUS_FAILED:
-		return nil, &Error{
-			Op:        "execute tool",
-			RequestID: response.RequestId,
-			Code:      codes.Internal,
-			Message:   response.Error,
-		}
+		return full, nil
 	}
 
 	// Still in flight: fall back to local polling.

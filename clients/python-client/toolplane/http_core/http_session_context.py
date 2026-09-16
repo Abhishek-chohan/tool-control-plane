@@ -116,18 +116,29 @@ class HTTPSessionContext:
         after wait_timeout seconds (default: timeout_seconds + 15, else 60).
         """
         try:
-            # Wait budget: also drives the server-side long-poll.
+            # Wait budget: also drives the server-side long-poll. The POST
+            # must complete inside the transport deadline — a wait that
+            # outlives it times out, gets retried, and duplicates the
+            # invocation — so the long-poll is clamped to the transport
+            # budget and the local poller covers the remainder.
             if wait_timeout is None:
                 wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
             else:
                 wait_for = wait_timeout
+
+            deadline = time.monotonic() + wait_for
+
+            transport_budget = max(
+                5, int(getattr(self.connection_manager.config, "request_timeout", 30)) - 5
+            )
+            http_wait = min(wait_for, transport_budget)
 
             request_id, terminal_status, result = self.tool_manager.execute_tool(
                 self.session_id,
                 tool_name,
                 params,
                 timeout_seconds=timeout_seconds,
-                wait_timeout_seconds=wait_for,
+                wait_timeout_seconds=http_wait,
             )
 
             # Poll for completion; the HTTP wait already returns the unwrapped
@@ -142,7 +153,8 @@ class HTTPSessionContext:
                 raise ToolplaneError(
                     f"Tool execution failed (request_id={request_id})"
                 )
-            return self._wait_for_completion(request_id, timeout=wait_for)
+            remaining = max(1, int(deadline - time.monotonic()))
+            return self._wait_for_completion(request_id, timeout=remaining)
 
         except ToolplaneTimeoutError:
             raise

@@ -295,9 +295,10 @@ class HTTPToolManager(BaseToolManager):
                 wait_timeout_seconds=wait_timeout_seconds,
             )
 
-            if response.get("error"):
-                raise ToolError(f"Tool execution failed: {response.get('error')}")
-
+            # Classify the terminal status BEFORE the generic error check:
+            # server-side FAILED/CANCELLED long-poll responses carry an
+            # error, and callers need the typed tuple (with the request id)
+            # rather than a generic ToolError.
             status_name = _RESPONSE_STATUS_NAMES.get(
                 str(response.get("status", "")).lower()
             )
@@ -317,6 +318,9 @@ class HTTPToolManager(BaseToolManager):
                     else:
                         result_value = raw
                 return response.get("requestId"), status_name, result_value
+
+            if response.get("error"):
+                raise ToolError(f"Tool execution failed: {response.get('error')}")
             return response.get("requestId"), None, None
 
         except ToolplaneAPIError:

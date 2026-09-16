@@ -1160,16 +1160,14 @@ export class ToolplaneClient {
       `failed to execute tool ${toolName}`,
     );
 
-    if (response.getError()) {
-      throw new ToolplaneError(`Tool execution failed: ${response.getError()}`);
-    }
-
     const requestId = response.getRequestId();
     if (!requestId) {
       throw new ProtocolError('Tool execution did not return a request ID');
     }
 
-    // Terminal inside the wait budget: hand back the response directly.
+    // Terminal classification runs BEFORE the generic error guard: the
+    // long-poll response carries error text for FAILED/CANCELLED, and
+    // callers need the typed errors (with the request id) they describe.
     if (isTerminalRequestStatus(response.getStatus())) {
       if (response.getStatus() === RequestStatus.REQUEST_STATUS_CANCELLED) {
         throw new CancelledError(`request ${requestId} was cancelled`, { requestId, status: 'cancelled' });
@@ -1187,6 +1185,12 @@ export class ToolplaneClient {
       synthetic.setResult(response.getResult());
       synthetic.setError(response.getError());
       return synthetic;
+    }
+
+    // Non-terminal responses never carry an error; keep the guard for
+    // defensive parity with the fire-and-forget contract.
+    if (response.getError()) {
+      throw new ToolplaneError(`Tool execution failed: ${response.getError()}`);
     }
 
     // Still in flight: fall back to local polling.

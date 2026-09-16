@@ -768,26 +768,30 @@ func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequ
 	defer cancel()
 	final, waitErr := s.requestService.WaitForRequestState(waitCtx, req.SessionId, request.ID)
 	if waitErr != nil {
-		if errors.Is(waitErr, context.DeadlineExceeded) || errors.Is(waitErr, context.Canceled) {
+		if !errors.Is(waitErr, context.DeadlineExceeded) && !errors.Is(waitErr, context.Canceled) {
+			return nil, statusFromDomainError("wait for request", waitErr)
+		}
+		// The wait expired: re-read so the response reflects the *current*
+		// state (the request may have completed right at the deadline, and
+		// a terminal payload is preferred over a stale PENDING).
+		final, waitErr = s.requestService.GetRequestByID(req.SessionId, request.ID)
+		if waitErr != nil {
+			return nil, statusFromDomainError("wait for request", waitErr)
+		}
+		if final == nil {
 			return &proto.ExecuteToolResponse{
 				RequestId: request.ID,
 				Status:    protoRequestStatus(request.Status),
 			}, nil
 		}
-		return nil, statusFromDomainError("wait for request", waitErr)
 	}
 
-	resultJSON := ""
-	if final.Result != nil {
-		if raw, mErr := json.Marshal(final.Result); mErr == nil {
-			resultJSON = string(raw)
-		}
-	}
 	return &proto.ExecuteToolResponse{
-		RequestId: request.ID,
-		Status:    protoRequestStatus(final.Status),
-		Result:    resultJSON,
-		Error:     final.Error,
+		RequestId:  request.ID,
+		Status:     protoRequestStatus(final.Status),
+		Result:     marshalExecuteToolResult(final.Result),
+		ResultType: string(final.ResultType),
+		Error:      final.Error,
 	}, nil
 }
 

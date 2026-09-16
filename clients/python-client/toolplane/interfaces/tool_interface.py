@@ -12,6 +12,7 @@ from typing import (
     List,
     Optional,
     Protocol,
+    Tuple,
     runtime_checkable,
 )
 
@@ -176,9 +177,22 @@ class IToolManager(Protocol):
         ...
 
     def execute_tool(
-        self, session_id: str, tool_name: str, params: Dict[str, Any]
-    ) -> str:
-        """Execute a tool."""
+        self,
+        session_id: str,
+        tool_name: str,
+        params: Dict[str, Any],
+        idempotency_key: str = "",
+        timeout_seconds: int = 0,
+        wait_timeout_seconds: int = 0,
+    ) -> Tuple[str, Optional[str], Optional[Any]]:
+        """Execute a tool.
+
+        Returns ``(request_id, terminal_status, result)``:
+        ``terminal_status`` is the normalized status name when the
+        server-side long-poll observed a terminal state (``result`` holds
+        the parsed result for a successful run); both are ``None`` when the
+        request is still in flight.
+        """
         ...
 
     def stream_tool(

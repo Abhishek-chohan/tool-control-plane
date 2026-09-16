@@ -253,9 +253,10 @@ class ToolManager(BaseToolManager):
                 request, metadata=self.connection_manager.get_metadata()
             )
 
-            if response.error:
-                raise ToolError(f"Tool execution failed: {response.error}")
-
+            # Classify the terminal status BEFORE the generic error check:
+            # server-side FAILED/CANCELLED long-poll responses carry an
+            # error, and callers need the typed tuple (with the request id)
+            # rather than a generic ToolError.
             status_name = _REQUEST_STATUS_NAMES.get(response.status)
             if wait_timeout_seconds > 0 and status_name in (
                 "done",
@@ -269,6 +270,9 @@ class ToolManager(BaseToolManager):
                     except (TypeError, ValueError):
                         result_value = response.result
                 return response.request_id, status_name, result_value
+
+            if response.error:
+                raise ToolError(f"Tool execution failed: {response.error}")
             return response.request_id, None, None
 
         except grpc.RpcError as rpc_error:

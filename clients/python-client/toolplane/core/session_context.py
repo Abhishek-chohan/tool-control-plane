@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
@@ -113,6 +114,8 @@ class SessionContext:
             else:
                 wait_for = wait_timeout
 
+            deadline = time.monotonic() + wait_for
+
             request_id, terminal_status, result = self.tool_manager.execute_tool(
                 self.session_id,
                 tool_name,
@@ -132,8 +135,10 @@ class SessionContext:
                     f"Tool execution failed (request_id={request_id})"
                 )
 
-            # Still in flight after the server-side wait: poll as before.
-            status = self._wait_for_completion(request_id, timeout=wait_for)
+            # Still in flight after the server-side wait: poll for the
+            # remaining budget only, so the documented cap is a total.
+            remaining = max(1, int(deadline - time.monotonic()))
+            status = self._wait_for_completion(request_id, timeout=remaining)
 
             # Unwrap: callers want the tool's return value, not the envelope.
             return status.get("result")
