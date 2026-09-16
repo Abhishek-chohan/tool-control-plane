@@ -433,6 +433,20 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Identity fields are first-registration-wins, mirroring the Postgres
+	// upsert: a re-register (including one whose cold cache minted a fresh
+	// credential) must not silently rotate the machine's token or reset
+	// its age. BindMachineToken remains the only writer of token_hash
+	// after first registration.
+	if existing, ok := s.machines[machine.ID]; ok && existing != nil {
+		incoming := cloneMachine(machine)
+		incoming.CreatedAt = existing.CreatedAt
+		if existing.TokenHash != "" {
+			incoming.TokenHash = existing.TokenHash
+		}
+		s.machines[machine.ID] = incoming
+		return nil
+	}
 	s.machines[machine.ID] = cloneMachine(machine)
 	return nil
 }

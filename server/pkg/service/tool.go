@@ -442,6 +442,44 @@ func (s *ToolService) ToolNamesForMachine(sessionID, machineID string) []string 
 	return names
 }
 
+// ToolsByMachine returns the session's tools currently owned by the
+// machine as name → tool ID. Store-first when a store is configured — a
+// re-register reconcile must diff against registrations other replicas
+// made — with the local registry as the store-less fallback and the
+// degradation path on a store error.
+func (s *ToolService) ToolsByMachine(sessionID, machineID string) map[string]string {
+	out := make(map[string]string)
+	if machineID == "" {
+		return out
+	}
+
+	if s.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		list, err := s.store.ListToolsBySession(ctx, sessionID)
+		cancel()
+		if err == nil {
+			for _, tool := range list {
+				if tool == nil || tool.MachineID != machineID {
+					continue
+				}
+				s.cacheTool(sessionID, tool)
+				out[tool.Name] = tool.ID
+			}
+			return out
+		}
+		log.Printf("tool listing read-through failed: %v", err)
+	}
+
+	s.toolsMutex.RLock()
+	defer s.toolsMutex.RUnlock()
+	for _, tool := range s.tools[sessionID] {
+		if tool != nil && tool.MachineID == machineID {
+			out[tool.Name] = tool.ID
+		}
+	}
+	return out
+}
+
 // MachineProvidesTool reports whether the machine registered the named tool
 // in the session. An empty machine identity never matches: a detached or
 // malformed tool row with an empty MachineID must not become claimable by an

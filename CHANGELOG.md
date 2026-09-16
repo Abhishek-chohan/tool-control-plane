@@ -49,6 +49,19 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Machine re-register reconciles in place**: re-registering no longer
+  hard-deletes the machine's tools before re-creating them — consumers
+  saw NOT_FOUND mid-re-register and every tool gained a fresh ID. Kept
+  names now upsert in place (IDs preserved), dropped names are removed,
+  rival-owned names keep their owner, and the registry lock no longer
+  spans the tool transactions. A cold-cache replica re-registering an
+  existing machine verifies the presented credential against the durable
+  row instead of minting a second credential over it; `SaveMachine` is
+  first-registration-wins on identity fields (token binds once,
+  `created_at` never moves) on both backends, and the legacy pre-token
+  bind goes through the CAS. See
+  `server/docs/release-notes/2026-09-16-reregister-reconcile.md`.
+
 - **The gateways own their deadline policy**: the HTTP gateway's blanket
   30s unary deadline silently truncated server-side waits (expiry
   converted to a normal in-flight 200 — no error anywhere) and was
