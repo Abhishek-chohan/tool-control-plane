@@ -70,6 +70,41 @@ func writeHealth(w http.ResponseWriter, status string, backend string, statusCod
 	}
 }
 
+// gatewayUnaryDeadline is the default unary bound for the facade's
+// backend calls; the application loops (sync tools/call, task polling)
+// issue short RPCs well under it. Mirrors cmd/proxy.
+const gatewayUnaryDeadline = 30 * time.Second
+
+// waitMethodBackstop bounds the wait-capable entrypoints the facade may
+// call; it sits above the server's wait ceiling (3600s, see
+// ExecuteToolRequest.wait_timeout_seconds) so an honest max-length wait
+// completes while a server bug cannot hang the call. Mirrors cmd/proxy.
+const waitMethodBackstop = time.Hour + 30*time.Second
+
+var waitMethods = map[string]bool{
+	"/api.v1.ToolService/InvokeTool":  true,
+	"/api.v1.ToolService/ExecuteTool": true,
+}
+
+func unaryDeadline(method string) time.Duration {
+	if waitMethods[method] {
+		return waitMethodBackstop
+	}
+	return gatewayUnaryDeadline
+}
+
+// unaryDeadlineInterceptor applies the per-method deadline policy to the
+// backend dial, defaulting only: an existing deadline (the facade's own
+// sync-timeout budget) always wins. Mirrors cmd/proxy.
+func unaryDeadlineInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, unaryDeadline(method))
+		defer cancel()
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
 func main() {
 	cfg, err := loadGatewayConfig()
 	if err != nil {
@@ -123,14 +158,7 @@ func main() {
 			Timeout:             3 * time.Second,
 			PermitWithoutStream: true,
 		}),
-		grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, callOpts ...grpc.CallOption) error {
-			if _, ok := ctx.Deadline(); !ok {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
-			}
-			return invoker(ctx, method, req, reply, cc, callOpts...)
-		}),
+		grpc.WithUnaryInterceptor(unaryDeadlineInterceptor),
 	}
 
 	conn, err := grpc.NewClient(*grpcEndpoint, opts...)

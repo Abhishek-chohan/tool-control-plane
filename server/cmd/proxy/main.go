@@ -250,6 +250,67 @@ func extractClientIP(r *http.Request, trustForwardedFor bool) string {
 	return r.RemoteAddr
 }
 
+// deadlinePolicyMiddleware owns the gateway's deadline policy. The
+// grpc-gateway runtime honors a client-supplied Grpc-Timeout header — it
+// becomes the context deadline before the backend dial interceptor runs,
+// so any HTTP caller could raise or shrink the effective bound in either
+// direction (including killing a streaming replay mid-flight). The header
+// is stripped here instead: HTTP callers bound themselves with their own
+// client timeouts, and the per-method dial policy (see unaryDeadline)
+// decides everything else.
+func deadlinePolicyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del("Grpc-Timeout")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// proxyUnaryDeadline is the default unary bound: fast management calls
+// (create/get/list) complete in milliseconds, so 30 seconds is generously
+// above their p99 while still failing fast on a stuck backend.
+const proxyUnaryDeadline = 30 * time.Second
+
+// waitMethodBackstop bounds the two wait-capable entrypoints. The server
+// itself rejects waits above its ceiling (see
+// ExecuteToolRequest.wait_timeout_seconds, 3600s); the backstop sits above
+// it so an honest max-length wait completes, while a server bug still
+// cannot hang the gateway connection forever.
+const waitMethodBackstop = time.Hour + 30*time.Second
+
+// waitMethods are the full method names whose unary bound is the wait
+// backstop instead of the default. Both are ToolService methods;
+// InvokeTool delegates to ExecuteTool server-side.
+var waitMethods = map[string]bool{
+	"/api.v1.ToolService/InvokeTool":  true,
+	"/api.v1.ToolService/ExecuteTool": true,
+}
+
+// unaryDeadline picks the dial deadline for one unary method: the wait
+// backstop for the long-poll entrypoints, the fast-call default for
+// everything else.
+func unaryDeadline(method string) time.Duration {
+	if waitMethods[method] {
+		return waitMethodBackstop
+	}
+	return proxyUnaryDeadline
+}
+
+// unaryDeadlineInterceptor applies the per-method deadline policy to the
+// backend dial — but only as a default. An existing deadline (an HTTP
+// client's own timeout, propagated through the request context) always
+// wins; the client-supplied Grpc-Timeout override is stripped at the edge
+// (see deadlinePolicyMiddleware), so the policy here is gateway-owned.
+func unaryDeadlineInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, unaryDeadline(method))
+		defer cancel()
+	}
+	return invoker(ctx, method, req, reply, cc, opts...)
+}
+
+// newProxyRootHandler assembles the HTTP chain: CORS, then rate limiting
+// and circuit breaking, then the deadline policy, then the gateway mux.
 func newProxyRootHandler(
 	cfg proxyConfig,
 	breaker *CircuitBreakerManager,
@@ -258,7 +319,7 @@ func newProxyRootHandler(
 	apiHandler http.Handler,
 ) http.Handler {
 	root := http.NewServeMux()
-	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(cfg, breaker, rateLimiter, throttleTracker, apiHandler)))
+	root.Handle("/", corsMiddleware(cfg, proxyControlMiddleware(cfg, breaker, rateLimiter, throttleTracker, deadlinePolicyMiddleware(apiHandler))))
 	root.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeHealthResponse(w, breaker, rateLimiter, throttleTracker, time.Now().UTC())
 	})
@@ -388,15 +449,7 @@ func main() {
 			PermitWithoutStream: true,             // allow pings even without active streams
 		}),
 		// Add context propagation
-		grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-			// Apply deadline if not already set
-			if _, ok := ctx.Deadline(); !ok {
-				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
-				defer cancel()
-			}
-			return invoker(ctx, method, req, reply, cc, opts...)
-		}),
+		grpc.WithUnaryInterceptor(unaryDeadlineInterceptor),
 		// Set stream buffer sizes for flow control
 		grpc.WithReadBufferSize(1024 * 64),  // 64KB read buffer
 		grpc.WithWriteBufferSize(1024 * 64), // 64KB write buffer
