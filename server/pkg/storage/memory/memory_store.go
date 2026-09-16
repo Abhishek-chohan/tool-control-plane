@@ -959,8 +959,20 @@ func (s *Store) ClaimToolOwnership(ctx context.Context, tool *model.Tool, staleC
 		}
 	}
 	if existing != nil {
-		// Check if the owning machine is stale; if so, transfer ownership.
-		if m, ok := s.machines[existing.MachineID]; ok && m.LastPingAt.Before(staleCutoff) {
+		// The current owner re-registering updates in place — the Postgres
+		// claim skips the staleness gate for the same machine.
+		if existing.MachineID == tool.MachineID {
+			existing.Description = tool.Description
+			existing.Schema = tool.Schema
+			existing.Config = cloneConfig(tool.Config)
+			existing.Tags = cloneTags(tool.Tags)
+			existing.LastPingAt = tool.LastPingAt
+			return cloneTool(existing), "", nil
+		}
+		// Transfer ownership when the prior owner is stale OR gone — the
+		// same verdict the Postgres claim makes: a machine missing from the
+		// registry is at least as dead as one with an expired heartbeat.
+		if m, ok := s.machines[existing.MachineID]; !ok || m.LastPingAt.Before(staleCutoff) {
 			replaced := existing.MachineID
 			existing.MachineID = tool.MachineID
 			existing.Description = tool.Description

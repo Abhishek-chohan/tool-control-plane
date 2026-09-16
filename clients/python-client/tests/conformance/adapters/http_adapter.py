@@ -2,6 +2,7 @@ import json
 import re
 import time
 from typing import Any, Dict, List, Tuple
+from uuid import uuid4
 
 from toolplane import ToolplaneAPIError, ToolplaneHTTP
 
@@ -128,6 +129,43 @@ class HttpConformanceAdapter:
             tags=["conformance"],
         )
 
+    def register_tool_from_second_machine(
+        self, session_id: str, tool_name: str, description: str
+    ) -> Dict[str, Any]:
+        """Register tool_name from a second, fresh machine in the session.
+
+        The session's provider machine owns the name, so this registration
+        must surface the ownership conflict (FAILED_PRECONDITION), never a
+        silent takeover.
+        """
+        rival_id = f"conformance-rival-{uuid4().hex[:8]}"
+        try:
+            self.client.connection_manager.register_machine(
+                {
+                    "sessionId": session_id,
+                    "machineId": rival_id,
+                    "sdkVersion": "1.0.0-conformance",
+                    "sdkLanguage": "conformance",
+                    "tools": [],
+                }
+            )
+            response = self.client.connection_manager.register_tool(
+                {
+                    "sessionId": session_id,
+                    "machineId": rival_id,
+                    "name": tool_name,
+                    "description": description,
+                    "schema": "{}",
+                }
+            )
+            tool = response.get("tool", response) if isinstance(response, dict) else {}
+            return {
+                "id": tool.get("id", ""),
+                "name": tool.get("name", ""),
+                "machineId": tool.get("machineId", tool.get("machine_id", "")),
+            }
+        except Exception as exc:
+            return self._normalize_fenced_error(exc)
 
     def register_failing_tool(self, session_id: str, tool_name: str, description: str):
         context = self._ensure_context_machine(session_id)

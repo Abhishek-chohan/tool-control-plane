@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -67,6 +68,10 @@ var (
 	ErrNotFound = errors.New("not found")
 
 	// ErrAlreadyExists reports a create that collided with an existing entity.
+	// Ownership of an existing tool NAME is not this condition: tool
+	// registration is an upsert, and a name held by another live machine is
+	// a state conflict (storage.ErrToolOwnershipConflict →
+	// FAILED_PRECONDITION), not a create collision.
 	ErrAlreadyExists = errors.New("already exists")
 
 	// ErrInvalidArgument reports caller input that failed validation before
@@ -137,6 +142,7 @@ var (
 //	machine concurrency limit reached    -> RESOURCE_EXHAUSTED
 //	timeout above the maximum,
 //	expired stream replay window         -> OUT_OF_RANGE
+//	persistence deadline exceeded        -> DEADLINE_EXCEEDED
 //	anything unmapped                    -> INTERNAL (fail closed)
 func statusFromDomainError(action string, err error) error {
 	switch {
@@ -157,6 +163,7 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, storage.ErrMachineNotToolOwner):
 		return status.Errorf(codes.PermissionDenied, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineDraining),
+		errors.Is(err, storage.ErrToolOwnershipConflict),
 		errors.Is(err, ErrRequestNotClaimable),
 		errors.Is(err, ErrRequestNotCancellable),
 		errors.Is(err, ErrTaskNotCancellable),
@@ -171,6 +178,11 @@ func statusFromDomainError(action string, err error) error {
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonSessionBacklogFull, 5*time.Second)
 	case errors.Is(err, ErrRequestTimeoutOutOfRange):
 		return errorInfoStatus(codes.OutOfRange, fmt.Sprintf("failed to %s: %v", action, err), ReasonTimeoutAboveMax)
+	case errors.Is(err, context.DeadlineExceeded):
+		// A persistence deadline that fired inside the handler (the store
+		// calls carry their own timeouts) keeps its real code instead of
+		// failing closed to INTERNAL.
+		return status.Errorf(codes.DeadlineExceeded, "failed to %s: %v", action, err)
 	default:
 		var expired *RequestStreamExpiredError
 		if errors.As(err, &expired) {

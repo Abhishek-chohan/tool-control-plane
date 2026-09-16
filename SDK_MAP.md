@@ -84,7 +84,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 
 | RPC | Python | Go | TypeScript | Notes / conformance |
 | --- | --- | --- | --- | --- |
-| `RegisterTool` | `partial`: provider registration via explicit `ProviderRuntime` | `full`: `RegisterTool()` | `full`: `registerTool()` plus `ProviderRuntime.registerTool()` / `ProviderRuntime.tool()` | Direct TypeScript registration still requires a machine; the explicit runtime now owns the maintained provider path |
+| `RegisterTool` | `partial`: provider registration via explicit `ProviderRuntime` | `full`: `RegisterTool()` | `full`: `registerTool()` plus `ProviderRuntime.registerTool()` / `ProviderRuntime.tool()` | Upsert semantics: same-machine re-register and stale-owner takeover return `OK` with the tool ID preserved; a name owned by another live machine is `FAILED_PRECONDITION` (SDK error classes remap automatically by code). Covered by `conformance/cases/tool_discovery.json`. Direct TypeScript registration still requires a machine; the explicit runtime now owns the maintained provider path |
 | `ListTools` | `full`: `get_available_tools()` / `list_tools()` | `full`: `ListTools()` | `full`: `listTools()` | Covered by `conformance/cases/tool_discovery.json` |
 | `GetTool` | `full`: `get_tool_by_id()` / `get_tool_by_name()` | `full`: `GetToolByID()` / `GetToolByName()` | `full`: `getToolById()` / `getToolByName()` | v1 unified lookup: one RPC resolves by ID or by name. Covered by `conformance/cases/tool_discovery.json` |
 | `GetToolById` | deprecated alias of `GetTool` | `full` via `GetToolByID()` | `full` via `getToolById()` | Deprecated v0 alias, retained for migration |

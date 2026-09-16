@@ -62,13 +62,17 @@ func (s *GRPCServer) RegisterTool(ctx context.Context, req *proto.RegisterToolRe
 		config[k] = v
 	}
 
-	// Register the tool with our service
+	// Register the tool with our service. Registration is an idempotent
+	// upsert-with-takeover: same-machine re-register and stale-owner
+	// takeover succeed with the tool ID preserved. The one failure that is
+	// about the tool itself — the name is owned by another live machine —
+	// carries storage.ErrToolOwnershipConflict and funnels to
+	// FAILED_PRECONDITION through the taxonomy; everything else (store
+	// outage, deadline) keeps its real code instead of masquerading as
+	// AlreadyExists.
 	tool, err := s.toolService.RegisterTool(req.SessionId, req.MachineId, req.Name, req.Description, req.Schema, config, req.Tags)
 	if err != nil {
-		// Return the tool even if it already exists
-		return &proto.RegisterToolResponse{
-			Tool: convertModelToolToProto(tool),
-		}, status.Errorf(codes.AlreadyExists, "tool registration: %v", err)
+		return nil, statusFromDomainError("register tool", err)
 	}
 
 	return &proto.RegisterToolResponse{

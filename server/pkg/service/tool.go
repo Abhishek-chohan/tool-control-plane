@@ -97,7 +97,15 @@ func (s *ToolService) RegisterTool(sessionID, machineID, name, description, sche
 					"ownerMachineId": ownerMachine,
 				},
 			})
-			return existing, err
+			// One sentinel for both storage modes, carrying the owning
+			// machine: the handler funnels this to FAILED_PRECONDITION
+			// through statusFromDomainError.
+			if ownerMachine == "" {
+				return existing, wrapf(storage.ErrToolOwnershipConflict,
+					"tool %s is owned by an active machine", name)
+			}
+			return existing, wrapf(storage.ErrToolOwnershipConflict,
+				"tool %s is owned by active machine %s", name, ownerMachine)
 		}
 		return nil, err
 	}
@@ -155,7 +163,8 @@ func (s *ToolService) registerToolInMemoryLocked(sessionID, machineID, name, des
 						"ownerMachineId": existingTool.MachineID,
 					},
 				})
-				return existingTool, wrapf(ErrAlreadyExists, "tool %s already registered by another machine", name)
+				return existingTool, wrapf(storage.ErrToolOwnershipConflict,
+					"tool %s is owned by active machine %s", name, existingTool.MachineID)
 			}
 		}
 

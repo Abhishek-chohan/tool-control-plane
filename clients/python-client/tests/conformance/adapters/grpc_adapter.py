@@ -1,6 +1,7 @@
 import json
 import time
 from typing import Any, Dict, List, Tuple
+from uuid import uuid4
 
 import grpc
 
@@ -9,6 +10,7 @@ from toolplane.proto.service_pb2 import (
     ClaimRequestRequest,
     GetRequestChunksRequest,
     RegisterMachineRequest,
+    RegisterToolRequest,
     RenewRequestLeaseRequest,
     RequestStatus,
     ResumeStreamRequest,
@@ -154,6 +156,52 @@ class GrpcConformanceAdapter:
             tags=["conformance"],
         )
 
+
+    def register_tool_from_second_machine(
+        self, session_id: str, tool_name: str, description: str
+    ) -> Dict[str, Any]:
+        """Register tool_name from a second, fresh machine in the session.
+
+        The session's provider machine owns the name, so this registration
+        must surface the ownership conflict (FAILED_PRECONDITION), never a
+        silent takeover.
+        """
+        try:
+            machine = self.client.connection_manager.machine_stub.RegisterMachine(
+                RegisterMachineRequest(
+                    session_id=session_id,
+                    machine_id=f"conformance-rival-{uuid4().hex[:8]}",
+                    sdk_version="1.0.0-conformance",
+                    sdk_language="conformance",
+                ),
+                metadata=self.client.connection_manager.get_metadata(),
+            )
+        except grpc.RpcError as exc:
+            return {
+                "errorCode": _normalize_grpc_error_code(exc),
+                "errorMessage": exc.details(),
+            }
+        try:
+            response = self.client.connection_manager.tool_stub.RegisterTool(
+                RegisterToolRequest(
+                    session_id=session_id,
+                    machine_id=machine.id,
+                    name=tool_name,
+                    description=description,
+                    schema="{}",
+                ),
+                metadata=self.client.connection_manager.get_metadata(),
+            )
+            return {
+                "id": response.tool.id,
+                "name": response.tool.name,
+                "machineId": response.tool.machine_id,
+            }
+        except grpc.RpcError as exc:
+            return {
+                "errorCode": _normalize_grpc_error_code(exc),
+                "errorMessage": exc.details(),
+            }
 
     def register_failing_tool(self, session_id: str, tool_name: str, description: str):
         context = self._ensure_context_machine(session_id)

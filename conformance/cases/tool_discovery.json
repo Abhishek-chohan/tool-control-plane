@@ -1,7 +1,7 @@
 {
   "id": "tool_discovery",
   "feature": "tool_discovery",
-  "description": "Validate tool listing, direct lookup, and delete semantics for a registered tool.",
+  "description": "Validate tool listing, direct lookup, delete semantics, and registration ownership: same-machine re-register keeps the tool ID, a rival live machine gets FAILED_PRECONDITION.",
   "request": {
     "user_id": "conformance-user",
     "name": "tool-discovery-session",
@@ -18,6 +18,8 @@
     "description_equals": "tool discovery coverage",
     "lookup_by_id": true,
     "lookup_by_name": true,
+    "reregister_preserves_tool_id": true,
+    "rival_register_error_code": "failed_precondition",
     "delete_success": true,
     "absent_after_delete": true
   }
