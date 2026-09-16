@@ -49,6 +49,19 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **The gateways own their deadline policy**: the HTTP gateway's blanket
+  30s unary deadline silently truncated server-side waits (expiry
+  converted to a normal in-flight 200 — no error anywhere) and was
+  client-overridable in either direction via the `Grpc-Timeout` header.
+  Deadlines are now method-scoped — the wait entrypoints
+  (`InvokeTool`/`ExecuteTool`) dial with a 1h30m backstop above the
+  server's 3600s wait ceiling, everything else keeps the 30s fast-call
+  default — and `Grpc-Timeout` is stripped at the edge (which also
+  protects streaming replays). The MCP gateway mirrors the scoping.
+  Deliberate max-length waits no longer surface as 504s feeding the
+  circuit breaker. See
+  `server/docs/release-notes/2026-09-16-gateway-deadline-policy.md`.
+
 - **A full replay window is readable everywhere**: the server retains an
   8 MiB chunk window, but both gateways and every SDK default capped
   messages at 4 MiB — stored chunk data was unreadable through any
