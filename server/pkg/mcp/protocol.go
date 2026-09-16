@@ -69,6 +69,11 @@ const (
 	// auto-provisions one session per API key.
 	SessionIDMetaKey = "dev.toolplane/session_id"
 
+	// TimeoutMetaKey carries an optional per-call execution timeout in
+	// seconds: the gateway forwards it as the request's timeout_seconds so a
+	// long tool is not re-executed by the lease reaper at the default.
+	TimeoutMetaKey = "dev.toolplane/timeout_seconds"
+
 	// LastSeqMetaKey carries the chunk cursor on tasks/get: the sequence
 	// number of the first chunk the client still needs. Chunks with a
 	// sequence >= last_seq are returned.
@@ -191,8 +196,10 @@ type requestMeta struct {
 	protocolVersion string
 	capabilities    map[string]any
 	sessionID       string
+	timeoutSeconds  int32
 	lastSeq         int32
 	hasLastSeq      bool
+	hasTimeout      bool
 }
 
 // parseRequestMeta validates the modern per-request metadata. The 2026-07-28
@@ -224,6 +231,15 @@ func parseRequestMeta(params json.RawMessage) (requestMeta, *Error) {
 		return requestMeta{}, errInvalidRequest("missing _meta." + metaClientCapabilities + ": every request must declare client capabilities (use {} for none)")
 	}
 	meta.capabilities = caps
+
+	if timeout, present := base.Meta[TimeoutMetaKey]; present {
+		timeoutValue, ok := timeout.(float64)
+		if !ok || timeoutValue <= 0 || timeoutValue != math.Trunc(timeoutValue) || timeoutValue > math.MaxInt32 {
+			return requestMeta{}, errInvalidParams("_meta." + TimeoutMetaKey + " must be a positive integer (seconds)")
+		}
+		meta.timeoutSeconds = int32(timeoutValue)
+		meta.hasTimeout = true
+	}
 
 	if sessionID, ok := base.Meta[SessionIDMetaKey].(string); ok {
 		meta.sessionID = sessionID
