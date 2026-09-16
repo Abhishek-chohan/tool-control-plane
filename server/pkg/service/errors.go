@@ -166,7 +166,8 @@ func statusFromDomainError(action string, err error) error {
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonCapacityExhausted, 2*time.Second)
-	case errors.Is(err, ErrTooManyPendingRequests):
+	case errors.Is(err, ErrTooManyPendingRequests),
+		errors.Is(err, storage.ErrTooManyPendingRequests):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonSessionBacklogFull, 5*time.Second)
 	case errors.Is(err, ErrRequestTimeoutOutOfRange):
 		return errorInfoStatus(codes.OutOfRange, fmt.Sprintf("failed to %s: %v", action, err), ReasonTimeoutAboveMax)

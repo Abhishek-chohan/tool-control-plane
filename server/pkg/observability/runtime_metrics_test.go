@@ -130,3 +130,39 @@ func TestRuntimeMetricsCollectorRendersCurrentRuntimeStateAndCounters(t *testing
 		t.Fatalf("pending request should remain accessible: %v", err)
 	}
 }
+
+type staticRequestSource struct {
+	pending int
+	depth   int64
+}
+
+func (s staticRequestSource) RequestMetricsSnapshot() (pending, claimed, running, done, failed, stalled, deadLetter int) {
+	return s.pending, 0, 0, 0, 0, 0, 0
+}
+
+func (s staticRequestSource) PendingQueueDepth() int64 {
+	return s.depth
+}
+
+// TestQueueDepthGaugePrefersStoreSourcedCount pins the gauge source: a
+// store-sourced depth (>= 0) wins over the per-replica cache snapshot, and a
+// cache-only service (-1) falls back to the snapshot count.
+func TestQueueDepthGaugePrefersStoreSourcedCount(t *testing.T) {
+	scrape := func(c *RuntimeMetricsCollector) string {
+		recorder := httptest.NewRecorder()
+		c.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+		return recorder.Body.String()
+	}
+
+	storeSourced := NewRuntimeMetricsCollector()
+	storeSourced.Bind(staticRequestSource{pending: 2, depth: 7}, nil, nil)
+	if body := scrape(storeSourced); !strings.Contains(body, "toolplane_request_queue_depth 7") {
+		t.Fatalf("expected store-sourced queue depth 7, got:\n%s", body)
+	}
+
+	cacheOnly := NewRuntimeMetricsCollector()
+	cacheOnly.Bind(staticRequestSource{pending: 2, depth: -1}, nil, nil)
+	if body := scrape(cacheOnly); !strings.Contains(body, "toolplane_request_queue_depth 2") {
+		t.Fatalf("expected fallback queue depth 2, got:\n%s", body)
+	}
+}

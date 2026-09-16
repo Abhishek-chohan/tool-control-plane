@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"toolplane/pkg/storage"
+)
 
 const machineHeartbeatTTL = 5 * time.Minute
 const machineDrainPollInterval = 50 * time.Millisecond
@@ -34,8 +38,12 @@ const requestCleanupInterval = 30 * time.Minute
 // auditRetentionAge bounds how long audit events are retained.
 const auditRetentionAge = 30 * 24 * time.Hour
 
-// maxPendingRequestsPerSession caps the outstanding pending backlog a single
-// session may accumulate. Providers are expected to drain it; a session
-// whose claims stall (no provider, capacity) hits this ceiling instead of
-// growing the queue without bound.
-const maxPendingRequestsPerSession = 512
+// maxPendingRequestsPerSession aliases the storage-owned backlog ceiling so
+// the optimistic cache pre-check and the authoritative store verdict count
+// against one number. The store enforces it inside the insert transaction;
+// see storage.MaxPendingRequestsPerSession.
+const maxPendingRequestsPerSession = storage.MaxPendingRequestsPerSession
+
+// queueDepthRefreshInterval is the cadence for reloading the durable
+// pending count behind the queue-depth gauge on store-backed replicas.
+const queueDepthRefreshInterval = 5 * time.Second

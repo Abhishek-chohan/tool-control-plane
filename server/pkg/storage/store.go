@@ -48,6 +48,20 @@ var ErrNotFound = errors.New("storage: not found")
 // surfaces instead of silently overwriting the existing row.
 var ErrRequestExists = errors.New("storage: request already exists")
 
+// ErrTooManyPendingRequests reports that a request insert was rejected
+// because the session already holds the maximum outstanding pending
+// backlog. The store owns this verdict: per-replica caches count only
+// their own creates, so the durable count is the only enforcement point
+// that holds across replicas.
+var ErrTooManyPendingRequests = errors.New("storage: too many pending requests in session")
+
+// MaxPendingRequestsPerSession caps the outstanding pending backlog a
+// single session may accumulate. Providers are expected to drain it; a
+// session whose claims stall (no provider, capacity) hits this ceiling
+// instead of growing the queue without bound. Enforced inside the insert
+// transaction so the verdict is authoritative across replicas.
+const MaxPendingRequestsPerSession = 512
+
 // ErrChunkWindowGap reports that the retained chunk table does not cover the
 // row's advertised window contiguously — the window bookkeeping raced the
 // trim (cross-replica append/trim interleaving). Stream readers map this to
@@ -132,8 +146,14 @@ type Storer interface {
 	CancelRequestFenced(ctx context.Context, sessionID, requestID, message string) (*model.Request, bool, error)
 	// InsertRequest writes a brand-new request row without an upsert clause:
 	// a colliding insert (same id, or the idempotency-key partial unique
-	// index) fails instead of overwriting the persisted row.
+	// index) fails instead of overwriting the persisted row. It also enforces
+	// the per-session pending backlog cap (MaxPendingRequestsPerSession)
+	// atomically with the insert, rejecting with ErrTooManyPendingRequests.
 	InsertRequest(ctx context.Context, req *model.Request) error
+	// CountPendingRequests returns the total number of pending,
+	// non-dead-lettered requests across all sessions. It is the
+	// store-sourced reading behind the queue-depth gauge.
+	CountPendingRequests(ctx context.Context) (int, error)
 
 	// Machines
 	AllMachines(ctx context.Context) ([]*model.Machine, error)
