@@ -424,8 +424,14 @@ func TestMachineDrainFlag_WriteOwnership(t *testing.T) {
 		seedSession(t, s, sess)
 		m := seedMachine(t, s, sess, mach, time.Now())
 		// Token-less row: NewMachine mints a credential, but the bind path
-		// under test starts from an unbound machine.
+		// under test starts from an unbound machine. SaveMachine preserves
+		// an existing credential (first-registration-wins, matching the
+		// Postgres upsert), so the unbound row is seeded by removing the
+		// minted one first — a plain re-save can no longer unbind it.
 		m.TokenHash = ""
+		if err := s.DeleteMachine(ctx, mach); err != nil {
+			t.Fatalf("remove minted machine row: %v", err)
+		}
 		if err := s.SaveMachine(ctx, m); err != nil {
 			t.Fatalf("seed unbound machine: %v", err)
 		}

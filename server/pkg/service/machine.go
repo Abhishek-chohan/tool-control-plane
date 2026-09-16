@@ -121,41 +121,80 @@ func (s *MachinesService) RegisterMachine(
 	}
 
 	s.machinesMutex.Lock()
-	defer s.machinesMutex.Unlock()
 
 	// Initialize machines map for this session if not exists
 	if _, ok := s.machines[sessionID]; !ok {
 		s.machines[sessionID] = make(map[string]*model.Machine)
 	}
 
-	// Create new machine or update existing one
+	// Resolve machine identity: a fresh registration mints a credential;
+	// a same-ID re-register must present the existing credential — whether
+	// the machine is in this replica's cache or only in the store (a cold
+	// replica must not mint a second credential or reset identity age).
 	var machine *model.Machine
 	id := machineID
-	if id == "" {
+	switch {
+	case id == "":
 		// Generate new ID if not provided
 		machine = model.NewMachine(sessionID, "", sdkVersion, sdkLanguage, ip)
 		id = machine.ID
-	} else if existing, ok := s.machines[sessionID][id]; ok {
+	default:
+		existing, cached := s.machines[sessionID][id]
+		if !cached && s.store != nil {
+			// Cold cache: read the durable row so a re-register on this
+			// replica keeps the machine's identity instead of minting a
+			// fresh credential over it.
+			readCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+			stored, err := s.store.GetMachine(readCtx, id)
+			cancel()
+			if err != nil {
+				log.Printf("machine %s re-register read-through failed: %v", id, err)
+			} else if stored != nil && stored.SessionID == sessionID {
+				existing, cached = stored, true
+			}
+		}
+		if !cached {
+			// Create new machine with provided ID
+			machine = model.NewMachine(sessionID, id, sdkVersion, sdkLanguage, ip)
+			break
+		}
 		// Re-registering an existing machine requires its credential.
 		switch {
 		case existing.TokenHash == "":
-			// Pre-token machine: bind the first presented credential.
+			// Pre-token machine: bind the first presented credential
+			// through the store's compare-and-set when persisted, so two
+			// racing registrations cannot bind different credentials.
 			if presentedToken == "" {
+				s.machinesMutex.Unlock()
 				return nil, fmt.Errorf("%w: machine %s has no bound credential; re-registration must present one to bind", ErrMachineCredentialRejected, id)
+			}
+			bound := true
+			if s.store != nil {
+				bindCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+				var err error
+				bound, err = s.store.BindMachineToken(bindCtx, id, model.HashAPIKeySecret(presentedToken))
+				cancel()
+				if err != nil {
+					s.machinesMutex.Unlock()
+					return nil, fmt.Errorf("bind machine %s credential: %w", id, err)
+				}
+			}
+			if !bound {
+				s.machinesMutex.Unlock()
+				return nil, fmt.Errorf("%w: machine %s credential was already bound by another registration", ErrMachineCredentialRejected, id)
 			}
 			existing.TokenHash = model.HashAPIKeySecret(presentedToken)
 		case !existing.MatchesMachineToken(presentedToken):
+			s.machinesMutex.Unlock()
 			return nil, fmt.Errorf("%w: machine %s is already registered with a different credential", ErrMachineCredentialRejected, id)
 		}
-		// Update existing machine
+		// Update existing machine in place: identity fields (ID, session,
+		// creation time, credential) are preserved by construction.
 		existing.SDKVersion = sdkVersion
 		existing.SDKLanguage = sdkLanguage
 		existing.IP = ip
 		existing.UpdatePing()
 		machine = existing
-	} else {
-		// Create new machine with provided ID
-		machine = model.NewMachine(sessionID, id, sdkVersion, sdkLanguage, ip)
 	}
 
 	// Store machine
@@ -177,8 +216,9 @@ func (s *MachinesService) RegisterMachine(
 
 	if s.store != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-		defer cancel()
-		if err := s.store.SaveMachine(ctx, machine); err != nil {
+		err := s.store.SaveMachine(ctx, machine)
+		cancel()
+		if err != nil {
 			log.Printf("persist machine save failed: %v", err)
 		}
 	}
@@ -186,26 +226,15 @@ func (s *MachinesService) RegisterMachine(
 	// Track active machine for tool ownership checks
 	s.toolService.TrackMachine(sessionID, id)
 
-	// Register tools provided by this machine
+	// The machine lock guards identity and the registry only; the tool
+	// reconcile below runs without it (the tool registry has its own lock,
+	// and holding the machine lock across N tool transactions starves
+	// heartbeats and machine lookups for the whole re-register).
+	s.machinesMutex.Unlock()
+
+	// Register tools by reconciliation, not delete-and-recreate.
 	if len(tools) > 0 {
-		s.cleanupExistingTools(sessionID, id)
-		for _, tool := range tools {
-			if tool == nil {
-				continue
-			}
-			registeredTool, err := s.toolService.RegisterTool(sessionID, id, tool.Name, tool.Description, tool.Schema, tool.Config, tool.Tags)
-			if err != nil {
-				if errors.Is(err, storage.ErrToolOwnershipConflict) {
-					log.Printf("machine %s failed to claim tool %s due to active owner", id, tool.Name)
-				} else {
-					log.Printf("machine %s failed to register tool %s: %v", id, tool.Name, err)
-				}
-				continue
-			}
-			if registeredTool != nil {
-				log.Printf("machine %s registered tool %s (%s)", id, registeredTool.Name, registeredTool.ID)
-			}
-		}
+		s.reconcileMachineTools(sessionID, id, tools)
 	}
 
 	// The minted token travels to the caller exactly once; the cached and
@@ -379,7 +408,7 @@ func (s *MachinesService) DrainMachine(ctx context.Context, sessionID, machineID
 				"activeRequests": activeRequests,
 			},
 		})
-		s.cleanupExistingTools(sessionID, machineID)
+		s.toolService.DeleteToolsByMachine(sessionID, machineID)
 		s.toolService.UntrackMachine(sessionID, machineID)
 		go s.waitForDrainAndUnregister(sessionID, machineID, state)
 	}
@@ -653,8 +682,47 @@ func (s *MachinesService) cleanupMachines() {
 	}
 }
 
-func (s *MachinesService) cleanupExistingTools(sessionID, machineID string) {
-	s.toolService.DeleteToolsByMachine(sessionID, machineID)
+// reconcileMachineTools converges the machine's registered tool set to the
+// desired list without a delete-and-recreate gap: kept names upsert in
+// place (preserving tool IDs), names dropped from the list are removed,
+// and a name held by another live machine keeps its current owner (the
+// registration is logged and skipped). The previous delete-first flow
+// removed every row before re-registering, so consumers observed NOT_FOUND
+// mid-re-register and every tool gained a fresh ID.
+func (s *MachinesService) reconcileMachineTools(sessionID, machineID string, tools []*model.Tool) {
+	current := s.toolService.ToolsByMachine(sessionID, machineID)
+
+	desired := make(map[string]bool, len(tools))
+	for _, tool := range tools {
+		if tool != nil {
+			desired[tool.Name] = true
+		}
+	}
+	for name, toolID := range current {
+		if desired[name] {
+			continue
+		}
+		if err := s.toolService.DeleteTool(sessionID, toolID); err != nil {
+			log.Printf("machine %s reconcile: delete dropped tool %s: %v", machineID, name, err)
+		}
+	}
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		registeredTool, err := s.toolService.RegisterTool(sessionID, machineID, tool.Name, tool.Description, tool.Schema, tool.Config, tool.Tags)
+		if err != nil {
+			if errors.Is(err, storage.ErrToolOwnershipConflict) {
+				log.Printf("machine %s failed to claim tool %s due to active owner", machineID, tool.Name)
+			} else {
+				log.Printf("machine %s failed to register tool %s: %v", machineID, tool.Name, err)
+			}
+			continue
+		}
+		if registeredTool != nil {
+			log.Printf("machine %s registered tool %s (%s)", machineID, registeredTool.Name, registeredTool.ID)
+		}
+	}
 }
 
 func (s *MachinesService) reclaimMachine(sessionID, machineID string, cutoff time.Time) (bool, int) {

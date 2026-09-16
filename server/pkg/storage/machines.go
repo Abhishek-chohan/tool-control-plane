@@ -124,9 +124,18 @@ func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
             sdk_version = EXCLUDED.sdk_version,
             sdk_language = EXCLUDED.sdk_language,
             ip = EXCLUDED.ip,
-            created_at = EXCLUDED.created_at,
+            -- Identity fields are first-registration-wins: a re-register on
+            -- any replica (including one whose cold cache mints a fresh
+            -- credential) must not silently rotate the machine's token or
+            -- reset its age. The only writer of token_hash after first
+            -- registration is BindMachineToken's compare-and-set.
+            created_at = machines.created_at,
             last_ping_at = EXCLUDED.last_ping_at,
-            token_hash = EXCLUDED.token_hash,
+            token_hash = CASE
+                WHEN machines.token_hash IS NULL OR machines.token_hash = ''
+                THEN EXCLUDED.token_hash
+                ELSE machines.token_hash
+            END,
             draining = machines.draining -- drain state is written only by Set/ClearMachineDraining
     `, machine.ID, machine.SessionID, nullString(machine.SDKVersion), nullString(machine.SDKLanguage), nullString(machine.IP), machine.CreatedAt, machine.LastPingAt, nullString(machine.TokenHash))
 	if err != nil {
