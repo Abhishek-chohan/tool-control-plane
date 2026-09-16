@@ -214,6 +214,7 @@ func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, 
 			"requestId": request.Id,
 			"startSeq":  window.StartSeq,
 			"nextSeq":   window.NextSeq,
+			"chunks":    window.Chunks,
 		}
 	}
 	result["_meta"] = meta

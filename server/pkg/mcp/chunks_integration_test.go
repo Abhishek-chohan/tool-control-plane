@@ -257,16 +257,16 @@ func TestSyncCallSurfacesChunksAndResult(t *testing.T) {
 	if structured, _ := result["structuredContent"].(map[string]any); structured["echo"] != "sync" {
 		t.Fatalf("structuredContent = %v, want echo=sync", result["structuredContent"])
 	}
-	// The final result text is the single copy of the output: streaming
-	// chunks are no longer duplicated into the content array, and the
-	// _meta chunk cursor carries only window bookkeeping (no chunk array).
+	// The final result text is the single copy of the output in content:
+	// streaming chunks are no longer prepended as separate text blocks. The
+	// _meta chunk cursor remains as machine-readable resume metadata.
 	resultMeta, _ := result["_meta"].(map[string]any)
-	if chunksMeta, ok := resultMeta[mcp.ChunksMetaKey]; ok {
-		if m, isMap := chunksMeta.(map[string]any); isMap {
-			if _, has := m["chunks"]; has {
-				t.Fatalf("sync result _meta still duplicates chunk content: %v", chunksMeta)
-			}
-		}
+	chunksMeta, _ := resultMeta[mcp.ChunksMetaKey].(map[string]any)
+	if chunksMeta == nil {
+		t.Fatalf("sync result _meta missing %s: %v", mcp.ChunksMetaKey, resultMeta)
+	}
+	if chunks, _ := chunksMeta["chunks"].([]any); len(chunks) != 2 {
+		t.Fatalf("chunks cursor = %v, want 2 entries", chunksMeta)
 	}
 	content, _ := result["content"].([]any)
 	textBlocks := 0
