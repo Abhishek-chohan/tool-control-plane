@@ -93,7 +93,6 @@ import {
   RegisterToolRequest as RegisterToolMessage,
   RegisterToolResponse as RegisterToolResponseMessage,
   Request as ProtoRequest,
-  Request as RequestMessage,
   RequestStatus,
   Session as ProtoSession,
   SubmitRequestResultRequest as SubmitRequestResultMessage,

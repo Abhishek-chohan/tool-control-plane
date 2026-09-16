@@ -14,6 +14,10 @@ from toolplane.proto.service_pb2 import (
     RegisterToolRequest,
     RequestStatus,
 )
+from ..common.base_tool_manager import BaseToolManager
+from ..common.utils import parse_json_safe, timestamp_to_iso
+from .connection import ConnectionManager
+from .errors import ToolError, api_error_from_rpc_error
 
 # Wire enum -> normalized status name; UNSPECIFIED maps to None so an
 # in-flight long-poll return is distinguishable from a terminal one.
@@ -22,11 +26,6 @@ _REQUEST_STATUS_NAMES = {
     RequestStatus.REQUEST_STATUS_FAILED: "failed",
     RequestStatus.REQUEST_STATUS_CANCELLED: "cancelled",
 }
-
-from ..common.base_tool_manager import BaseToolManager
-from ..common.utils import parse_json_safe, timestamp_to_iso
-from .connection import ConnectionManager
-from .errors import ToolError, api_error_from_rpc_error
 
 
 class ToolManager(BaseToolManager):
