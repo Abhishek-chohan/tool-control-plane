@@ -202,6 +202,10 @@ function requestTaskStatus(request: ToolplaneRequest): TaskStatus {
   switch (request.status) {
     case 'done':
       return TASK_STATUS_COMPLETED;
+    case 'cancelled':
+      // First-class cancelled status (legacy backends use FAILED plus the
+      // conventioned error string, handled below).
+      return TASK_STATUS_CANCELLED;
     case 'failure':
       return request.error === REQUEST_CANCELLED_ERROR ? TASK_STATUS_CANCELLED : TASK_STATUS_FAILED;
     default:
