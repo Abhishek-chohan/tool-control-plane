@@ -103,18 +103,50 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 // colliding insert (same id, or the idempotency-key partial unique index)
 // fails instead of overwriting the persisted row. Request creation goes
 // through here so a create can never rewrite an existing row's history.
+// The per-session pending backlog cap is enforced in the same serializable
+// transaction as the insert: the count and the write are one atomic
+// verdict, so concurrent creators — including creators on other replicas —
+// cannot all pass the ceiling; a serialization abort retries and re-counts.
 func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 	if s == nil || req == nil {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx, `
-	INSERT INTO requests (`+requestInsertColumns+`)
-	VALUES (`+requestInsertPlaceholders+`)
-	`, requestRowArgs(req)...)
-	if err != nil {
-		return fmt.Errorf("insert request: %w", err)
+	return s.withSerializableTx(ctx, func(tx *sql.Tx) error {
+		var pending int
+		if err := tx.QueryRowContext(ctx, `
+		    SELECT COUNT(*) FROM requests
+		    WHERE session_id = $1 AND status = $2 AND dead_letter = false
+		`, req.SessionID, string(model.RequestStatusPending)).Scan(&pending); err != nil {
+			return fmt.Errorf("count pending requests: %w", err)
+		}
+		if pending >= MaxPendingRequestsPerSession {
+			return fmt.Errorf("session %s at %d pending requests: %w", req.SessionID, pending, ErrTooManyPendingRequests)
+		}
+		if _, err := tx.ExecContext(ctx, `
+		INSERT INTO requests (`+requestInsertColumns+`)
+		VALUES (`+requestInsertPlaceholders+`)
+		`, requestRowArgs(req)...); err != nil {
+			return fmt.Errorf("insert request: %w", err)
+		}
+		return nil
+	})
+}
+
+// CountPendingRequests reports the total number of pending, non-dead-letter
+// requests across all sessions — the store-sourced reading behind the
+// queue-depth gauge.
+func (s *Store) CountPendingRequests(ctx context.Context) (int, error) {
+	if s == nil {
+		return 0, nil
 	}
-	return nil
+	var pending int
+	if err := s.db.QueryRowContext(ctx, `
+	    SELECT COUNT(*) FROM requests
+	    WHERE status = $1 AND dead_letter = false
+	`, string(model.RequestStatusPending)).Scan(&pending); err != nil {
+		return 0, fmt.Errorf("count pending requests: %w", err)
+	}
+	return pending, nil
 }
 
 func (s *Store) LeasePendingRequest(ctx context.Context, sessionID, machineID string, toolNames []string, leaseDuration time.Duration) (*model.Request, error) {

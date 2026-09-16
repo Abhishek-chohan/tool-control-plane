@@ -13,6 +13,9 @@ import (
 
 type requestMetricsSource interface {
 	RequestMetricsSnapshot() (pending, claimed, running, done, failed, stalled, deadLetter int)
+	// PendingQueueDepth reports the store-sourced pending backlog when a
+	// store is attached, or -1 so callers fall back to the snapshot count.
+	PendingQueueDepth() int64
 }
 
 type machineMetricsSource interface {
@@ -101,6 +104,11 @@ func (c *RuntimeMetricsCollector) registerGauges() {
 		"Number of pending requests waiting for dispatch.",
 		func() float64 {
 			if s := c.requestSource(); s != nil {
+				// Prefer the durable cross-replica count; the cache snapshot
+				// only sees this replica's creates.
+				if depth := s.PendingQueueDepth(); depth >= 0 {
+					return float64(depth)
+				}
 				pending, _, _, _, _, _, _ := s.RequestMetricsSnapshot()
 				return float64(pending)
 			}

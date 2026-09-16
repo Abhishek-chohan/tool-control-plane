@@ -47,6 +47,19 @@ release notes live in `server/docs/release-notes/`.
   state on wait expiry without cancelling the work. SDKs send the wait
   and keep local polling only as the in-flight fallback.
 
+### Fixed
+
+- **Backlog cap enforced durably across replicas**: the per-session
+  pending-request ceiling (512) is now counted and enforced inside the
+  store's insert transaction on both backends — previously the check ran
+  only against the per-replica cache, which production store-mode creates
+  never populated, so the cap held nowhere but tests. Store-mode creates
+  now mirror into the replica cache (with clone discipline; four
+  un-cloned mirror sites fixed), and `toolplane_request_queue_depth` is
+  sourced from a durable pending count refreshed every 5s instead of the
+  cache. See
+  `server/docs/release-notes/2026-09-16-backlog-cap-store-enforced.md`.
+
 ### Changed (earlier)
 
 - **SDK timeout cliff closed (Python)**: `invoke`/`stream`/`ainvoke`/

@@ -132,7 +132,9 @@ func (s *Store) SaveRequest(ctx context.Context, req *model.Request) error {
 // InsertRequest mirrors the Postgres insert-only create: an id that is
 // already persisted fails instead of overwriting the row, and so does a
 // duplicate (session_id, idempotency_key) pair — the contract the Postgres
-// partial unique index enforces.
+// partial unique index enforces. The per-session pending backlog cap is
+// enforced under the same lock, mirroring the Postgres count-then-insert
+// transaction.
 func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 	if req == nil {
 		return nil
@@ -149,8 +151,32 @@ func (s *Store) InsertRequest(ctx context.Context, req *model.Request) error {
 			}
 		}
 	}
+	pending := 0
+	for _, existing := range s.requests {
+		if existing != nil && existing.SessionID == req.SessionID &&
+			existing.Status == model.RequestStatusPending && !existing.DeadLetter {
+			pending++
+		}
+	}
+	if pending >= storage.MaxPendingRequestsPerSession {
+		return fmt.Errorf("session %s at %d pending requests: %w", req.SessionID, pending, storage.ErrTooManyPendingRequests)
+	}
 	s.requests[req.ID] = cloneRequest(req)
 	return nil
+}
+
+// CountPendingRequests mirrors the Postgres pending count — the
+// store-sourced reading behind the queue-depth gauge.
+func (s *Store) CountPendingRequests(ctx context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pending := 0
+	for _, req := range s.requests {
+		if req != nil && req.Status == model.RequestStatusPending && !req.DeadLetter {
+			pending++
+		}
+	}
+	return pending, nil
 }
 
 // machineProvidesToolLocked reports whether the machine registered toolName

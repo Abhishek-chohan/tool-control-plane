@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"toolplane/pkg/model"
@@ -24,6 +25,11 @@ type RequestsService struct {
 	requests      map[string]map[string]*model.Request // map[sessionID]map[requestID]Request
 	requestsMutex sync.RWMutex
 	signals       sync.Map // map[requestID]*requestSignal
+
+	// storePendingDepth is the durable pending count behind the queue-depth
+	// gauge, refreshed on a ticker when a store is attached. The cache below
+	// is per-replica; only this number is cross-replica correct.
+	storePendingDepth atomic.Int64
 
 	// Service dependencies
 	toolService    *ToolService
@@ -121,6 +127,12 @@ func NewRequestsService(ctx context.Context, toolService *ToolService, machineSe
 	// Start the retention sweeper for terminal requests (and audit events on
 	// store-backed replicas).
 	go service.cleanupTerminalRequests()
+	// Store-backed replicas refresh the durable pending count for the
+	// queue-depth gauge; the per-replica cache cannot see other replicas'
+	// creates.
+	if store != nil {
+		go service.refreshQueueDepthLoop()
+	}
 
 	return service
 }
@@ -219,21 +231,6 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		return nil, wrapf(ErrNoProviderAvailable, "no machines available for tool %s", toolName)
 	}
 
-	// Per-session pending backlog cap: without a claim-draining provider the
-	// queue would grow without bound, so refuse new work past the ceiling.
-	s.requestsMutex.RLock()
-	pendingCount := 0
-	for _, req := range s.requests[sessionID] {
-		if req != nil && req.Status == model.RequestStatusPending && !req.DeadLetter {
-			pendingCount++
-		}
-	}
-	s.requestsMutex.RUnlock()
-	if pendingCount >= maxPendingRequestsPerSession {
-		return nil, wrapf(ErrTooManyPendingRequests,
-			"session %s already has %d pending requests", sessionID, pendingCount)
-	}
-
 	resolvedTimeout := requestTimeout
 	if timeoutSeconds > 0 {
 		resolvedTimeout = time.Duration(timeoutSeconds) * time.Second
@@ -251,9 +248,11 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 	request.VisibleAt = time.Now()
 
 	// Cap check + insert run under the cache write lock so concurrent creates
-	// cannot all pass the ceiling check between count and insert.
+	// cannot all pass the ceiling check between count and insert. This is the
+	// optimistic fast-fail: it counts only this replica's cache. The store's
+	// count-in-transaction verdict below is authoritative across replicas.
 	s.requestsMutex.Lock()
-	pendingCount = 0
+	pendingCount := 0
 	for _, req := range s.requests[sessionID] {
 		if req != nil && req.Status == model.RequestStatusPending && !req.DeadLetter {
 			pendingCount++
@@ -276,6 +275,13 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 		if err := s.store.InsertRequest(ctx, request); err != nil {
 			cancel()
 			s.requestsMutex.Unlock()
+			// The durable count is the authoritative backlog verdict: this
+			// replica's cache may not have seen other replicas' creates.
+			if errors.Is(err, storage.ErrTooManyPendingRequests) {
+				return nil, wrapf(ErrTooManyPendingRequests,
+					"session %s already has the maximum %d pending requests",
+					sessionID, storage.MaxPendingRequestsPerSession)
+			}
 			// A concurrent replica inserted the same (session, key) first: the
 			// unique partial index — or the memory store's contract-equivalent
 			// conflict — rejects this insert and the retry returns the
@@ -288,6 +294,14 @@ func (s *RequestsService) CreateRequest(sessionID, toolName, input string, timeo
 			return nil, fmt.Errorf("persist request create failed: %w", err)
 		}
 		cancel()
+		// Mirror the durable row into this replica's cache: reads are
+		// cache-first and the optimistic cap check above counts the cache.
+		// The map owns a clone (48d89ec discipline); the local object keeps
+		// being read below after the lock drops.
+		if _, ok := s.requests[sessionID]; !ok {
+			s.requests[sessionID] = make(map[string]*model.Request)
+		}
+		s.requests[sessionID][request.ID] = request.Clone()
 	} else {
 		if _, ok := s.requests[sessionID]; !ok {
 			s.requests[sessionID] = make(map[string]*model.Request)
@@ -1129,7 +1143,7 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 			if _, ok := s.requests[sessionID]; !ok {
 				s.requests[sessionID] = make(map[string]*model.Request)
 			}
-			s.requests[sessionID][requestID] = stored
+			s.requests[sessionID][requestID] = stored.Clone()
 			s.requestsMutex.Unlock()
 			return wrapf(ErrRequestNotCancellable, "request %s is already in state %s", requestID, stored.Status)
 		}
@@ -1139,7 +1153,7 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 		if _, ok := s.requests[sessionID]; !ok {
 			s.requests[sessionID] = make(map[string]*model.Request)
 		}
-		s.requests[sessionID][requestID] = request
+		s.requests[sessionID][requestID] = stored.Clone()
 		s.requestsMutex.Unlock()
 	} else {
 		s.requestsMutex.Lock()
@@ -1696,7 +1710,7 @@ func (s *RequestsService) waitForRequestState(ctx context.Context, sessionID, re
 			if _, ok := s.requests[sessionID]; !ok {
 				s.requests[sessionID] = make(map[string]*model.Request)
 			}
-			s.requests[sessionID][stored.ID] = stored
+			s.requests[sessionID][stored.ID] = stored.Clone()
 			s.requestsMutex.Unlock()
 			return stored, nil
 		}
@@ -1791,6 +1805,44 @@ func (s *RequestsService) recordRequestEvent(
 		Timestamp: timestamp,
 		Metadata:  eventMetadata,
 	})
+}
+
+// PendingQueueDepth returns the store-sourced pending backlog for the
+// queue-depth gauge: the durable cross-replica count refreshed on a
+// ticker, or -1 when no store is attached (callers fall back to the
+// per-replica cache snapshot).
+func (s *RequestsService) PendingQueueDepth() int64 {
+	if s.store == nil {
+		return -1
+	}
+	return s.storePendingDepth.Load()
+}
+
+// refreshQueueDepth reloads the durable pending count. On a store error the
+// last value stands: a transient outage must not zero the gauge.
+func (s *RequestsService) refreshQueueDepth() {
+	ctx, cancel := context.WithTimeout(s.ctx, defaultPersistenceTimeout)
+	defer cancel()
+	pending, err := s.store.CountPendingRequests(ctx)
+	if err != nil {
+		log.Printf("queue depth refresh failed: %v", err)
+		return
+	}
+	s.storePendingDepth.Store(int64(pending))
+}
+
+func (s *RequestsService) refreshQueueDepthLoop() {
+	ticker := time.NewTicker(queueDepthRefreshInterval)
+	defer ticker.Stop()
+	s.refreshQueueDepth()
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-ticker.C:
+			s.refreshQueueDepth()
+		}
+	}
 }
 
 // RequestMetricsSnapshot returns current request counts for observability scrapes.
@@ -1965,7 +2017,7 @@ func (s *RequestsService) handleExpiredRequest(req *model.Request) {
 	if _, ok := s.requests[sessionID]; !ok {
 		s.requests[sessionID] = make(map[string]*model.Request)
 	}
-	s.requests[sessionID][req.ID] = req
+	s.requests[sessionID][req.ID] = req.Clone()
 	s.requestsMutex.Unlock()
 
 	if s.store != nil {
