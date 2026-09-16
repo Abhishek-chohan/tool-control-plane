@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from toolplane.utils.schema import generate_schema_from_function
 
+from ..common.constants import WAIT_TIMEOUT_MAX_SECONDS
 from .connection import ConnectionManager
 from .errors import (
     ToolplaneAPIError,
@@ -21,8 +22,6 @@ from .machine import MachineManager
 from .request import RequestManager
 from .session import SessionManager
 from .tool import ToolManager
-
-from ..common.constants import WAIT_TIMEOUT_MAX_SECONDS
 
 logger = logging.getLogger(__name__)
 
