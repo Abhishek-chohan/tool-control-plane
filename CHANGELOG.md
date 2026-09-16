@@ -49,6 +49,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Cancelled requests wake their waiters**: `WaitForRequestTerminal`
+  handled done/failed/stalled only, so a third-party `CancelRequest`
+  (gRPC, MCP `notifications/cancelled`, `tasks/cancel`) left the waiter
+  spinning to its own deadline and the task recorded "timed out" for
+  work that was cancelled. The waiter now checks `IsTerminalStatus`
+  first: cancellation returns promptly with `ErrRequestCancelled`
+  (`CANCELLED` on the wire), tasks settle `CANCELLED` with "underlying
+  request cancelled", and the cache-only cancel path writes the
+  first-class `CANCELLED` status like the store path always did. See
+  `server/docs/release-notes/2026-09-16-cancelled-waiter-fidelity.md`.
+
 - **RegisterTool error contract**: tool registration is an upsert —
   same-machine re-register and stale-owner takeover return `OK` with the
   tool ID preserved — and the one real conflict (a name owned by another
