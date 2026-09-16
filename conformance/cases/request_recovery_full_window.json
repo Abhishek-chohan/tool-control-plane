@@ -1,0 +1,26 @@
+{
+  "id": "request_recovery_full_window",
+  "feature": "request_recovery",
+  "description": "Fill the entire 8 MiB retained chunk window with 512 KiB chunks and read it back in one GetRequestChunks response — the full message-size ladder (server send limit, gateway dial, client receive limit) must carry it end to end.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "conformance-request-recovery-full-window-session",
+    "description": "session for request recovery full window fixture",
+    "namespace": "conformance",
+    "tool_name": "conformance_full_window",
+    "tool_description": "conformance request recovery sized stream tool",
+    "sized_chunks": true,
+    "params": {
+      "count": 16,
+      "chunk_kib": 512
+    }
+  },
+  "expected": {
+    "request_id_non_empty": true,
+    "final_status_equals": "done",
+    "chunk_count_equals": 16,
+    "chunk_bytes_equals": 524288,
+    "window_bytes_at_least": 8388608
+  },
+  "tags": ["core", "request", "recovery", "stream", "sizing"]
+}

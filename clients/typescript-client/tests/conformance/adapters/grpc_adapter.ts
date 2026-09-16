@@ -162,10 +162,16 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
   constructor(host: string, port: number, private readonly userId: string, private readonly apiKey: string = '') {
     this.target = `${host}:${port}`;
     const credentials = grpc.credentials.createInsecure();
-    this.toolClient = new ToolServiceClient(this.target, credentials);
-    this.sessionClient = new SessionsServiceClient(this.target, credentials);
-    this.machineClient = new MachinesServiceClient(this.target, credentials);
-    this.requestsClient = new RequestsServiceClient(this.target, credentials);
+    // Message-size ladder, mirroring the SDK's channel options: a full
+    // 8 MiB replay-window read must clear the client's receive limit.
+    const channelOptions: grpc.ChannelOptions = {
+      'grpc.max_receive_message_length': 9 * 1024 * 1024,
+      'grpc.max_send_message_length': 17 * 1024 * 1024,
+    };
+    this.toolClient = new ToolServiceClient(this.target, credentials, channelOptions);
+    this.sessionClient = new SessionsServiceClient(this.target, credentials, channelOptions);
+    this.machineClient = new MachinesServiceClient(this.target, credentials, channelOptions);
+    this.requestsClient = new RequestsServiceClient(this.target, credentials, channelOptions);
     this.providerClient = ToolplaneClient.createGRPCClient(host, port, '', userId, apiKey);
   }
 
@@ -309,6 +315,36 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
         for (let index = 0; index < count; index += 1) {
           await sleep(250);
           yield `${prefix}-${index + 1}`;
+        }
+      },
+    });
+  }
+
+  // A stream tool whose chunks are exactly chunkKib KiB each — the
+  // full-window fixture uses it to prove the message-size ladder (one
+  // GetRequestChunks response carrying the whole 8 MiB window).
+  async registerSizedStreamTool(sessionId: string, toolName: string, description: string): Promise<void> {
+    await this.getRuntime(sessionId).registerTool({
+      sessionId,
+      name: toolName,
+      description,
+      schema: {
+        type: 'object',
+        properties: {
+          count: { type: 'integer' },
+          chunk_kib: { type: 'integer' },
+        },
+        required: ['count', 'chunk_kib'],
+      },
+      tags: ['conformance', 'stream', 'sized'],
+      stream: true,
+      handler: async function* (input) {
+        const count = numberValue(input.count, 2);
+        const chunkKib = numberValue(input.chunk_kib, 256);
+
+        for (let index = 0; index < count; index += 1) {
+          const header = `window-chunk-${index + 1}-of-${count}:`;
+          yield header + 'x'.repeat(chunkKib * 1024 - header.length);
         }
       },
     });

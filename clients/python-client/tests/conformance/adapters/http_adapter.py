@@ -190,6 +190,24 @@ class HttpConformanceAdapter:
             session_id, tool_name, description, _stream_tool, tags=["conformance", "stream"]
         )
 
+    def register_sized_stream_tool(self, session_id: str, tool_name: str, description: str):
+        """A stream tool whose chunks are exactly chunk_kib KiB each — the
+        full-window fixture uses it to prove the message-size ladder (one
+        GetRequestChunks response carrying the whole 8 MiB window)."""
+
+        def _sized_stream_tool(count: int = 2, chunk_kib: int = 256, **_: Any):
+            for index in range(int(count)):
+                header = f"window-chunk-{index + 1}-of-{count}:"
+                yield header + "x" * (int(chunk_kib) * 1024 - len(header))
+
+        self.register_stream_tool_func(
+            session_id,
+            tool_name,
+            description,
+            _sized_stream_tool,
+            tags=["conformance", "stream", "sized"],
+        )
+
     def register_stream_tool_func(
         self,
         session_id: str,

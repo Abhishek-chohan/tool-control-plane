@@ -731,8 +731,18 @@ class RequestManager:
                 )
                 if chunks_response.chunks:
                     result["streamResults"] = list(chunks_response.chunks)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Chunk enrichment is best-effort for the status envelope,
+                # but never silent: a chunk-read failure (size limits,
+                # window state) is logged and surfaced on the envelope so
+                # stream consumers see why streamResults is absent instead
+                # of quietly missing data.
+                logger.warning(
+                    "stream chunk read failed for request %s: %s",
+                    request_id,
+                    exc,
+                )
+                result["streamResultsError"] = str(exc)
 
             return result
 

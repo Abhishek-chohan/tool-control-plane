@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	"toolplane/pkg/mcp"
+	"toolplane/pkg/model"
 )
 
 // corsMiddleware applies explicit development or production CORS behavior,
@@ -80,7 +81,11 @@ func main() {
 	syncTimeout := flag.Duration("sync-timeout", 60*time.Second, "maximum time a tools/call blocks for clients without Tasks support")
 	pollInterval := flag.Duration("poll-interval", 250*time.Millisecond, "backend task poll cadence")
 	defaultUserID := flag.String("default-user-id", "mcp-gateway", "user ID for auto-provisioned sessions")
-	maxMsgSize := flag.Int("max-msg-size", 4*1024*1024, "Maximum gRPC message size in bytes")
+	// Default sized from the server's chunk ladder: one AppendRequestChunks
+	// batch (16 MiB payload) plus envelope headroom — the previous 4 MiB
+	// default rejected full replay-window reads (8 MiB) and max batches at
+	// the dial.
+	maxMsgSize := flag.Int("max-msg-size", model.MaxChunkBatchBytes+1<<20, "Maximum gRPC message size in bytes")
 	// Rate limiting controls, mirroring cmd/proxy (0 disables).
 	apiRate := flag.Float64("api-rate", 0, "Maximum requests per second per API key (0 disables)")
 	apiBurst := flag.Int("api-burst", 0, "Burst size per API key when rate limiting is enabled")

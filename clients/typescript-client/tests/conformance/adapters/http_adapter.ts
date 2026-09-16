@@ -290,6 +290,49 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   }
 
   async registerStreamTool(sessionId: string, toolName: string, description: string): Promise<void> {
+    await this.registerStreamToolWithSchema(
+      sessionId,
+      toolName,
+      description,
+      {
+        type: 'object',
+        properties: {
+          prefix: { type: 'string' },
+          count: { type: 'integer' },
+        },
+        required: ['prefix', 'count'],
+      },
+      ['conformance', 'stream'],
+    );
+  }
+
+  // A stream tool whose chunks are exactly chunk_kib KiB each — the
+  // full-window fixture uses it to prove the message-size ladder (one
+  // GetRequestChunks response carrying the whole 8 MiB window).
+  async registerSizedStreamTool(sessionId: string, toolName: string, description: string): Promise<void> {
+    await this.registerStreamToolWithSchema(
+      sessionId,
+      toolName,
+      description,
+      {
+        type: 'object',
+        properties: {
+          count: { type: 'integer' },
+          chunk_kib: { type: 'integer' },
+        },
+        required: ['count', 'chunk_kib'],
+      },
+      ['conformance', 'stream', 'sized'],
+    );
+  }
+
+  private async registerStreamToolWithSchema(
+    sessionId: string,
+    toolName: string,
+    description: string,
+    schema: Record<string, unknown>,
+    tags: string[],
+  ): Promise<void> {
     const state = await this.ensureMachine(sessionId);
     if (state.tools.has(toolName)) {
       return;
@@ -300,16 +343,9 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
       machineId: state.machineId,
       name: toolName,
       description,
-      schema: JSON.stringify({
-        type: 'object',
-        properties: {
-          prefix: { type: 'string' },
-          count: { type: 'integer' },
-        },
-        required: ['prefix', 'count'],
-      }),
+      schema: JSON.stringify(schema),
       config: {},
-      tags: ['conformance', 'stream'],
+      tags,
     });
 
     state.tools.set(toolName, { stream: true });
@@ -1004,10 +1040,16 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
   ): Promise<void> {
     const prefix = typeof params.prefix === 'string' && params.prefix.length > 0 ? params.prefix : 'chunk';
     const count = numberValue(params.count, 5);
+    const chunkKib = numberValue(params.chunk_kib, 0);
     const chunks: string[] = [];
 
     for (let index = 0; index < count; index += 1) {
-      const value = `${prefix}-${index + 1}`;
+      const value = chunkKib > 0
+        ? (() => {
+          const header = `window-chunk-${index + 1}-of-${count}:`;
+          return header + 'x'.repeat(chunkKib * 1024 - header.length);
+        })()
+        : `${prefix}-${index + 1}`;
       chunks.push(value);
 
       await this.post('api.v1/AppendRequestChunks', {

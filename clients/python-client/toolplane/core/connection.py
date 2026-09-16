@@ -17,6 +17,10 @@ from toolplane.proto.service_pb2_grpc import (
     ToolServiceStub,
 )
 
+from ..common.constants import (
+    GRPC_MAX_RECEIVE_MESSAGE_LENGTH,
+    GRPC_MAX_SEND_MESSAGE_LENGTH,
+)
 from .config import ClientConfig
 from .errors import ConnectionError, ToolplaneConnectionError
 
@@ -101,16 +105,30 @@ class ConnectionManager:
         except OSError as exc:
             raise ToolplaneConnectionError(f"Failed to read {label}: {exc}") from exc
 
-    def _channel_options(self) -> list[tuple[str, str]]:
-        """Build gRPC channel options for TLS overrides."""
-        server_name = getattr(self.config, "tls_server_name", None)
-        if not server_name:
-            return []
+    def _channel_options(self) -> list[tuple[str, object]]:
+        """Build gRPC channel options: the message-size ladder plus TLS
+        overrides.
 
-        return [
-            ("grpc.ssl_target_name_override", server_name),
-            ("grpc.default_authority", server_name),
+        The size options lift the client above the gRPC 4 MiB receive
+        default, which rejects a full 8 MiB replay-window read at the
+        client before it reaches application code.
+        """
+        options: list[tuple[str, object]] = [
+            (
+                "grpc.max_receive_message_length",
+                GRPC_MAX_RECEIVE_MESSAGE_LENGTH,
+            ),
+            ("grpc.max_send_message_length", GRPC_MAX_SEND_MESSAGE_LENGTH),
         ]
+        server_name = getattr(self.config, "tls_server_name", None)
+        if server_name:
+            options.extend(
+                [
+                    ("grpc.ssl_target_name_override", server_name),
+                    ("grpc.default_authority", server_name),
+                ]
+            )
+        return options
 
     def _create_channel(self, target: str) -> grpc.Channel:
         """Create a secure or insecure gRPC channel from client configuration."""

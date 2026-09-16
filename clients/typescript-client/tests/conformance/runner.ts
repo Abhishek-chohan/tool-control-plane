@@ -142,11 +142,19 @@ async function executeRequestRecoveryCase(
   transport: Transport,
 ): Promise<void> {
   const toolName = String(request.tool_name ?? '');
-  await adapter.registerStreamTool(
-    sessionId,
-    toolName,
-    String(request.tool_description ?? 'conformance request recovery tool'),
-  );
+  if (request.sized_chunks === true) {
+    await adapter.registerSizedStreamTool(
+      sessionId,
+      toolName,
+      String(request.tool_description ?? 'conformance request recovery tool'),
+    );
+  } else {
+    await adapter.registerStreamTool(
+      sessionId,
+      toolName,
+      String(request.tool_description ?? 'conformance request recovery tool'),
+    );
+  }
 
   const requestId = await adapter.startStreamingRequest(
     sessionId,
@@ -182,6 +190,28 @@ async function executeRequestRecoveryCase(
   }
   if ('chunk_count_equals' in expected) {
     assertChunkWindowLength(chunkWindow, numberValue(expected.chunk_count_equals, 0), caseId, transport);
+  }
+  if ('chunk_bytes_equals' in expected) {
+    const wantBytes = numberValue(expected.chunk_bytes_equals, 0);
+    (chunkWindow.chunks as unknown[] ?? []).forEach((chunk, index) => {
+      if (String(chunk).length !== wantBytes) {
+        throw new Error(
+          `[${transport}] ${caseId}: chunk ${index} is ${String(chunk).length} bytes, want ${wantBytes}`,
+        );
+      }
+    });
+  }
+  if ('window_bytes_at_least' in expected) {
+    const total = (chunkWindow.chunks as unknown[] ?? []).reduce(
+      (sum, chunk) => sum + String(chunk).length,
+      0,
+    );
+    const wantTotal = numberValue(expected.window_bytes_at_least, 0);
+    if (total < wantTotal) {
+      throw new Error(
+        `[${transport}] ${caseId}: window carries ${total} bytes, want at least ${wantTotal} (the message-size ladder must carry a full window in one response)`,
+      );
+    }
   }
   if ('start_seq_equals' in expected) {
     assertChunkWindowFieldEquals(chunkWindow, 'startSeq', expected.start_seq_equals, caseId, transport);

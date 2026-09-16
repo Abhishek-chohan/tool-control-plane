@@ -283,14 +283,22 @@ const (
 	// MaxRequestChunkBytes bounds one stream chunk; larger payloads are
 	// rejected at the RPC boundary rather than truncated mid-stream.
 	MaxRequestChunkBytes = 512 << 10
-	// MaxChunkBatchBytes bounds one AppendRequestChunks RPC: the server's
-	// MaxRecvMsgSize is set to match, so a full max-size batch fits.
+	// MaxChunkBatchBytes bounds one AppendRequestChunks RPC at the gRPC
+	// transport: the server's MaxRecvMsgSize is set to match. The protobuf
+	// envelope (framing, sequence numbers) rides on top of the summed
+	// payload, so an exactly-full batch is over the wire limit — the
+	// service's batch guard rejects totals above
+	// MaxChunkBatchPayloadBytes with a clear code instead of a transport
+	// ResourceExhausted.
 	MaxChunkBatchBytes = 32 * MaxRequestChunkBytes
-	// maxRequestStreamWindowBytes bounds the retained window: when the
+	// MaxChunkBatchPayloadBytes is the domain cap on the summed chunk
+	// payload of one AppendRequestChunks RPC: MaxChunkBatchBytes minus
+	// headroom for the envelope, so a batch at this bound passes the
+	// transport cleanly.
+	MaxChunkBatchPayloadBytes = MaxChunkBatchBytes - 64<<10
+	// MaxRequestStreamWindowBytes is the stored-window byte bound: when the
 	// window's total payload exceeds it, oldest chunks are trimmed (StartSeq
-	// advances) until it fits.
-	// MaxRequestStreamWindowBytes is the stored-window byte bound (shared
-	// with the chunk-table trim).
+	// advances) until it fits. Shared with the chunk-table trim.
 	MaxRequestStreamWindowBytes = 8 << 20
 )
 

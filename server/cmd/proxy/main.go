@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 
+	"toolplane/pkg/model"
 	gw "toolplane/proto"
 	// Registers google.rpc.ErrorInfo so the gateway can marshal status
 	// details attached by the server.
@@ -316,8 +317,12 @@ func main() {
 	httpListen := flag.String("listen", ":8080", "HTTP listen address for JSON gateway")
 	// gRPC backend endpoint
 	grpcEndpoint := flag.String("backend", "localhost:9001", "gRPC server endpoint")
-	// Max message size settings (for backpressure management)
-	maxMsgSize := flag.Int("max-msg-size", 4*1024*1024, "Maximum message size in bytes")
+	// Max message size settings (for backpressure management). The default
+	// is sized from the server's chunk ladder: one AppendRequestChunks
+	// batch (16 MiB payload) plus envelope headroom — the previous 4 MiB
+	// default rejected full replay-window reads (8 MiB) and max batches at
+	// the dial.
+	maxMsgSize := flag.Int("max-msg-size", model.MaxChunkBatchBytes+1<<20, "Maximum message size in bytes")
 	// Max concurrent requests
 	maxConcurrentRequests := flag.Int64("max-concurrent", 1000, "Maximum concurrent requests")
 	// Rate limiting controls

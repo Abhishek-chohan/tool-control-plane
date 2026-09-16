@@ -232,6 +232,25 @@ class GrpcConformanceAdapter:
             tags=["conformance", "stream"],
         )
 
+    def register_sized_stream_tool(self, session_id: str, tool_name: str, description: str):
+        """A stream tool whose chunks are exactly chunk_kib KiB each — the
+        full-window fixture uses it to prove the message-size ladder (one
+        GetRequestChunks response carrying the whole 8 MiB window)."""
+        context = self._ensure_context_machine(session_id)
+
+        def _sized_stream_tool(count: int = 2, chunk_kib: int = 256, **_: Any):
+            for index in range(int(count)):
+                header = f"window-chunk-{index + 1}-of-{count}:"
+                yield header + "x" * (int(chunk_kib) * 1024 - len(header))
+
+        context.register_tool(
+            name=tool_name,
+            func=_sized_stream_tool,
+            description=description,
+            stream=True,
+            tags=["conformance", "stream", "sized"],
+        )
+
     def list_tools(self, session_id: str) -> List[Dict[str, Any]]:
         return self.client.list_tools(session_id)
 

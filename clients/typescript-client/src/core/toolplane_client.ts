@@ -285,16 +285,26 @@ export class ToolplaneClient {
   }
 
   private channelOptions(): grpc.ChannelOptions {
+    // Message-size ladder, sized from the server's chunk limits: replay
+    // window reads (8 MiB) and chunk batch writes (16 MiB) plus envelope
+    // headroom. The gRPC default (4 MiB receive) rejects a full window
+    // read at the client before it reaches application code.
+    const options: grpc.ChannelOptions = {
+      'grpc.max_receive_message_length': 9 * 1024 * 1024,
+      'grpc.max_send_message_length': 17 * 1024 * 1024,
+    };
+
     if (!this.isTLSEnabled()) {
-      return {};
+      return options;
     }
 
     const serverName = this.config.tls?.serverName?.trim();
     if (!serverName) {
-      return {};
+      return options;
     }
 
     return {
+      ...options,
       'grpc.ssl_target_name_override': serverName,
       'grpc.default_authority': serverName,
     };
