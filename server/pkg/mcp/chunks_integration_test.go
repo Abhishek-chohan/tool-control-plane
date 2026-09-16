@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,13 +257,203 @@ func TestSyncCallSurfacesChunksAndResult(t *testing.T) {
 	if structured, _ := result["structuredContent"].(map[string]any); structured["echo"] != "sync" {
 		t.Fatalf("structuredContent = %v, want echo=sync", result["structuredContent"])
 	}
+	// The final result text is the single copy of the output: streaming
+	// chunks are no longer duplicated into the content array or _meta.
 	resultMeta, _ := result["_meta"].(map[string]any)
-	chunksMeta, _ := resultMeta[mcp.ChunksMetaKey].(map[string]any)
-	if chunksMeta == nil {
-		t.Fatalf("sync result _meta missing %s: %v", mcp.ChunksMetaKey, resultMeta)
+	if chunksMeta, exists := resultMeta[mcp.ChunksMetaKey]; exists {
+		t.Fatalf("sync result _meta still duplicates chunks: %v", chunksMeta)
 	}
-	if chunks, _ := chunksMeta["chunks"].([]any); len(chunks) != 2 {
-		t.Fatalf("chunks = %v, want 2 entries", chunks)
+	content, _ := result["content"].([]any)
+	textBlocks := 0
+	for _, block := range content {
+		m, _ := block.(map[string]any)
+		if m["type"] == "text" && strings.Contains(fmt.Sprint(m["text"]), "sync") {
+			textBlocks++
+		}
+	}
+	if textBlocks != 1 {
+		t.Fatalf("result content carries %d copies of the result text, want 1: %v", textBlocks, content)
 	}
 	<-providerDone
+}
+
+// postRaw sends one JSON-RPC envelope with an explicit id (or none, for
+// notifications) and returns the recorder for status inspection.
+func postRaw(t *testing.T, handler http.Handler, id any, method string, params map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	envelope := map[string]any{"jsonrpc": "2.0", "method": method, "params": params}
+	if id != nil {
+		envelope["id"] = id
+	}
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(body)))
+	return recorder
+}
+
+// TestSyncCallRetryDedupsOnJSONRPCID pins retry dedup: a tools/call retry
+// carrying the same JSON-RPC id, tool, and arguments reuses the original
+// request instead of creating a second one (double execution).
+func TestSyncCallRetryDedupsOnJSONRPCID(t *testing.T) {
+	conn, machineService, requestService := startBackendWithServices(t)
+	handler := mcp.NewServer(conn, mcp.WithPollInterval(20*time.Millisecond), mcp.WithSyncTimeout(200*time.Millisecond)).Handler()
+
+	const sessionID = "session-dedup"
+	if _, err := machineService.RegisterMachine(sessionID, "machine-dedup", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-dedup", "slow", "slow tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	call := func() *httptest.ResponseRecorder {
+		return postRaw(t, handler, 7, "tools/call", map[string]any{
+			"_meta": map[string]any{
+				"io.modelcontextprotocol/protocolVersion":    mcp.ProtocolVersion,
+				"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+				mcp.SessionIDMetaKey:                         sessionID,
+			},
+			"name": "slow", "arguments": map[string]any{"n": 1},
+		})
+	}
+
+	if rec := call(); rec.Code != http.StatusOK {
+		t.Fatalf("first call status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if rec := call(); rec.Code != http.StatusOK {
+		t.Fatalf("retry status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	requests, _, err := requestService.ListRequests(sessionID, "", "", 100, 0)
+	if err != nil {
+		t.Fatalf("list requests: %v", err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("retry created %d requests, want exactly 1 (dedup failed)", len(requests))
+	}
+}
+
+// TestMetaTimeoutForwardsToRequest pins _meta.dev.toolplane/timeout_seconds
+// reaching the durable request as its absolute execution timeout.
+func TestMetaTimeoutForwardsToRequest(t *testing.T) {
+	conn, machineService, requestService := startBackendWithServices(t)
+	handler := mcp.NewServer(conn, mcp.WithPollInterval(20*time.Millisecond), mcp.WithSyncTimeout(150*time.Millisecond)).Handler()
+
+	const sessionID = "session-timeout-meta"
+	if _, err := machineService.RegisterMachine(sessionID, "machine-timeout", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-timeout", "slow", "slow tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	// Provider completes the call so the response carries _meta.toolplaneTaskId.
+	providerDone := make(chan struct{})
+	go func() {
+		defer close(providerDone)
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, "machine-timeout", []string{"slow"})
+			if err != nil || claimed == nil {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			_, _ = requestService.UpdateRequest(sessionID, claimed.ID, "machine-timeout", claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
+			time.Sleep(50 * time.Millisecond)
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, "machine-timeout", claimed.LeaseEpoch,
+				map[string]string{"ok": "true"}, model.ResultTypeResolution, nil)
+			return
+		}
+	}()
+	defer func() { <-providerDone }()
+
+	rec := postRaw(t, handler, 3, "tools/call", map[string]any{
+		"_meta": map[string]any{
+			"io.modelcontextprotocol/protocolVersion":    mcp.ProtocolVersion,
+			"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			mcp.SessionIDMetaKey:                         sessionID,
+			mcp.TimeoutMetaKey:                           120,
+		},
+		"name": "slow", "arguments": map[string]any{},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("call status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	envelope := map[string]any{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	result := envelope["result"].(map[string]any)
+	meta := result["_meta"].(map[string]any)
+	taskID := meta[mcp.TaskIDDataKey].(string)
+
+	stored, err := requestService.GetRequestByID(sessionID, taskID)
+	if err != nil {
+		t.Fatalf("load request: %v", err)
+	}
+	if stored.TimeoutSeconds != 120 {
+		t.Fatalf("request timeout=%d want 120 (_meta timeout not forwarded)", stored.TimeoutSeconds)
+	}
+}
+
+// TestCancelledNotificationStopsRequest pins notifications/cancelled: "user
+// hit stop" fences the executing request instead of being discarded.
+func TestCancelledNotificationStopsRequest(t *testing.T) {
+	conn, machineService, requestService := startBackendWithServices(t)
+	handler := mcp.NewServer(conn, mcp.WithPollInterval(20*time.Millisecond), mcp.WithSyncTimeout(150*time.Millisecond)).Handler()
+
+	const sessionID = "session-cancel-note"
+	if _, err := machineService.RegisterMachine(sessionID, "machine-cancel", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-cancel", "slow", "slow tool", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	rec := postRaw(t, handler, 9, "tools/call", map[string]any{
+		"_meta": map[string]any{
+			"io.modelcontextprotocol/protocolVersion":    mcp.ProtocolVersion,
+			"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			mcp.SessionIDMetaKey:                         sessionID,
+		},
+		"name": "slow", "arguments": map[string]any{},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("call status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	envelope := map[string]any{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode envelope: %v", err)
+	}
+	// The call hit the sync timeout: the request id surfaces in the error
+	// data, exactly where a real client finds it before sending "stop".
+	errObj := envelope["error"].(map[string]any)
+	errData := errObj["data"].(map[string]any)
+	requestID := errData[mcp.TaskIDDataKey].(string)
+
+	// "User hit stop": the standard MCP cancellation notification.
+	notification := postRaw(t, handler, nil, "notifications/cancelled", map[string]any{
+		"requestId": 9,
+		"reason":    "user pressed stop",
+	})
+	if notification.Code != http.StatusAccepted {
+		t.Fatalf("notification status=%d want 202", notification.Code)
+	}
+
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		stored, err := requestService.GetRequestByID(sessionID, requestID)
+		if err != nil {
+			t.Fatalf("load cancelled request: %v", err)
+		}
+		if model.IsTerminalStatus(stored.Status) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("request still %q after notifications/cancelled", stored.Status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
