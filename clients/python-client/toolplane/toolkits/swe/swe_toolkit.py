@@ -352,7 +352,7 @@ class CreateDirectoryTool(BaseTool):
             if success:
                 return f"Directory created successfully: {dir_path}"
             else:
-                return f"Failed to create directory: {dir_path}"
+                raise ToolExecutionError(f"Failed to create directory: {dir_path}")
 
         except Exception as e:
             raise ToolExecutionError(f"Error creating directory: {str(e)}")
@@ -398,7 +398,7 @@ class WriteFileTool(BaseTool):
             if success:
                 return f"File created successfully: {file_path}"
             else:
-                return f"Failed to create file: {file_path}"
+                raise ToolExecutionError(f"Failed to create file: {file_path}")
 
         except Exception as e:
             raise ToolExecutionError(f"Error creating file: {str(e)}")
@@ -652,7 +652,7 @@ class ReadFileTool(BaseTool):
             )
 
             if not result["success"]:
-                return f"Error: {result['error']}"
+                raise ToolExecutionError(f"Error: {result['error']}")
 
             # Format output
             output = []
@@ -727,7 +727,7 @@ class ReplaceStringTool(BaseTool):
             )
 
             if not result["success"]:
-                return f"Error: {result['error']}"
+                raise ToolExecutionError(f"Error: {result['error']}")
 
             output = [result["message"]]
 
@@ -822,7 +822,7 @@ def search_directory_for_term(search_term: str, directory: str = "."):
     import os
 
     if not os.path.isdir(directory):
-        return f"Directory {directory} not found"
+        raise ToolExecutionError(f"Directory {directory} not found")
 
     directory = os.path.realpath(directory)
     matches = {}

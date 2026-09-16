@@ -41,3 +41,61 @@ def test_bash_success_still_returns_output():
     tool = BashTool()
     output = tool._run(command="echo success-marker")
     assert "success-marker" in output
+
+
+def test_provider_executor_converts_raise_to_rejection():
+    """The exception-to-rejection half of the contract: a provider tool that
+    raises reaches the server as a rejection submission (FAILED), not a
+    resolution."""
+    import types
+
+    from toolplane.core.request import RequestManager
+
+    class _Stub:
+        def __init__(self):
+            self.submitted = []
+
+        def UpdateRequest(self, request, metadata=None):
+            return types.SimpleNamespace(success=True)
+
+        def SubmitRequestResult(self, request, metadata=None):
+            self.submitted.append(request)
+            return types.SimpleNamespace(success=True)
+
+    class _Conn:
+        def __init__(self):
+            self.requests_stub = _Stub()
+
+        def ensure_connected(self):
+            pass
+
+        def get_metadata(self):
+            return ()
+
+        def mark_unhealthy(self):
+            pass
+
+    conn = _Conn()
+    manager = RequestManager(conn)
+
+    def _explode():
+        raise RuntimeError("intentional tool failure")
+
+    request = types.SimpleNamespace(
+        id="req-failure-1",
+        session_id="session-failure",
+        tool_name="explode",
+        input="{}",
+        leased_by="machine-1",
+        lease_epoch=1,
+    )
+
+    manager._execute_request(
+        request, {"explode": _explode}, set()
+    )
+
+    submitted = conn.requests_stub.submitted
+    assert submitted, "no result was submitted"
+    rejection = submitted[-1]
+    assert rejection.result_type == "rejection"
+    assert "intentional tool failure" in rejection.result

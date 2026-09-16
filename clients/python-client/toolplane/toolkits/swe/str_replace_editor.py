@@ -89,12 +89,9 @@ MAX_RESPONSE_LEN = 10000  # 4000 #12000 # 16000
 import io
 import sys
 
-# sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-if hasattr(sys.stdout, "buffer"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-else:
-    # Fallback
-    sys.stderr.write("sys.stdout does not have a 'buffer' attribute.\n")
+# NOTE: no module-level sys.stdout replacement: wrapping the caller's
+# stdout at import time closes downstream capture buffers (pytest
+# capture, provider result capture) when the wrapper is collected.
 
 
 def safe_print(x):
