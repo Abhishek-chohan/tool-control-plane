@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -128,18 +130,21 @@ func (s *Server) handleToolsCall(ctx context.Context, req *Request, meta request
 		return nil, errInvalidParams("tool arguments must be JSON-serializable: " + err.Error())
 	}
 
-	// Create a request in the pending state so a provider machine can claim and
-	// execute it. Claiming it here (as the task execution path does) would hold
-	// the lease and block the polling provider until lease expiry, so tool calls
-	// must enter the queue the same way provider-driven invocations do.
+	// Retry dedup: a client retrying the same JSON-RPC id for the same tool
+	// with identical arguments lands on the original (possibly still
+	// running) request instead of double-executing a side-effecting tool.
+	// The digest keeps an intentionally different call from ever colliding.
 	request, err := s.requests.CreateRequest(ctx, &gw.CreateRequestRequest{
-		SessionId: sessionID,
-		ToolName:  params.Name,
-		Input:     string(input),
+		SessionId:      sessionID,
+		ToolName:       params.Name,
+		Input:          string(input),
+		IdempotencyKey: deriveCallIdempotencyKey(req.ID, params.Name, input),
+		TimeoutSeconds: meta.timeoutSeconds,
 	})
 	if err != nil {
 		return nil, backendError("create request for tool "+params.Name, err)
 	}
+	s.trackCall(sessionID, req.ID, request.Id)
 
 	if meta.clientSupportsTasks() {
 		return createTaskResult(request), nil
@@ -179,32 +184,58 @@ func (s *Server) awaitSyncResult(ctx context.Context, sessionID, requestID strin
 	}
 }
 
-// buildSyncCallToolResult renders the terminal request as a CallToolResult with
-// the request's retained chunks surfaced as leading text blocks. The exact chunk
-// sequence is also carried in _meta so clients can assert ordering and
-// completeness without parsing content blocks.
+// buildSyncCallToolResult renders the terminal request as one CallToolResult.
+// Content appears exactly once: the final result text when present, otherwise
+// the retained stream chunks joined in order (a provider that died mid-stream
+// still hands back its partial output). The chunk window is no longer
+// duplicated into _meta — the tasks/get cursor covers resume needs.
 func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, request *gw.Request) any {
 	result := callToolResultFromRequest(request)
-	meta := metaMap{TaskIDDataKey: request.Id}
+
+	if hasTextContent(result["content"]) {
+		result["_meta"] = metaMap{TaskIDDataKey: request.Id}
+		return result
+	}
+
+	// No final result text: replay retained chunks as the content.
 	if window, err := s.requests.GetRequestChunks(ctx, &gw.GetRequestChunksRequest{
 		SessionId: sessionID,
 		RequestId: request.Id,
 	}); err == nil && len(window.Chunks) > 0 {
-		content, _ := result["content"].([]any)
-		chunkBlocks := make([]any, 0, len(window.Chunks))
-		for _, chunk := range window.Chunks {
-			chunkBlocks = append(chunkBlocks, textBlock(chunk))
+		text := strings.Join(window.Chunks, "\n")
+		if over := len(text) - maxRenderedTextBytes; over > 0 {
+			text = text[:len(text)-over] + "\n... [output truncated at " +
+				fmt.Sprint(maxRenderedTextBytes) + " bytes; use tasks/get paging to re-read] ..."
 		}
-		result["content"] = append(chunkBlocks, content...)
-		meta[ChunksMetaKey] = map[string]any{
-			"requestId": request.Id,
-			"startSeq":  window.StartSeq,
-			"nextSeq":   window.NextSeq,
-			"chunks":    window.Chunks,
+		result["content"] = []any{textBlock(text)}
+	}
+	result["_meta"] = metaMap{TaskIDDataKey: request.Id}
+	return result
+}
+
+// maxRenderedTextBytes bounds one rendered CallToolResult text block: the
+// gateway must not forward unbounded provider output into a model context.
+const maxRenderedTextBytes = 256 * 1024
+
+// hasTextContent reports whether the content array carries any non-empty text
+// block.
+func hasTextContent(content any) bool {
+	blocks, ok := content.([]any)
+	if !ok {
+		return false
+	}
+	for _, block := range blocks {
+		m, ok := block.(map[string]any)
+		if !ok {
+			continue
+		}
+		if m["type"] == "text" {
+			if text, ok := m["text"].(string); ok && strings.TrimSpace(text) != "" {
+				return true
+			}
 		}
 	}
-	result["_meta"] = meta
-	return result
+	return false
 }
 
 // backendError converts a gRPC backend failure into an internal JSON-RPC
@@ -323,4 +354,86 @@ func (s *Server) handleLegacyToolsCall(ctx context.Context, req *Request, apiKey
 		return resultMap, nil
 	}
 	return result, nil
+}
+
+// deriveCallIdempotencyKey builds the dedup key for a tools/call so a client
+// retrying the same JSON-RPC id for the same tool with identical arguments
+// lands on the original request instead of double-executing it. The tool name
+// guards a reused JSON-RPC id across different tools; the input digest keeps
+// an intentionally different call from ever colliding.
+func deriveCallIdempotencyKey(jsonrpcID json.RawMessage, toolName string, input []byte) string {
+	digest := sha256.Sum256(input)
+	return fmt.Sprintf("mcp:%s:%s:%s",
+		normalizeJSONRPCID(jsonrpcID),
+		toolName,
+		hex.EncodeToString(digest[:])[:16],
+	)
+}
+
+// normalizeJSONRPCID renders a JSON-RPC id (string or number) as a stable
+// string key.
+func normalizeJSONRPCID(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	return string(trimmed)
+}
+
+// trackCall records the JSON-RPC id → (session, request) mapping so a later
+// notifications/cancelled can fence the executing request. The map is bounded:
+// oldest entries beyond the cap are dropped.
+func (s *Server) trackCall(sessionID string, jsonrpcID json.RawMessage, requestID string) {
+	key := normalizeJSONRPCID(jsonrpcID)
+	if key == "" || requestID == "" {
+		return
+	}
+	s.callsMu.Lock()
+	defer s.callsMu.Unlock()
+	if _, exists := s.trackedCalls[key]; !exists && len(s.trackedCalls) >= maxTrackedCalls {
+		for old := range s.trackedCalls {
+			delete(s.trackedCalls, old)
+			break
+		}
+	}
+	s.trackedCalls[key] = trackedCall{sessionID: sessionID, requestID: requestID}
+}
+
+// trackedCallFor returns the session and request recorded for a JSON-RPC id.
+func (s *Server) trackedCallFor(jsonrpcID json.RawMessage) (string, string) {
+	key := normalizeJSONRPCID(jsonrpcID)
+	s.callsMu.Lock()
+	defer s.callsMu.Unlock()
+	call, ok := s.trackedCalls[key]
+	if !ok {
+		return "", ""
+	}
+	return call.sessionID, call.requestID
+}
+
+// handleCancelledNotification maps notifications/cancelled to a fenced
+// CancelRequest. The MCP spec's params.requestId names the JSON-RPC id of the
+// call being stopped; the gateway's tracking resolves it to the durable
+// request. Unknown ids (already completed, foreign, or never tracked) are
+// dropped silently — the notification is still acknowledged with 202.
+func (s *Server) handleCancelledNotification(ctx context.Context, req *Request) {
+	var params struct {
+		RequestId json.RawMessage `json:"requestId"`
+	}
+	if len(req.Params) > 0 {
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			return
+		}
+	}
+
+	sessionID, requestID := s.trackedCallFor(params.RequestId)
+	if requestID == "" {
+		return
+	}
+	if _, err := s.requests.CancelRequest(ctx, &gw.CancelRequestRequest{
+		SessionId: sessionID,
+		RequestId: requestID,
+	}); err != nil {
+		fmt.Printf("mcp-gateway: notifications/cancelled for %s failed: %v\n", requestID, err)
+	}
 }

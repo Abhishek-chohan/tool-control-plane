@@ -54,7 +54,23 @@ type Server struct {
 
 	sessionsMu   sync.Mutex
 	sessionByKey map[string]*cachedSession
+
+	// notifications/cancelled tracking: JSON-RPC id → the session and
+	// Toolplane request a tools/call created, so "user hit stop" can fence
+	// the executing attempt. Bounded to keep memory flat.
+	callsMu      sync.Mutex
+	trackedCalls map[string]trackedCall
 }
+
+// trackedCall is one sync tools/call's mapping from its JSON-RPC id to the
+// durable request executing it.
+type trackedCall struct {
+	sessionID string
+	requestID string
+}
+
+// maxTrackedCalls bounds the notifications/cancelled tracking map.
+const maxTrackedCalls = 4096
 
 // cachedSession is one auto-provisioned session binding. The cache is keyed by
 // a SHA-256 hash of the caller credential — never the raw secret — and entries
@@ -128,6 +144,7 @@ func NewServer(conn grpc.ClientConnInterface, opts ...Option) *Server {
 		pollInterval:  250 * time.Millisecond,
 		defaultUserID: DefaultUserID,
 		sessionByKey:  make(map[string]*cachedSession),
+		trackedCalls:  make(map[string]trackedCall),
 
 		// Library default: auto-provisioning on (development convenience).
 		// The gateway binary passes WithSessionAutoProvision(environment !=
@@ -175,7 +192,13 @@ func (s *Server) serveMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.IsNotification() {
-		// Notifications (e.g. notifications/cancelled) expect no response.
+		// Notifications expect no response — but notifications/cancelled
+		// must still reach the backend: "user hit stop" fences the request
+		// the gateway created for that JSON-RPC id.
+		if req.Method == "notifications/cancelled" {
+			ctx := metadata.NewOutgoingContext(r.Context(), authMetadata(r))
+			s.handleCancelledNotification(ctx, &req)
+		}
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
