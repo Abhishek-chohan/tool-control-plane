@@ -19,6 +19,11 @@ import (
 var (
 	errTaskCancelled = errors.New("task cancelled")
 	errTaskTimedOut  = errors.New("task timed out")
+	// errTaskRequestCancelled reports that the task's underlying request was
+	// cancelled by a third party (not the task's own CancelTask): the task
+	// records the cancelled state itself — the runner's errTaskCancelled
+	// path assumes CancelTask already wrote it.
+	errTaskRequestCancelled = errors.New("task request cancelled")
 )
 
 // Task-adoption fencing intervals. A task's executing instance owns it for
@@ -631,6 +636,13 @@ func (s *TasksService) executeTask(task *model.Task) {
 		if errors.Is(err, errTaskCancelled) {
 			return
 		}
+		if errors.Is(err, errTaskRequestCancelled) {
+			// The underlying request was cancelled by a third party: the
+			// work is durably gone, so the task records cancelled — not a
+			// timeout, and not a retry.
+			s.updateTaskWithCancelled(task, "underlying request cancelled")
+			return
+		}
 		if errors.Is(err, errTaskTimedOut) {
 			s.updateTaskWithError(task, err.Error())
 			return
@@ -809,6 +821,9 @@ func (s *TasksService) runTaskAttempt(taskCtx context.Context, task *model.Task)
 		if s.isTaskCancelled(task.ID) {
 			return errTaskCancelled
 		}
+		if errors.Is(err, ErrRequestCancelled) {
+			return errTaskRequestCancelled
+		}
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("%w after %ds", errTaskTimedOut, task.TimeoutSeconds)
 		}
@@ -890,6 +905,34 @@ func (s *TasksService) persistTask(task *model.Task) error {
 }
 
 // updateTaskWithError updates a task with an error status
+// updateTaskWithCancelled records the cancelled terminal state for a task
+// whose underlying request was cancelled by a third party. It mirrors
+// updateTaskWithError's durability shape but closes as CANCELLED, and never
+// overwrites an already-terminal task.
+func (s *TasksService) updateTaskWithCancelled(task *model.Task, reason string) {
+	s.tasksMutex.Lock()
+	defer s.tasksMutex.Unlock()
+	if task.Status != model.StatusPending && task.Status != model.StatusRunning {
+		return
+	}
+
+	task.Status = model.StatusCancelled
+	task.Error = reason
+	task.UpdatedAt = time.Now()
+	completedAt := time.Now()
+	task.CompletedAt = &completedAt
+	task.NextAttemptAt = nil
+
+	if err := s.persistTask(task); err != nil {
+		// The cancelled state exists only in memory; a restart re-adopts
+		// the task.
+		log.Printf("task %s cancelled state not durable; may re-execute after restart: %v", task.ID, err)
+	}
+	s.recordTaskEvent(task, trace.EventTaskCancelled, map[string]any{
+		"reason": reason,
+	})
+}
+
 func (s *TasksService) updateTaskWithError(task *model.Task, errorMsg string) {
 	s.tasksMutex.Lock()
 	defer s.tasksMutex.Unlock()

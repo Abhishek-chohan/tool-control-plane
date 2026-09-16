@@ -45,7 +45,7 @@ func TestTasksServiceCancelTaskCancelsUnderlyingRequest(t *testing.T) {
 	}
 
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCancelled, time.Second)
-	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusFailed, time.Second)
+	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusCancelled, time.Second)
 
 	// Present the cancelled request's own lease grant: even a correctly-fenced
 	// late submission must be rejected once the request is terminal.
@@ -129,7 +129,7 @@ func TestTasksServiceTimeoutCancelsUnderlyingRequest(t *testing.T) {
 	requestID := waitForActiveTaskRequestID(t, tasksService, task.ID, time.Second)
 	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusPending, time.Second)
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusFailed, 3*time.Second)
-	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusFailed, time.Second)
+	waitForRequestStatus(t, requestService, sessionID, requestID, model.RequestStatusCancelled, time.Second)
 
 	updatedTask, err := tasksService.GetTaskByID(sessionID, task.ID)
 	if err != nil {

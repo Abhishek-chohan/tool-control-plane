@@ -97,6 +97,12 @@ var (
 	// already reached a terminal state.
 	ErrRequestNotCancellable = errors.New("request not cancellable")
 
+	// ErrRequestCancelled reports that a request reached the cancelled
+	// terminal state — the waiter observed a third-party cancellation, not
+	// its own deadline. Consumers that mirror request state (tasks) map
+	// this to their own cancelled state instead of timing out.
+	ErrRequestCancelled = errors.New("request cancelled")
+
 	// ErrTaskNotCancellable reports a cancel against a task that already
 	// reached a terminal state.
 	ErrTaskNotCancellable = errors.New("task not cancellable")
@@ -171,6 +177,8 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, storage.ErrLeaseConflict),
 		errors.Is(err, storage.ErrRequestTerminal):
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
+	case errors.Is(err, ErrRequestCancelled):
+		return status.Errorf(codes.Canceled, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonCapacityExhausted, 2*time.Second)
 	case errors.Is(err, ErrTooManyPendingRequests),

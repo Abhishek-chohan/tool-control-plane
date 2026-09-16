@@ -1179,6 +1179,11 @@ func (s *RequestsService) CancelRequest(sessionID, requestID string) error {
 
 		// Cancel request
 		cached.SetResult(map[string]string{"message": "Request was cancelled"}, model.ResultTypeRejection, "Request was cancelled")
+		// Cancelled is a first-class terminal status: the store path's
+		// CancelRequestFenced already writes it, and the rejection→FAILED
+		// rendering is the legacy fallback this cache-only path no longer
+		// needs to emit.
+		cached.Status = model.RequestStatusCancelled
 		cached.LastError = "Request was cancelled"
 		cached.DeadLetter = true
 		s.requestsMutex.Unlock()
@@ -1663,21 +1668,32 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 			return nil, readErr
 		}
 
-		switch req.Status {
-		case model.RequestStatusDone:
+		// Terminal check via IsTerminalStatus so the waiter exits on every
+		// terminal state — a third-party cancellation must wake it, not
+		// spin to the deadline and report a timeout.
+		if model.IsTerminalStatus(req.Status) {
 			s.releaseRequestSignal(req.ID)
-			return &model.ToolResult{
-				RequestID:  req.ID,
-				Result:     marshalExecuteToolResult(req.Result),
-				ResultType: string(req.ResultType),
-			}, nil
-		case model.RequestStatusFailed:
-			s.releaseRequestSignal(req.ID)
-			if req.Error != "" {
-				return nil, fmt.Errorf("tool execution failed: %s", req.Error)
+			switch req.Status {
+			case model.RequestStatusDone:
+				return &model.ToolResult{
+					RequestID:  req.ID,
+					Result:     marshalExecuteToolResult(req.Result),
+					ResultType: string(req.ResultType),
+				}, nil
+			case model.RequestStatusCancelled:
+				return nil, wrapf(ErrRequestCancelled, "request %s was cancelled", req.ID)
+			case model.RequestStatusFailed:
+				if req.Error != "" {
+					return nil, fmt.Errorf("tool execution failed: %s", req.Error)
+				}
+				return nil, fmt.Errorf("tool execution failed")
+			default:
+				// IsTerminalStatus gained a member this waiter cannot serve:
+				// exit loudly instead of spinning to the deadline.
+				return nil, fmt.Errorf("request ended in terminal state %s", req.Status)
 			}
-			return nil, fmt.Errorf("tool execution failed")
-		case model.RequestStatusStalled:
+		}
+		if req.Status == model.RequestStatusStalled {
 			return nil, fmt.Errorf("tool execution stalled")
 		}
 
@@ -1689,7 +1705,10 @@ func (s *RequestsService) WaitForRequestTerminal(ctx context.Context, sessionID,
 		case <-ctx.Done():
 			// Same contract as the primary waiter: a departing caller
 			// durably cancels the request rather than orphaning execution.
-			if err := s.CancelRequest(sessionID, requestID); err != nil {
+			// A request that already reached terminal state on another
+			// replica refuses the cancel (ErrRequestNotCancellable) — that
+			// is success, not a failure worth an error log.
+			if err := s.CancelRequest(sessionID, requestID); err != nil && !errors.Is(err, ErrRequestNotCancellable) {
 				log.Printf("request %s: cancel on waiter deadline failed: %v", requestID, err)
 			}
 			return nil, ctx.Err()
