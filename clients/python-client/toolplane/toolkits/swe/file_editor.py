@@ -86,12 +86,10 @@ MAX_RESPONSE_LEN = 32000  # 4000 #12000 # 16000
 import io
 import sys
 
-# sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-if hasattr(sys.stdout, "buffer"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-else:
-    # Fallback
-    sys.stderr.write("sys.stdout does not have a 'buffer' attribute.\n")
+# NOTE: this module deliberately does NOT replace sys.stdout at import time.
+# A module-level stdout swap wraps (and on garbage collection, closes) the
+# caller's capture buffer — pytest capture, piped output, and the provider's
+# own result capture all break. Printing stays UTF-8-safe via safe_print.
 
 
 def safe_print(x):

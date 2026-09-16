@@ -1178,13 +1178,20 @@ export class ToolplaneClient {
           { requestId, status: 'failure' },
         );
       }
-      // Synthesize the Request model the callers expect from the response.
-      const synthetic = new RequestMessage();
-      synthetic.setId(requestId);
-      synthetic.setStatus(response.getStatus());
-      synthetic.setResult(response.getResult());
-      synthetic.setError(response.getError());
-      return synthetic;
+      // Terminal inside the wait budget: fetch the full request so callers
+      // get complete metadata (the fast-path response only carries
+      // id/status/result/error).
+      const full = await this.invokeGRPCUnary<ProtoRequest>(
+        (metadata, options, callback) => {
+          const getRequest = new GetRequestRequest();
+          getRequest.setSessionId(this.getRequiredSessionId('tool execution'));
+          getRequest.setRequestId(requestId);
+          return this.requestsClient!.getRequest(getRequest, metadata, options, callback);
+        },
+        `failed to fetch request ${requestId}`,
+        requestId,
+      );
+      return full;
     }
 
     // Non-terminal responses never carry an error; keep the guard for

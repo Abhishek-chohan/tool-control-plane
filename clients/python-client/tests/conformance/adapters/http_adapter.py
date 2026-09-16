@@ -1,9 +1,9 @@
-import time
 import json
 import re
+import time
 from typing import Any, Dict, List, Tuple
 
-from toolplane import ToolplaneHTTP, ToolplaneAPIError
+from toolplane import ToolplaneAPIError, ToolplaneHTTP
 
 
 def _parse_maybe_json(value: Any) -> Any:
@@ -123,6 +123,21 @@ class HttpConformanceAdapter:
         context.register_tool(
             name=tool_name,
             func=_echo_tool,
+            description=description,
+            stream=False,
+            tags=["conformance"],
+        )
+
+
+    def register_failing_tool(self, session_id: str, tool_name: str, description: str):
+        context = self._ensure_context_machine(session_id)
+
+        def _failing_tool(**_: Any):
+            raise RuntimeError("intentional tool failure for conformance")
+
+        context.register_tool(
+            name=tool_name,
+            func=_failing_tool,
             description=description,
             stream=False,
             tags=["conformance"],

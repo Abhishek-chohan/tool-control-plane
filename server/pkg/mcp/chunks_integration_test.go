@@ -257,11 +257,16 @@ func TestSyncCallSurfacesChunksAndResult(t *testing.T) {
 	if structured, _ := result["structuredContent"].(map[string]any); structured["echo"] != "sync" {
 		t.Fatalf("structuredContent = %v, want echo=sync", result["structuredContent"])
 	}
-	// The final result text is the single copy of the output: streaming
-	// chunks are no longer duplicated into the content array or _meta.
+	// The final result text is the single copy of the output in content:
+	// streaming chunks are no longer prepended as separate text blocks. The
+	// _meta chunk cursor remains as machine-readable resume metadata.
 	resultMeta, _ := result["_meta"].(map[string]any)
-	if chunksMeta, exists := resultMeta[mcp.ChunksMetaKey]; exists {
-		t.Fatalf("sync result _meta still duplicates chunks: %v", chunksMeta)
+	chunksMeta, _ := resultMeta[mcp.ChunksMetaKey].(map[string]any)
+	if chunksMeta == nil {
+		t.Fatalf("sync result _meta missing %s: %v", mcp.ChunksMetaKey, resultMeta)
+	}
+	if chunks, _ := chunksMeta["chunks"].([]any); len(chunks) != 2 {
+		t.Fatalf("chunks cursor = %v, want 2 entries", chunksMeta)
 	}
 	content, _ := result["content"].([]any)
 	textBlocks := 0
@@ -455,5 +460,55 @@ func TestCancelledNotificationStopsRequest(t *testing.T) {
 			t.Fatalf("request still %q after notifications/cancelled", stored.Status)
 		}
 		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// TestSyncCallFailureCarriesIsError pins the failure contract end to end: a
+// provider tool that raises surfaces as a rejection → FAILED request → an
+// MCP result with isError=true carrying the failure text.
+func TestSyncCallFailureCarriesIsError(t *testing.T) {
+	conn, machineService, requestService := startBackendWithServices(t)
+	handler := mcp.NewServer(conn, mcp.WithPollInterval(20*time.Millisecond)).Handler()
+
+	const sessionID = "session-failure-fidelity"
+	if _, err := machineService.RegisterMachine(sessionID, "machine-fail", "1.0.0", "go", "127.0.0.1", []*model.Tool{
+		model.NewTool(sessionID, "machine-fail", "explode", "raises intentionally", `{"type":"object"}`, nil, nil),
+	}, ""); err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	providerDone := make(chan struct{})
+	go func() {
+		defer close(providerDone)
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			claimed, err := requestService.ClaimPendingRequest(sessionID, "machine-fail", []string{"explode"})
+			if err != nil || claimed == nil {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			_, _ = requestService.UpdateRequest(sessionID, claimed.ID, "machine-fail", claimed.LeaseEpoch, model.RequestStatusRunning, nil, "")
+			_ = requestService.SubmitRequestResult(sessionID, claimed.ID, "machine-fail", claimed.LeaseEpoch,
+				map[string]interface{}{"error": "intentional tool failure"}, model.ResultTypeRejection, nil)
+			return
+		}
+	}()
+	defer func() { <-providerDone }()
+
+	envelope := rpcPost(t, handler, "tools/call", map[string]any{
+		"_meta": map[string]any{
+			"io.modelcontextprotocol/protocolVersion":    mcp.ProtocolVersion,
+			"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+			mcp.SessionIDMetaKey:                         sessionID,
+		},
+		"name": "explode", "arguments": map[string]any{},
+	})
+	result := rpcResult(t, envelope)
+	if result["isError"] != true {
+		t.Fatalf("failed tool call isError=%v, want true: %v", result["isError"], result)
+	}
+	content := fmt.Sprint(result["content"])
+	if !strings.Contains(content, "intentional tool failure") {
+		t.Fatalf("content %q missing the failure message", content)
 	}
 }

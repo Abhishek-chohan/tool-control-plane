@@ -187,25 +187,37 @@ func (s *Server) awaitSyncResult(ctx context.Context, sessionID, requestID strin
 // buildSyncCallToolResult renders the terminal request as one CallToolResult.
 // Content appears exactly once: the final result text when present, otherwise
 // the retained stream chunks joined in order (a provider that died mid-stream
-// still hands back its partial output). The chunk window is no longer
-// duplicated into _meta — the tasks/get cursor covers resume needs.
+// still hands back its partial output). The chunk window stays in _meta —
+// machine-readable metadata for resume cursors, not duplicated content — and
+// text is capped so provider output cannot flow into a model context
+// unbounded.
 func (s *Server) buildSyncCallToolResult(ctx context.Context, sessionID string, request *gw.Request) any {
 	result := callToolResultFromRequest(request)
+	meta := metaMap{TaskIDDataKey: request.Id}
 
-	if hasTextContent(result["content"]) {
-		result["_meta"] = metaMap{TaskIDDataKey: request.Id}
-		return result
-	}
-
-	// No final result text: replay retained chunks as the content.
-	if window, err := s.requests.GetRequestChunks(ctx, &gw.GetRequestChunksRequest{
+	// One chunk-window read serves both needs: content replay when the
+	// request has no final result text, and the resume cursor in _meta.
+	window, windowErr := s.requests.GetRequestChunks(ctx, &gw.GetRequestChunksRequest{
 		SessionId: sessionID,
 		RequestId: request.Id,
-	}); err == nil && len(window.Chunks) > 0 {
+	})
+	if windowErr != nil {
+		window = nil
+	}
+
+	if !hasTextContent(result["content"]) && window != nil && len(window.Chunks) > 0 {
 		text := strings.Join(window.Chunks, "\n")
 		result["content"] = []any{textBlock(capRenderedText(text))}
 	}
-	result["_meta"] = metaMap{TaskIDDataKey: request.Id}
+	if window != nil {
+		meta[ChunksMetaKey] = map[string]any{
+			"requestId": request.Id,
+			"startSeq":  window.StartSeq,
+			"nextSeq":   window.NextSeq,
+			"chunks":    window.Chunks,
+		}
+	}
+	result["_meta"] = meta
 	return result
 }
 
