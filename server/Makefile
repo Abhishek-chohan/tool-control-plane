@@ -109,7 +109,7 @@ conformance-python:
 # Python SDK unit suites outside the conformance marker (request wrappers,
 # gRPC TLS, standalone toolkit self-tests).
 python-unit:
-	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py toolplane/toolkits/standalone_tools -q
+	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py toolplane/toolkits/standalone_tools -q
 
 # Server suite under the race detector, every package.
 test-race:

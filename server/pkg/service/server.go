@@ -744,12 +744,32 @@ func marshalExecuteToolResult(result interface{}) string {
 	return string(encoded)
 }
 
+// validateWaitTimeoutSeconds enforces the wait ceiling on the synchronous
+// execution entrypoints, mirroring the timeout_seconds rule: caller-supplied
+// durations cap at maxRequestTimeout, rejected above it with
+// TIMEOUT_ABOVE_MAX.
+func validateWaitTimeoutSeconds(seconds int32) error {
+	if seconds > int32(maxWaitTimeout.Seconds()) {
+		return wrapf(ErrRequestTimeoutOutOfRange,
+			"wait_timeout_seconds %d exceeds maximum %d", seconds, int(maxWaitTimeout.Seconds()))
+	}
+	return nil
+}
+
 // ======================
 // Execution Methods (Belongs to ToolService)
 // ======================
 
 // ExecuteTool implements the gRPC ExecuteTool method
 func (s *GRPCServer) ExecuteTool(ctx context.Context, req *proto.ExecuteToolRequest) (*proto.ExecuteToolResponse, error) {
+	// Caller-supplied durations share one ceiling: an over-max wait is
+	// rejected before anything is created, with the same reason code as an
+	// over-max timeout_seconds. InvokeTool delegates here, so both
+	// synchronous entrypoints carry the guard.
+	if err := validateWaitTimeoutSeconds(req.GetWaitTimeoutSeconds()); err != nil {
+		return nil, statusFromDomainError("execute tool", err)
+	}
+
 	// Create a request for the tool execution
 	request, err := s.requestService.CreateRequest(req.SessionId, req.ToolName, req.Input, int(req.TimeoutSeconds), req.IdempotencyKey)
 	if err != nil {

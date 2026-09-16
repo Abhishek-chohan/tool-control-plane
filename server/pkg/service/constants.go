@@ -22,6 +22,13 @@ const requestTimeout = 45 * time.Second
 
 // maxRequestTimeout caps caller-supplied per-request timeout overrides.
 const maxRequestTimeout = time.Hour
+
+// maxWaitTimeout caps caller-supplied wait_timeout_seconds on the
+// synchronous execution entrypoints. It shares the request timeout
+// ceiling: a wait can never usefully outlive the request's own maximum
+// execution time, and the bound keeps an unclaimed (immortal) PENDING
+// request from pinning a waiter forever.
+const maxWaitTimeout = maxRequestTimeout
 const requestBackoff = 5 * time.Second
 const maxMachineConcurrentRequests = 4
 

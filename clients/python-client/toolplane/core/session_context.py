@@ -22,7 +22,24 @@ from .request import RequestManager
 from .session import SessionManager
 from .tool import ToolManager
 
+from ..common.constants import WAIT_TIMEOUT_MAX_SECONDS
+
 logger = logging.getLogger(__name__)
+
+
+def derive_wait_for(timeout_seconds: int, wait_timeout: Optional[int]) -> int:
+    """Resolve the local wait budget that also drives the server long-poll.
+
+    Derived waits (``timeout_seconds + 15``, else 60) clamp to the server's
+    wait ceiling so a legal timeout at the ceiling is not rejected. An
+    explicit wait passes through untouched: the server rejects over-max
+    values loudly (OUT_OF_RANGE) instead of the SDK silently shrinking a
+    caller's chosen budget.
+    """
+    if wait_timeout is not None:
+        return wait_timeout
+    derived = timeout_seconds + 15 if timeout_seconds > 0 else 60
+    return min(derived, WAIT_TIMEOUT_MAX_SECONDS)
 
 
 class SessionContext:
@@ -109,10 +126,7 @@ class SessionContext:
         try:
             # Wait budget: also drives the server-side long-poll, so the
             # common case returns terminal inside the submit call itself.
-            if wait_timeout is None:
-                wait_for = timeout_seconds + 15 if timeout_seconds > 0 else 60
-            else:
-                wait_for = wait_timeout
+            wait_for = derive_wait_for(timeout_seconds, wait_timeout)
 
             deadline = time.monotonic() + wait_for
 

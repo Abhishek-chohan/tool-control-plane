@@ -759,8 +759,13 @@ message ExecuteToolRequest {
   string idempotency_key = 5;
   // Optional server-side wait: when positive, the RPC blocks until the
   // request reaches a terminal state (returning its result/error) or this
-  // many seconds elapse (returning the current PENDING state). The wait
+  // many seconds elapse (returning the current in-flight state). The wait
   // never cancels the request. Zero keeps fire-and-forget semantics.
+  // Values above the server maximum (3600s, the same ceiling as
+  // timeout_seconds) are rejected with OUT_OF_RANGE / TIMEOUT_ABOVE_MAX
+  // before anything is created. Ingress paths may apply tighter transport
+  // budgets of their own (the HTTP gateway bounds non-wait calls; the MCP
+  // gateway applies its sync timeout).
   int32 wait_timeout_seconds = 6;
 }
 
