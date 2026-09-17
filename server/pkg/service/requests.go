@@ -505,8 +505,14 @@ func (s *RequestsService) ListRequests(
 	}
 
 	// Map iteration is unordered: sort before paginating so pages are
-	// stable and the store's oldest-first ordering survives the cache.
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].CreatedAt.Before(filtered[j].CreatedAt) })
+	// deterministic. The ID tiebreaker matches the store's ORDER BY —
+	// same-tick CreatedAt values must not reshuffle between pages.
+	sort.SliceStable(filtered, func(i, j int) bool {
+		if filtered[i].CreatedAt.Equal(filtered[j].CreatedAt) {
+			return filtered[i].ID < filtered[j].ID
+		}
+		return filtered[i].CreatedAt.Before(filtered[j].CreatedAt)
+	})
 
 	// The filtered total feeds the v1 ListPage trailer.
 	totalCount := len(filtered)

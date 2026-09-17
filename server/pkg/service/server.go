@@ -226,8 +226,11 @@ func (s *GRPCServer) DeleteSession(ctx context.Context, req *proto.DeleteSession
 
 // ListUserSessions implements the gRPC ListUserSessions method
 func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSessionsRequest) (*proto.ListUserSessionsResponse, error) {
-	// List user sessions with pagination and filtering. The v1 cursor is an
-	// opaque token; the offset it encodes never leaves this handler.
+	// List user sessions with pagination and filtering. The v1 cursor is a
+	// reversible offset token addressing the live ordering, not a snapshot:
+	// sessions created or deleted mid-walk shift positions, so pages may
+	// skip or repeat under mutation (deterministic ordering comes from the
+	// CreatedAt+ID tiebreak, not from isolation).
 	offset, err := decodePageOffset(req.PageToken)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
@@ -510,8 +513,11 @@ func (s *GRPCServer) GetRequest(ctx context.Context, req *proto.GetRequestReques
 
 // ListRequests implements the gRPC ListRequests method
 func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRequest) (*proto.ListRequestsResponse, error) {
-	// List requests. The v1 cursor is opaque; the offset it encodes stays
-	// inside this handler.
+	// List requests. The v1 cursor is a reversible offset token addressing
+	// the live ordering, not a snapshot: requests that appear or reach
+	// terminal states mid-walk shift positions under a status filter, so
+	// pages may skip or repeat under mutation (deterministic ordering comes
+	// from the CreatedAt+ID tiebreak, not from isolation).
 	offset, err := decodePageOffset(req.PageToken)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
@@ -1036,8 +1042,8 @@ func encodePageOffset(offset int) (string, error) {
 	return pageTokenCodec.Encode(offset)
 }
 
-// decodePageOffset unwraps a v1 opaque page token into its numeric list
-// offset. Empty means "from the start".
+// decodePageOffset unwraps a v1 page token into its numeric list offset.
+// Empty means "from the start".
 func decodePageOffset(token string) (int, error) {
 	return pageTokenCodec.Decode(token)
 }
