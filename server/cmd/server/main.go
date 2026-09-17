@@ -103,6 +103,9 @@ func run() int {
 	} else {
 		store = pgStore
 		storageState = "postgres (durable)"
+		// Serialization-retry telemetry: only the Postgres store has a
+		// retry loop to observe (memory-mode stores serialize under a lock).
+		pgStore.SetSerializationObserver(metricsCollector)
 	}
 
 	// Loud posture banner for non-production configurations: enumerate

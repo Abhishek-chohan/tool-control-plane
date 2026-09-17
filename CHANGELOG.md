@@ -49,6 +49,18 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Serialization retries: jittered, counted, and retryable when
+  exhausted**: the SERIALIZABLE transaction wrapper (behind every claim
+  and fenced write) retried with deterministic 2/4/8ms backoff, no
+  metrics, no logs, and a raw SQLSTATE error on exhaustion that failed
+  closed to INTERNAL. Retries now sleep full-jitter draws
+  (`toolplane_storage_serialization_retries_total` /
+  `..._exhausted_total` on the operator surface), exhaustion logs, and a
+  new `storage.ErrSerializationConflict` sentinel maps exhaustion to
+  `UNAVAILABLE` — which every SDK already retries — since the work was
+  never applied. See
+  `server/docs/release-notes/2026-09-16-serialization-retry-observability.md`.
+
 - **Machine re-register reconciles in place**: re-registering no longer
   hard-deletes the machine's tools before re-creating them — consumers
   saw NOT_FOUND mid-re-register and every tool gained a fresh ID. Kept

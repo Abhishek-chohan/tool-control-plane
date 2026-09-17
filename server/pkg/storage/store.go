@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"strings"
@@ -72,6 +73,10 @@ var ErrChunkWindowGap = errors.New("storage: chunk window gap")
 type Store struct {
 	db     *sql.DB
 	logger *log.Logger
+
+	// serializationObserver, when attached, counts retry-loop lifecycle
+	// events for operational metrics.
+	serializationObserver SerializationObserver
 }
 
 // Store is the persistence boundary used by the service layer. The concrete
@@ -333,11 +338,51 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// ErrSerializationConflict reports that a SERIALIZABLE transaction was
+// retried to exhaustion on serialization failures (SQLSTATE 40001/40P01):
+// the datastore kept aborting the transaction under contention. The work
+// was never applied. Callers surface it as UNAVAILABLE — retryable at the
+// RPC layer — instead of failing closed to INTERNAL with raw SQLSTATE text.
+var ErrSerializationConflict = errors.New("storage: serialization conflict retries exhausted")
+
+// SerializationObserver receives serialization-retry lifecycle events for
+// operational metrics. Implementations must be safe for concurrent use.
+type SerializationObserver interface {
+	SerializationRetry()
+	SerializationExhausted()
+}
+
+// SetSerializationObserver attaches retry telemetry to the store. The
+// observer is optional; without one the retry loop is unchanged.
+func (s *Store) SetSerializationObserver(observer SerializationObserver) {
+	if s == nil {
+		return
+	}
+	s.serializationObserver = observer
+}
+
+// serializationBackoff returns the full-jitter sleep for one retry: a
+// uniform draw over [0, base). Jitter de-synchronizes replicas retrying
+// against each other — deterministic backoff lets contending instances
+// re-abort in lockstep.
+func serializationBackoff(base time.Duration) time.Duration {
+	if base <= 0 {
+		return 0
+	}
+	// #nosec G404 -- retry jitter only de-synchronizes contending
+	// replicas; predictability is harmless, crypto randomness is not
+	// worth the cost on this hot path.
+	return rand.N(base)
+}
+
 // withSerializableTx runs fn inside a SERIALIZABLE transaction, retrying
 // serialization failures (SQLSTATE 40001). Concurrent replicas contending on
 // the same rows are routine under serializable isolation: Postgres aborts
 // one of the transactions, and the correct response is to restart it, not to
-// surface an error to the caller.
+// surface an error to the caller. Retries are jittered and counted; when
+// the attempt budget is exhausted on serialization failures the outcome is
+// ErrSerializationConflict (wrapping the last error) so callers can map it
+// to a retryable status instead of failing closed.
 func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	if s == nil {
 		return errors.New("storage: store is nil")
@@ -350,11 +395,21 @@ func (s *Store) withSerializableTx(ctx context.Context, fn func(*sql.Tx) error) 
 		if err == nil {
 			return nil
 		}
-		if attempt+1 >= maxAttempts || !isSerializationFailure(err) {
+		if !isSerializationFailure(err) {
 			return err
 		}
+		if attempt+1 >= maxAttempts {
+			if s.serializationObserver != nil {
+				s.serializationObserver.SerializationExhausted()
+			}
+			s.logger.Printf("serializable transaction abandoned after %d attempts: %v", maxAttempts, err)
+			return fmt.Errorf("%w: %v", ErrSerializationConflict, err)
+		}
+		if s.serializationObserver != nil {
+			s.serializationObserver.SerializationRetry()
+		}
 		select {
-		case <-time.After(backoff):
+		case <-time.After(serializationBackoff(backoff)):
 		case <-ctx.Done():
 			// Cancellation is the caller's outcome, not a retryable
 			// serialization failure; surface it instead of the 40001.

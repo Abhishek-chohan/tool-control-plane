@@ -43,6 +43,9 @@ type RuntimeMetricsCollector struct {
 	taskRetries        prometheus.Counter
 	taskDeadLetters    prometheus.Counter
 
+	storageSerializationRetries   prometheus.Counter
+	storageSerializationExhausted prometheus.Counter
+
 	grpcRequests  *prometheus.CounterVec
 	grpcDurations *prometheus.HistogramVec
 }
@@ -73,7 +76,15 @@ func NewRuntimeMetricsCollector() *RuntimeMetricsCollector {
 		Name: "toolplane_task_dead_letters_total",
 		Help: "Total number of tasks dead-lettered after retry exhaustion.",
 	})
-	c.registry.MustRegister(c.requestRequeues, c.requestDeadLetters, c.taskRetries, c.taskDeadLetters)
+	c.storageSerializationRetries = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_storage_serialization_retries_total",
+		Help: "Total number of SERIALIZABLE transaction retries after SQLSTATE 40001/40P01 aborts.",
+	})
+	c.storageSerializationExhausted = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "toolplane_storage_serialization_exhausted_total",
+		Help: "Total number of SERIALIZABLE transactions abandoned after retry exhaustion.",
+	})
+	c.registry.MustRegister(c.requestRequeues, c.requestDeadLetters, c.taskRetries, c.taskDeadLetters, c.storageSerializationRetries, c.storageSerializationExhausted)
 
 	// Labels are bounded by construction: methods by the proto surface,
 	// codes by the gRPC code set.
@@ -204,6 +215,18 @@ func (c *RuntimeMetricsCollector) taskSource() taskMetricsSource {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.tasks
+}
+
+// SerializationRetry counts one SERIALIZABLE transaction retry after a
+// serialization abort. Implements storage.SerializationObserver.
+func (c *RuntimeMetricsCollector) SerializationRetry() {
+	c.storageSerializationRetries.Inc()
+}
+
+// SerializationExhausted counts one SERIALIZABLE transaction abandoned
+// after retry exhaustion. Implements storage.SerializationObserver.
+func (c *RuntimeMetricsCollector) SerializationExhausted() {
+	c.storageSerializationExhausted.Inc()
 }
 
 // Bind attaches live service sources used for gauge snapshots.

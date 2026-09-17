@@ -181,6 +181,11 @@ func statusFromDomainError(action string, err error) error {
 		return status.Errorf(codes.Canceled, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonCapacityExhausted, 2*time.Second)
+	case errors.Is(err, storage.ErrSerializationConflict):
+		// Serializable-retry exhaustion: the work was never applied and the
+		// datastore kept aborting the transaction — retryable, which the
+		// SDKs already do for UNAVAILABLE, instead of failing closed.
+		return status.Errorf(codes.Unavailable, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrTooManyPendingRequests),
 		errors.Is(err, storage.ErrTooManyPendingRequests):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonSessionBacklogFull, 5*time.Second)
