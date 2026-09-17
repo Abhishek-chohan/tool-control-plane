@@ -28,5 +28,7 @@ scripts branch without parsing output.`,
 		Version:       version,
 	}
 	root.AddCommand(newServeCommand())
+	root.AddCommand(newGatewayCommand())
+	root.AddCommand(newMCPCommand())
 	return root
 }
