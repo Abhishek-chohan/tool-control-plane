@@ -118,3 +118,16 @@ func boolEnv(key string, fallback bool) bool {
 		return fallback
 	}
 }
+
+// ValidateConfig resolves the environment contract and the production
+// gates without starting any server component — doctor and config checks
+// use it to report exactly which setting is missing or invalid.
+func ValidateConfig() error {
+	cfg, err := loadServerConfig()
+	if err != nil {
+		return err
+	}
+	certFile := strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_CERT_FILE"))
+	keyFile := strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_KEY_FILE"))
+	return validateGRPCTLSSettings(cfg.environment, certFile, keyFile)
+}

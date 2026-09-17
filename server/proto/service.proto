@@ -999,6 +999,9 @@ message HealthCheckRequest {
 message HealthCheckResponse {
   string status = 1;
   string version = 2;
+  // Resolved storage mode (memory or postgres). Empty on servers predating
+  // the field.
+  string storage = 3;
 }
 
 // Task definition
