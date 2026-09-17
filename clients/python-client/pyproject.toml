@@ -24,8 +24,6 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
-[project.scripts]
-toolplane-provider = "toolplane.provider_cli:main"
 
 dependencies = [
     "grpcio>=1.80.0",
@@ -37,6 +35,9 @@ dependencies = [
     "pydantic>=2.0.0",
 ]
 requires-python = ">=3.9"
+
+[project.scripts]
+toolplane-provider = "toolplane.provider_cli:main"
 
 [project.optional-dependencies]
 dev = [
