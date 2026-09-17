@@ -95,7 +95,7 @@ func uid(t *testing.T) string {
 // The sessionID should be unique per test (use uid(t)).
 func seedSession(t *testing.T, s storage.Storer, sessionID string) *model.Session {
 	t.Helper()
-	sess := model.NewSession("test-session", "test", "test-user", "", "")
+	sess := model.NewSession("test-session", "test", "test-user", "")
 	sess.ID = sessionID
 	ctx := context.Background()
 	if err := s.SaveSession(ctx, sess); err != nil {

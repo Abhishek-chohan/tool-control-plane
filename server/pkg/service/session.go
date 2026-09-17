@@ -111,14 +111,6 @@ func NewSessionsService(tracer trace.SessionTracer, store storage.Storer) *Sessi
 			if session == nil {
 				continue
 			}
-			if session.ApiKey != "" {
-				session.ApiKey = ""
-				persistCtx, persistCancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-				if err := store.SaveSession(persistCtx, session); err != nil {
-					log.Printf("persist legacy session api key retirement failed: %v", err)
-				}
-				persistCancel()
-			}
 			list, ok := svc.userSessions[session.CreatedBy]
 			if !ok {
 				svc.userSessions[session.CreatedBy] = []string{session.ID}
@@ -158,7 +150,7 @@ func (s *SessionsService) CreateSession(userID, name, description, requestedID, 
 	s.sessionsMutex.RUnlock()
 
 	// Create new session (random ID) then override if requested
-	session := model.NewSession(name, description, userID, "", namespace)
+	session := model.NewSession(name, description, userID, namespace)
 	if requestedID != "" {
 		session.ID = requestedID
 	}
@@ -306,8 +298,10 @@ func (s *SessionsService) UpdateSession(sessionID, name, description, namespace 
 	return session, nil
 }
 
-// DeleteSession deletes a session and all its associated API keys
-func (s *SessionsService) DeleteSession(sessionID string) error {
+// DeleteSession deletes a session and all its associated API keys.
+// actorKeyID is the API key performing the deletion (audit attribution);
+// empty when no authenticated principal is on the call path.
+func (s *SessionsService) DeleteSession(sessionID, actorKeyID string) error {
 	s.sessionsMutex.RLock()
 	session, ok := s.sessions[sessionID]
 	s.sessionsMutex.RUnlock()
@@ -369,15 +363,19 @@ func (s *SessionsService) DeleteSession(sessionID string) error {
 	}
 
 	s.recordSessionEvent(sessionID, "", trace.EventSessionDeleted, time.Now(), map[string]any{
-		"createdBy": userID,
-		"name":      session.Name,
+		"actorKeyId": actorKeyID,
+		"createdBy":  userID,
+		"name":       session.Name,
 	})
 
 	return nil
 }
 
-// CreateApiKey creates a new API key for a session
-func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabilityValues []string, allowedTools []string) (*model.ApiKey, error) {
+// CreateApiKey creates a new API key for a session. createdBy is the human
+// attribution recorded on the key; actorKeyID is the API key performing the
+// creation (audit attribution), empty when no authenticated principal is on
+// the call path.
+func (s *SessionsService) CreateApiKey(sessionID, name, createdBy, actorKeyID string, capabilityValues []string, allowedTools []string) (*model.ApiKey, error) {
 	// Check if session exists
 	s.sessionsMutex.RLock()
 	_, ok := s.sessions[sessionID]
@@ -423,6 +421,7 @@ func (s *SessionsService) CreateApiKey(sessionID, name, createdBy string, capabi
 	}
 
 	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyCreated, apiKey.CreatedAt, map[string]any{
+		"actorKeyId":    actorKeyID,
 		"apiKeyID":      apiKey.ID,
 		"name":          apiKey.Name,
 		"createdBy":     createdBy,
@@ -456,8 +455,9 @@ func (s *SessionsService) ListApiKeys(sessionID string) ([]*model.ApiKey, error)
 	return apiKeys, nil
 }
 
-// RevokeApiKey revokes an API key
-func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
+// RevokeApiKey revokes an API key. actorKeyID is the API key performing
+// the revocation (audit attribution).
+func (s *SessionsService) RevokeApiKey(sessionID, keyID, actorKeyID string) error {
 	s.apiKeysMutex.Lock()
 	defer s.apiKeysMutex.Unlock()
 
@@ -488,6 +488,7 @@ func (s *SessionsService) RevokeApiKey(sessionID, keyID string) error {
 		revokedAt = *apiKey.RevokedAt
 	}
 	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyRevoked, revokedAt, map[string]any{
+		"actorKeyId":   actorKeyID,
 		"apiKeyID":     apiKey.ID,
 		"name":         apiKey.Name,
 		"capabilities": model.CapabilityStrings(apiKey.Capabilities),
@@ -660,7 +661,7 @@ func (s *SessionsService) ListUserSessions(userID string, pageSize, pageToken in
 }
 
 // BulkDeleteSessions deletes multiple sessions for a user
-func (s *SessionsService) BulkDeleteSessions(userID string, sessionIDs []string, filter string) (int, []string, error) {
+func (s *SessionsService) BulkDeleteSessions(userID string, sessionIDs []string, filter, actorKeyID string) (int, []string, error) {
 	s.userSessionsMutex.RLock()
 	userSessionIDs, ok := s.userSessions[userID]
 	s.userSessionsMutex.RUnlock()
@@ -703,7 +704,7 @@ func (s *SessionsService) BulkDeleteSessions(userID string, sessionIDs []string,
 	deletedCount := 0
 
 	for _, sessionID := range sessionsToDelete {
-		if err := s.DeleteSession(sessionID); err != nil {
+		if err := s.DeleteSession(sessionID, actorKeyID); err != nil {
 			failedDeletions = append(failedDeletions, sessionID)
 		} else {
 			deletedCount++
@@ -746,8 +747,9 @@ func (s *SessionsService) GetSessionStats(userID string) (int, int, int, error) 
 // API key of the session so no credential for that session authenticates
 // again. The session record itself is kept (DeleteSession removes it); this
 // is the incident-response path for suspected key compromise. It returns the
-// number of keys revoked.
-func (s *SessionsService) InvalidateSession(sessionID, reason string) (int, error) {
+// number of keys revoked. actorKeyID is the admin API key pulling the
+// switch (audit attribution) — the one credential the trail must name.
+func (s *SessionsService) InvalidateSession(sessionID, reason, actorKeyID string) (int, error) {
 	s.apiKeysMutex.Lock()
 	keys := make([]*model.ApiKey, 0, len(s.apiKeys[sessionID]))
 	for _, apiKey := range s.apiKeys[sessionID] {
@@ -772,6 +774,7 @@ func (s *SessionsService) InvalidateSession(sessionID, reason string) (int, erro
 	}
 
 	s.recordSessionEvent(sessionID, "", trace.EventAPIKeyRevoked, time.Now(), map[string]any{
+		"actorKeyId":   actorKeyID,
 		"reason":       "session_invalidated:" + reason,
 		"revokedCount": len(keys),
 	})

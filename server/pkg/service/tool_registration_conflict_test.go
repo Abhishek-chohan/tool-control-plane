@@ -129,7 +129,7 @@ func TestRegisterToolOwnershipContractPostgres(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = sessionService.DeleteSession(session.ID)
+		_ = sessionService.DeleteSession(session.ID, "")
 	})
 
 	runRegisterToolOwnershipContract(t, store, session.ID)

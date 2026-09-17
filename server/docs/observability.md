@@ -123,6 +123,33 @@ The fingerprint is a short SHA-256-derived identifier of the client IP. It is in
 
 These are part of the maintained contract, not incidental implementation detail.
 
+## Audit Trail Contract
+
+The durable audit trail (`audit_events` on store-backed deployments) records
+security- and lifecycle-relevant transitions: session and API-key lifecycle,
+machine registration/unregistration, and terminal dead-letter outcomes.
+High-frequency execution events are deliberately excluded — they belong to
+metrics, not an audit log.
+
+- **Attribution**: caller-driven events carry `actor_key_id` — the API key
+  that performed the action (key creation and revocation, session deletion,
+  bulk deletion, and the session kill switch). System-driven events
+  (retention sweeps, dead-lettering after retry exhaustion) carry the empty
+  value, as do rows that predate attribution: the trail is append-only, so
+  no backfill exists or is possible.
+- **Machine events** attribute through `machine_id`: the machine's own
+  credential is the actor, which the existing column already identifies.
+- **Delivery semantics**: audit writes are asynchronous and bounded — a full
+  queue drops the event with a log line rather than stalling user requests;
+  persistence failures are logged with full event identity. The trail is
+  best-effort durable, not transactional with the operation it describes.
+- **Retention**: audit events are pruned on the same 30-day retention
+  schedule as terminal requests.
+
+## Correlation And Redaction Rules
+
+These are part of the maintained contract, not incidental implementation detail.
+
 ### Stable Correlation Keys
 
 - server traces use top-level `sessionId`, `machineId`, `toolId`, `requestId`, and `taskId`

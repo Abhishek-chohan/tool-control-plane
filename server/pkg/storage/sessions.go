@@ -15,7 +15,7 @@ func (s *Store) AllSessions(ctx context.Context) ([]*model.Session, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, namespace, created_at, created_by, api_key FROM sessions`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, namespace, created_at, created_by FROM sessions`)
 	if err != nil {
 		return nil, fmt.Errorf("query sessions: %w", err)
 	}
@@ -39,7 +39,7 @@ func (s *Store) GetSession(ctx context.Context, sessionID string) (*model.Sessio
 	if s == nil {
 		return nil, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, description, namespace, created_at, created_by, api_key FROM sessions WHERE id=$1`, sessionID)
+	row := s.db.QueryRowContext(ctx, `SELECT id, name, description, namespace, created_at, created_by FROM sessions WHERE id=$1`, sessionID)
 	rec, err := scanSessionRow(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -59,15 +59,11 @@ type sessionRowScanner interface {
 func scanSessionRow(row sessionRowScanner) (*model.Session, error) {
 	var rec model.Session
 	var namespace sql.NullString
-	var apiKey sql.NullString
-	if err := row.Scan(&rec.ID, &rec.Name, &rec.Description, &namespace, &rec.CreatedAt, &rec.CreatedBy, &apiKey); err != nil {
+	if err := row.Scan(&rec.ID, &rec.Name, &rec.Description, &namespace, &rec.CreatedAt, &rec.CreatedBy); err != nil {
 		return nil, fmt.Errorf("scan session: %w", err)
 	}
 	if namespace.Valid {
 		rec.Namespace = namespace.String
-	}
-	if apiKey.Valid {
-		rec.ApiKey = apiKey.String
 	}
 	return &rec, nil
 }
@@ -77,16 +73,15 @@ func (s *Store) SaveSession(ctx context.Context, session *model.Session) error {
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `
-        INSERT INTO sessions (id, name, description, namespace, created_at, created_by, api_key)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        INSERT INTO sessions (id, name, description, namespace, created_at, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6)
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name,
             description = EXCLUDED.description,
             namespace = EXCLUDED.namespace,
             created_at = EXCLUDED.created_at,
-            created_by = EXCLUDED.created_by,
-            api_key = EXCLUDED.api_key
-    `, session.ID, session.Name, session.Description, nullString(session.Namespace), session.CreatedAt, session.CreatedBy, nullString(session.ApiKey))
+            created_by = EXCLUDED.created_by
+    `, session.ID, session.Name, session.Description, nullString(session.Namespace), session.CreatedAt, session.CreatedBy)
 	if err != nil {
 		return fmt.Errorf("upsert session: %w", err)
 	}
@@ -102,10 +97,10 @@ func (s *Store) InsertSessionIfAbsent(ctx context.Context, session *model.Sessio
 		return false, nil
 	}
 	result, err := s.db.ExecContext(ctx, `
-        INSERT INTO sessions (id, name, description, namespace, created_at, created_by, api_key)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        INSERT INTO sessions (id, name, description, namespace, created_at, created_by)
+        VALUES ($1,$2,$3,$4,$5,$6)
         ON CONFLICT (id) DO NOTHING
-    `, session.ID, session.Name, session.Description, nullString(session.Namespace), session.CreatedAt, session.CreatedBy, nullString(session.ApiKey))
+    `, session.ID, session.Name, session.Description, nullString(session.Namespace), session.CreatedAt, session.CreatedBy)
 	if err != nil {
 		return false, fmt.Errorf("insert session if absent: %w", err)
 	}

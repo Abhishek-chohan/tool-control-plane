@@ -29,7 +29,7 @@ func TestAPIKeyRevocationPropagatesAcrossReplicas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"}, nil)
+	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", "", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestAPIKeyRevocationPropagatesAcrossReplicas(t *testing.T) {
 
 	// Replica A revokes it (persisted). B's cached grant is still fresh, so it
 	// keeps authenticating until the revalidation interval passes.
-	if err := svcA.RevokeApiKey(session.ID, apiKey.ID); err != nil {
+	if err := svcA.RevokeApiKey(session.ID, apiKey.ID, ""); err != nil {
 		t.Fatalf("revoke api key: %v", err)
 	}
 
@@ -65,7 +65,7 @@ func TestSessionDeletionPropagatesToAuthAcrossReplicas(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", []string{"read"}, nil)
+	apiKey, err := svcA.CreateApiKey(session.ID, "shared-key", "user-coherence", "", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestSessionDeletionPropagatesToAuthAcrossReplicas(t *testing.T) {
 
 	// Deleting the session cascades its keys in the store; B's revalidation
 	// must treat the vanished key as authentication failure.
-	if err := svcA.DeleteSession(session.ID); err != nil {
+	if err := svcA.DeleteSession(session.ID, ""); err != nil {
 		t.Fatalf("delete session: %v", err)
 	}
 

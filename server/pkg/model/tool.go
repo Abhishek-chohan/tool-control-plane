@@ -83,12 +83,11 @@ type Session struct {
 	Description string    `json:"description"`
 	Namespace   string    `json:"namespace,omitempty"` // Optional namespace for organization
 	CreatedAt   time.Time `json:"createdAt"`
-	CreatedBy   string    `json:"createdBy"`        // User ID of creator
-	ApiKey      string    `json:"apiKey,omitempty"` // legacy session lock field retained only for migration
+	CreatedBy   string    `json:"createdBy"` // User ID of creator
 }
 
 // NewSession creates a new session with generated ID and timestamp
-func NewSession(name, description, createdBy, apiKey, namespace string) *Session {
+func NewSession(name, description, createdBy, namespace string) *Session {
 	return &Session{
 		ID:          uuid.New().String(),
 		Name:        name,
@@ -96,7 +95,6 @@ func NewSession(name, description, createdBy, apiKey, namespace string) *Session
 		Namespace:   namespace,
 		CreatedAt:   time.Now(),
 		CreatedBy:   createdBy,
-		ApiKey:      apiKey,
 	}
 }
 

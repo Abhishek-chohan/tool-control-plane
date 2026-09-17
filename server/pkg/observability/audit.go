@@ -68,14 +68,28 @@ func (r *AuditRecorder) Record(event trace.SessionEvent) {
 		return
 	}
 
+	// The acting API key rides the trace metadata from the record site; it
+	// graduates to the dedicated audit column instead of living in details.
+	actor, _ := event.Metadata["actorKeyId"].(string)
+	details := event.Metadata
+	if actor != "" {
+		details = make(map[string]any, len(event.Metadata))
+		for key, value := range event.Metadata {
+			if key != "actorKeyId" {
+				details[key] = value
+			}
+		}
+	}
+
 	audit := &model.AuditEvent{
-		CreatedAt: time.Now(),
-		Event:     string(event.Event),
-		SessionID: event.SessionID,
-		MachineID: event.MachineID,
-		RequestID: event.RequestID,
-		TaskID:    event.TaskID,
-		Details:   event.Metadata,
+		CreatedAt:  time.Now(),
+		Event:      string(event.Event),
+		SessionID:  event.SessionID,
+		MachineID:  event.MachineID,
+		RequestID:  event.RequestID,
+		TaskID:     event.TaskID,
+		ActorKeyID: actor,
+		Details:    details,
 	}
 
 	select {

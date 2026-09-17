@@ -46,7 +46,7 @@ func TestRequestsServicePersistentRecoveryRequeuesExpiredRequest(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = sessionSvc.DeleteSession(session.ID)
+		_ = sessionSvc.DeleteSession(session.ID, "")
 	})
 
 	const machineID = "machine-persistent-recovery"
