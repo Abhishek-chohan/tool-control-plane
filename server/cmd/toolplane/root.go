@@ -27,6 +27,7 @@ scripts branch without parsing output.`,
 		SilenceErrors: true,
 		Version:       version,
 	}
+	root.AddCommand(newInvokeCommand())
 	root.AddCommand(newServeCommand())
 	root.AddCommand(newGatewayCommand())
 	root.AddCommand(newMCPCommand())

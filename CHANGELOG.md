@@ -8,6 +8,14 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`toolplane invoke`**: run a tool from the command line —
+  fire-and-forget with the request ID, blocking `--wait` (server-side
+  long-poll to terminal state), or `--stream` to print chunks as they
+  land; `--idempotency-key` dedups retries; `--format json` for scripts.
+  Exit codes map the failure's gRPC status (an unreachable server prints
+  the `toolplane serve` next step). See
+  `server/docs/release-notes/2026-09-17-toolplane-invoke.md`.
+
 - **`SessionsService/ListAuditEvents`**: the durable audit trail becomes
   readable — newest-first, paged via the standard ListPage trailer,
   filterable by session, actor key, or event type, gated to the admin
