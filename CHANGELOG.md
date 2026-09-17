@@ -8,6 +8,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`toolplane serve --config`**: a YAML config file supplies the base
+  configuration layer — flags override environment variables, which
+  override the file, which override defaults. Unknown keys are a boot
+  failure naming the key; values expand `${VAR}`;
+  `storage.database_url_file` reads a secret from a mounted file; a
+  world-readable config file logs a warning; and `--dry-run` prints the
+  resolved configuration with per-key provenance (`(flag)`/`(env)`/
+  `(file)`/`(default)`), secrets masked. See
+  `server/docs/release-notes/2026-09-17-serve-config-file.md`.
+
 - **`toolplane` unified command**: `toolplane serve` runs the gRPC
   control plane with the same flags, `TOOLPLANE_*` environment contract,
   dev-posture banner, and production gates as the standalone
