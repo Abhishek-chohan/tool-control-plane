@@ -8,6 +8,15 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`toolplane-provider` console script**: serve, validate, test, and
+  inspect tools files — Python modules using a bare `@tool` decorator
+  that imports no session and performs no I/O at import. `serve` binds
+  the file to a session and runs the provider loop;
+  `validate` checks schemas without executing the module; `call` runs a
+  tool locally; `schema` prints the generated JSON schema.
+  `ProviderRuntime.tool()` now accepts `session_id=None` for file-based
+  tools (bound at start; ambiguous setups fail loudly).
+
 - **`toolplane invoke`**: run a tool from the command line —
   fire-and-forget with the request ID, blocking `--wait` (server-side
   long-poll to terminal state), or `--stream` to print chunks as they
