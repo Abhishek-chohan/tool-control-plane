@@ -204,7 +204,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     serve = sub.add_parser("serve", help="bind a tools file to a session and serve it")
-    serve.add_argument("file", help="tools file (Python module with @tool functions)")
+    serve.add_argument(
+        "file", nargs="?", default="tools.py", help="tools file (default: ./tools.py)"
+    )
     serve.add_argument(
         "--session",
         default=None,
