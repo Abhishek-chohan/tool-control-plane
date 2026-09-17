@@ -82,6 +82,13 @@ class McpConformanceAdapter:
             session_id, tool_name, description
         )
 
+    def register_tool_with_schema(
+        self, session_id: str, tool_name: str, schema: str
+    ) -> Dict[str, Any]:
+        return self._management.register_tool_with_schema(
+            session_id, tool_name, schema
+        )
+
     def register_failing_tool(self, session_id: str, tool_name: str, description: str):
         self._management.register_failing_tool(session_id, tool_name, description)
 

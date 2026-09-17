@@ -28,6 +28,7 @@ import {
   ListUserSessionsRequest,
   Machine as ProtoMachine,
   RegisterMachineRequest,
+  RegisterToolRequest,
   RenewRequestLeaseRequest,
   RequestStatus,
   RevokeApiKeyRequest,
@@ -139,6 +140,9 @@ function normalizeGrpcErrorCode(code: grpc.status): string {
   }
   if (code === grpc.status.NOT_FOUND) {
     return 'not_found';
+  }
+  if (code === grpc.status.INVALID_ARGUMENT) {
+    return 'invalid_argument';
   }
 
   return String(code).toLowerCase();
@@ -643,6 +647,43 @@ export class GrpcConformanceAdapter implements ConformanceAdapter {
     );
 
     return this.normalizeMachine(response);
+  }
+
+  // Register tool_name from a fresh machine with a caller-supplied schema
+  // string — the schema-validation fixture uses it to pin the
+  // INVALID_ARGUMENT bar for garbage schemas. Returns an errorCode payload
+  // instead of throwing.
+  async registerToolWithSchema(sessionId: string, toolName: string, schema: string): Promise<Record<string, unknown>> {
+    const machine = new RegisterMachineRequest();
+    machine.setSessionId(sessionId);
+    machine.setMachineId(`conformance-probe-${randomUUID().slice(0, 8)}`);
+    machine.setSdkVersion('1.0.0-conformance');
+    machine.setSdkLanguage('conformance');
+
+    const machineSettled = await this.callUnarySettled<ProtoMachine>(
+      (metadata, options, callback) => this.machineClient.registerMachine(machine, metadata, options, callback),
+    );
+    if (machineSettled.errorCode || !machineSettled.response) {
+      return { errorCode: machineSettled.errorCode ?? '', errorMessage: machineSettled.errorMessage ?? '' };
+    }
+
+    const tool = new RegisterToolRequest();
+    tool.setSessionId(sessionId);
+    tool.setMachineId(machineSettled.response.getId());
+    tool.setName(toolName);
+    tool.setDescription('schema validation probe');
+    tool.setSchema(schema);
+
+    const toolSettled = await this.callUnarySettled(
+      (metadata, options, callback) => this.toolClient.registerTool(tool, metadata, options, callback),
+    );
+    if (toolSettled.errorCode || !toolSettled.response) {
+      return { errorCode: toolSettled.errorCode ?? '', errorMessage: toolSettled.errorMessage ?? '' };
+    }
+    return {
+      id: toolSettled.response.getTool()?.getId() ?? '',
+      name: toolSettled.response.getTool()?.getName() ?? '',
+    };
   }
 
   async listMachines(sessionId: string): Promise<Record<string, unknown>[]> {

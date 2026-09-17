@@ -166,11 +166,24 @@ class GrpcConformanceAdapter:
         must surface the ownership conflict (FAILED_PRECONDITION), never a
         silent takeover.
         """
+        return self._register_raw(session_id, tool_name, description, "{}")
+
+    def register_tool_with_schema(
+        self, session_id: str, tool_name: str, schema: str
+    ) -> Dict[str, Any]:
+        """Register tool_name from a fresh machine with a caller-supplied
+        schema string — the schema-validation fixture uses it to pin the
+        INVALID_ARGUMENT bar for garbage schemas."""
+        return self._register_raw(session_id, tool_name, "schema validation probe", schema)
+
+    def _register_raw(
+        self, session_id: str, tool_name: str, description: str, schema: str
+    ) -> Dict[str, Any]:
         try:
             machine = self.client.connection_manager.machine_stub.RegisterMachine(
                 RegisterMachineRequest(
                     session_id=session_id,
-                    machine_id=f"conformance-rival-{uuid4().hex[:8]}",
+                    machine_id=f"conformance-probe-{uuid4().hex[:8]}",
                     sdk_version="1.0.0-conformance",
                     sdk_language="conformance",
                 ),
@@ -188,7 +201,7 @@ class GrpcConformanceAdapter:
                     machine_id=machine.id,
                     name=tool_name,
                     description=description,
-                    schema="{}",
+                    schema=schema,
                 ),
                 metadata=self.client.connection_manager.get_metadata(),
             )

@@ -1,0 +1,21 @@
+{
+  "id": "tool_schema_validation",
+  "feature": "tool_discovery",
+  "description": "Tool registration enforces the schema bar: a non-empty schema must be well-formed JSON with an object root — garbage is rejected INVALID_ARGUMENT; an empty schema registers and consumers supply their fallback.",
+  "request": {
+    "user_id": "conformance-user",
+    "name": "tool-schema-validation-session",
+    "description": "conformance session",
+    "namespace": "conformance",
+    "tool_name": "conformance_schema_ok",
+    "tool_description": "schema validation coverage"
+  },
+  "expected": {
+    "listed_after_register": true,
+    "tool_id_non_empty": true,
+    "invalid_schema_error_code": "invalid_argument",
+    "delete_success": true,
+    "absent_after_delete": true
+  },
+  "tags": ["core", "tool", "registration", "validation"]
+}

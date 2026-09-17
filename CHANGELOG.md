@@ -49,6 +49,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Tool schemas clear a validity bar at registration**: a non-empty
+  schema must be well-formed JSON with an object root — anything else is
+  `INVALID_ARGUMENT` on both RegisterTool and machine registration (a
+  bad schema in a machine's tool list fails the registration instead of
+  being silently skipped). Semantic JSON-Schema validation stays out of
+  scope and documented on the proto field. The TypeScript provider
+  runtime applies the same check client-side, and the dead
+  `GetOpenAITools`/`GetToolsSummary` helpers (zero callers; the former
+  double-encoded schemas) are removed. See
+  `server/docs/release-notes/2026-09-16-tool-schema-bar.md`.
+
 - **Same-tick listings are deterministic**: `ListRequests` sorted by
   `CreatedAt` alone with an unstable sort over map iteration, so requests
   created in the same clock tick could reshuffle between pages and between

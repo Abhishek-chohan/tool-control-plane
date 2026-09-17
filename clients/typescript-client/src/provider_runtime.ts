@@ -65,7 +65,20 @@ function isIterable(value: unknown): value is Iterable<unknown> {
 
 function normalizeSchema(schema: string | Record<string, unknown> | undefined): string {
   if (typeof schema === 'string' && schema.trim()) {
-    return schema;
+    // The server rejects non-JSON and non-object roots with
+    // INVALID_ARGUMENT — fail here with the caller's schema in the
+    // message instead of letting registration surface it.
+    const trimmed = schema.trim();
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      throw new Error(`tool schema must be valid JSON: ${trimmed.slice(0, 60)}`);
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('tool schema root must be a JSON object');
+    }
+    return trimmed;
   }
 
   if (schema && typeof schema === 'object') {

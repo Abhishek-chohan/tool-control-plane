@@ -138,7 +138,20 @@ class HttpConformanceAdapter:
         must surface the ownership conflict (FAILED_PRECONDITION), never a
         silent takeover.
         """
-        rival_id = f"conformance-rival-{uuid4().hex[:8]}"
+        return self._register_raw(session_id, tool_name, description, "{}")
+
+    def register_tool_with_schema(
+        self, session_id: str, tool_name: str, schema: str
+    ) -> Dict[str, Any]:
+        """Register tool_name from a fresh machine with a caller-supplied
+        schema string — the schema-validation fixture uses it to pin the
+        INVALID_ARGUMENT bar for garbage schemas."""
+        return self._register_raw(session_id, tool_name, "schema validation probe", schema)
+
+    def _register_raw(
+        self, session_id: str, tool_name: str, description: str, schema: str
+    ) -> Dict[str, Any]:
+        rival_id = f"conformance-probe-{uuid4().hex[:8]}"
         try:
             self.client.connection_manager.register_machine(
                 {
@@ -155,7 +168,7 @@ class HttpConformanceAdapter:
                     "machineId": rival_id,
                     "name": tool_name,
                     "description": description,
-                    "schema": "{}",
+                    "schema": schema,
                 }
             )
             tool = response.get("tool", response) if isinstance(response, dict) else {}

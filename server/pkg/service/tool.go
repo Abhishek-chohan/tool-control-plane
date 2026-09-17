@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,8 +60,32 @@ func NewToolService(tracer trace.SessionTracer, store storage.Storer) *ToolServi
 	return svc
 }
 
+// validateToolSchema enforces the registration bar for tool schemas: a
+// non-empty schema must be well-formed JSON whose root is an object — the
+// minimum the MCP facade's defensive fallback already assumes. Full
+// JSON-Schema semantic validation is deliberately out of scope (documented
+// on the proto field). An empty schema stays allowed: consumers supply
+// their own fallback.
+func validateToolSchema(schema string) error {
+	trimmed := strings.TrimSpace(schema)
+	if trimmed == "" {
+		return nil
+	}
+	var root interface{}
+	if err := json.Unmarshal([]byte(trimmed), &root); err != nil {
+		return wrapf(ErrInvalidArgument, "tool schema is not valid JSON: %v", err)
+	}
+	if _, ok := root.(map[string]interface{}); !ok {
+		return wrapf(ErrInvalidArgument, "tool schema root must be a JSON object")
+	}
+	return nil
+}
+
 // RegisterTool registers a new tool
 func (s *ToolService) RegisterTool(sessionID, machineID, name, description, schema string, config map[string]interface{}, tags []string) (*model.Tool, error) {
+	if err := validateToolSchema(schema); err != nil {
+		return nil, err
+	}
 	log.Printf("ToolService.RegisterTool called with sessionID: %s, name: %s, tags: %v", sessionID, name, tags)
 	s.toolsMutex.Lock()
 	defer s.toolsMutex.Unlock()
@@ -642,67 +668,4 @@ func cloneTags(src []string) []string {
 	dst := make([]string, len(src))
 	copy(dst, src)
 	return dst
-}
-
-// GetToolsSummary gets a summary of all available tools with their schemas
-func (s *ToolService) GetToolsSummary() ([]map[string]interface{}, error) {
-	allTools, err := s.GetAllTools()
-	if err != nil {
-		return nil, err
-	}
-
-	// Format the tools summary
-	summary := make([]map[string]interface{}, 0, len(allTools))
-	for _, tool := range allTools {
-		// Extract schemas
-		inputSchema := tool.Schema
-		outputSchema := ""
-		if tool.Config != nil {
-			if outputSchemaStr, ok := tool.Config["outputSchema"]; ok {
-				// Add type assertion to convert interface{} to string
-				if strValue, ok := outputSchemaStr.(string); ok {
-					outputSchema = strValue
-				}
-				// If not a string, outputSchema remains empty
-			}
-		}
-
-		toolSummary := map[string]interface{}{
-			"id":           tool.ID,
-			"name":         tool.Name,
-			"description":  tool.Description,
-			"sessionId":    tool.SessionID,
-			"inputSchema":  inputSchema,
-			"outputSchema": outputSchema,
-			"createdAt":    tool.CreatedAt,
-		}
-
-		summary = append(summary, toolSummary)
-	}
-
-	return summary, nil
-}
-
-// GetOpenAITools gets tools in OpenAI compatible format
-func (s *ToolService) GetOpenAITools(sessionID string) ([]map[string]interface{}, error) {
-	tools, err := s.ListTools(sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	openAITools := make([]map[string]interface{}, 0, len(tools))
-	for _, tool := range tools {
-		openAITool := map[string]interface{}{
-			"type": "function",
-			"function": map[string]interface{}{
-				"name":        tool.Name,
-				"description": tool.Description,
-				"parameters":  tool.Schema,
-			},
-		}
-
-		openAITools = append(openAITools, openAITool)
-	}
-
-	return openAITools, nil
 }

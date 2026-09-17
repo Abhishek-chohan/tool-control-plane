@@ -106,6 +106,9 @@ function normalizeGatewayErrorCode(payload: unknown): string {
     if (code === 5) {
       return 'not_found';
     }
+    if (code === 3) {
+      return 'invalid_argument';
+    }
     if (typeof code === 'string') {
       const normalized = code.trim().toLowerCase().replace(/[-\s]+/g, '_');
       if (normalized === 'outofrange') {
@@ -657,6 +660,36 @@ export class HttpConformanceAdapter implements ConformanceAdapter {
     });
 
     return this.normalizeMachine(this.unwrapObject(response.machine ?? response));
+  }
+
+  // Register tool_name from a fresh machine with a caller-supplied schema
+  // string — the schema-validation fixture uses it to pin the
+  // INVALID_ARGUMENT bar for garbage schemas. Returns an errorCode payload
+  // instead of throwing.
+  async registerToolWithSchema(sessionId: string, toolName: string, schema: string): Promise<Record<string, unknown>> {
+    const probeId = `conformance-probe-${randomUUID().slice(0, 8)}`;
+    const machineSettled = await this.postSettled('api.v1/RegisterMachine', {
+      sessionId,
+      machineId: probeId,
+      sdkVersion: '1.0.0-conformance',
+      sdkLanguage: 'conformance',
+    });
+    if (machineSettled.errorCode) {
+      return { errorCode: machineSettled.errorCode, errorMessage: machineSettled.errorMessage ?? '' };
+    }
+
+    const settled = await this.postSettled('api.v1/RegisterTool', {
+      sessionId,
+      machineId: probeId,
+      name: toolName,
+      description: 'schema validation probe',
+      schema,
+    });
+    if (settled.errorCode) {
+      return { errorCode: settled.errorCode, errorMessage: settled.errorMessage ?? '' };
+    }
+    const tool = this.unwrapObject(settled.body?.tool ?? settled.body ?? {});
+    return { id: String(tool.id ?? ''), name: String(tool.name ?? '') };
   }
 
   async listMachines(sessionId: string): Promise<Record<string, unknown>[]> {
