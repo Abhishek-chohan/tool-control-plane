@@ -752,6 +752,13 @@ def execute_case(case_obj: Dict[str, Any], transport: str) -> None:
                 assert_error_code_equals(
                     rival, expected["rival_register_error_code"], case_id, transport
                 )
+            if "invalid_schema_error_code" in expected:
+                garbage = adapter.register_tool_with_schema(
+                    session_id, "conformance_bad_schema", "not json {"
+                )
+                assert_error_code_equals(
+                    garbage, expected["invalid_schema_error_code"], case_id, transport
+                )
 
             deleted = adapter.delete_tool(session_id, tool_id)
             if expected.get("delete_success", False):

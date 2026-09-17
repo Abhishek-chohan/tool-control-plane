@@ -417,6 +417,17 @@ export async function executeCase(caseObject: ConformanceCase, transport: Transp
         }
       }
 
+      // Schema bar: garbage schemas are rejected with INVALID_ARGUMENT at
+      // registration, before any state is touched.
+      if ('invalid_schema_error_code' in expected) {
+        const garbage = await adapter.registerToolWithSchema(
+          sessionId,
+          'conformance_bad_schema',
+          'not json {',
+        );
+        assertErrorCodeEquals(garbage, String(expected.invalid_schema_error_code), caseId, transport);
+      }
+
       const deleted = await adapter.deleteTool(sessionId, toolId);
       if (expected.delete_success === true) {
         assertSuccessTrue(deleted, 'tool delete result', caseId, transport);

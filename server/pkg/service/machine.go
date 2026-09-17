@@ -120,6 +120,18 @@ func (s *MachinesService) RegisterMachine(
 		return nil, wrapf(ErrMachineDraining, "machine %s is draining", machineID)
 	}
 
+	// Schema validation fails the whole registration before any state is
+	// touched: the reconcile below is deliberately tolerant of ownership
+	// conflicts (logged and skipped), but caller input errors must not be.
+	for _, tool := range tools {
+		if tool == nil {
+			continue
+		}
+		if err := validateToolSchema(tool.Schema); err != nil {
+			return nil, wrapf(ErrInvalidArgument, "tool %s: %v", tool.Name, err)
+		}
+	}
+
 	s.machinesMutex.Lock()
 
 	// Initialize machines map for this session if not exists

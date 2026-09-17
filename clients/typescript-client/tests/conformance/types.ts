@@ -35,6 +35,7 @@ export interface ConformanceAdapter {
   registerUnaryEchoTool(sessionId: string, toolName: string, description: string): Promise<void>;
   registerStreamTool(sessionId: string, toolName: string, description: string): Promise<void>;
   registerSizedStreamTool(sessionId: string, toolName: string, description: string): Promise<void>;
+  registerToolWithSchema(sessionId: string, toolName: string, schema: string): Promise<Record<string, unknown>>;
   listTools(sessionId: string): Promise<Record<string, unknown>[]>;
   getToolById(sessionId: string, toolId: string): Promise<Record<string, unknown>>;
   getToolByName(sessionId: string, toolName: string): Promise<Record<string, unknown>>;

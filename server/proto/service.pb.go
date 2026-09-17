@@ -358,11 +358,16 @@ func (x *DrainMachineResponse) GetDrained() bool {
 
 // Tool definition
 type Tool struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Schema        string                 `protobuf:"bytes,4,opt,name=schema,proto3" json:"schema,omitempty"` // JSON schema as string
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name        string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	// JSON schema as string. A non-empty schema must be well-formed JSON
+	// whose root is an object — registration rejects anything else with
+	// INVALID_ARGUMENT. Semantic JSON-Schema validation is out of scope:
+	// consumers treat the schema as advisory. Empty means "no schema" and
+	// consumers supply their own fallback.
+	Schema        string                 `protobuf:"bytes,4,opt,name=schema,proto3" json:"schema,omitempty"`
 	Config        map[string]string      `protobuf:"bytes,5,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	LastPingAt    *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=last_ping_at,json=lastPingAt,proto3" json:"last_ping_at,omitempty"`
@@ -948,14 +953,18 @@ func (x *Request) GetTimeoutSeconds() int32 {
 
 // RegisterToolRequest
 type RegisterToolRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	MachineId     string                 `protobuf:"bytes,2,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
-	Schema        string                 `protobuf:"bytes,5,opt,name=schema,proto3" json:"schema,omitempty"` // JSON schema as string
-	Config        map[string]string      `protobuf:"bytes,6,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Tags          []string               `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"` // Optional tags for categorization
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	SessionId   string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	MachineId   string                 `protobuf:"bytes,2,opt,name=machine_id,json=machineId,proto3" json:"machine_id,omitempty"`
+	Name        string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Description string                 `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	// JSON schema as string. A non-empty schema must be well-formed JSON
+	// whose root is an object — registration rejects anything else with
+	// INVALID_ARGUMENT. Semantic JSON-Schema validation is out of scope.
+	// Empty means "no schema" and consumers supply their own fallback.
+	Schema        string            `protobuf:"bytes,5,opt,name=schema,proto3" json:"schema,omitempty"`
+	Config        map[string]string `protobuf:"bytes,6,rep,name=config,proto3" json:"config,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tags          []string          `protobuf:"bytes,7,rep,name=tags,proto3" json:"tags,omitempty"` // Optional tags for categorization
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

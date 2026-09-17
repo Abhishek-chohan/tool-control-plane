@@ -417,7 +417,12 @@ message Tool {
   string id = 1;
   string name = 2;
   string description = 3;
-  string schema = 4;  // JSON schema as string
+  // JSON schema as string. A non-empty schema must be well-formed JSON
+  // whose root is an object — registration rejects anything else with
+  // INVALID_ARGUMENT. Semantic JSON-Schema validation is out of scope:
+  // consumers treat the schema as advisory. Empty means "no schema" and
+  // consumers supply their own fallback.
+  string schema = 4;
   map<string, string> config = 5;
   google.protobuf.Timestamp created_at = 6;
   google.protobuf.Timestamp last_ping_at = 7;
@@ -500,7 +505,11 @@ message RegisterToolRequest {
   string machine_id = 2;
   string name = 3;
   string description = 4;
-  string schema = 5;  // JSON schema as string
+  // JSON schema as string. A non-empty schema must be well-formed JSON
+  // whose root is an object — registration rejects anything else with
+  // INVALID_ARGUMENT. Semantic JSON-Schema validation is out of scope.
+  // Empty means "no schema" and consumers supply their own fallback.
+  string schema = 5;
   map<string, string> config = 6;
   repeated string tags = 7;  // Optional tags for categorization
 }
