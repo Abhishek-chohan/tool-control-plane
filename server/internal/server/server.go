@@ -41,6 +41,9 @@ type Options struct {
 	MigrateOnly   bool
 	TLSCertFile   string
 	TLSKeyFile    string
+	// Listener, when set, is served instead of binding :Port — tests and
+	// embedded callers hand a pre-bound listener to avoid pick-port races.
+	Listener net.Listener
 }
 
 // DefaultOptions returns the development defaults the standalone binary
@@ -195,10 +198,17 @@ func RunContext(ctx context.Context, opts Options) int {
 		return 1
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", opts.Port))
-	if err != nil {
-		slog.Error("failed to listen", slog.Any("err", err))
-		return 1
+	// A pre-bound listener (tests, socket injection) wins over the port;
+	// otherwise bind :Port. Binding here — not in the entry point — keeps
+	// the listen and the health flip atomic with the serve loop.
+	lis := opts.Listener
+	if lis == nil {
+		l, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", opts.Port))
+		if listenErr != nil {
+			slog.Error("failed to listen", slog.Any("err", listenErr))
+			return 1
+		}
+		lis = l
 	}
 
 	serverOptions, transportSummary, err := grpcServerTransport(opts.TLSCertFile, opts.TLSKeyFile)

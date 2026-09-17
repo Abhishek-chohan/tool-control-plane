@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"testing"
 	"time"
@@ -23,13 +24,14 @@ func bootTestServer(t *testing.T) string {
 	t.Setenv("TOOLPLANE_AUTH_FIXED_API_KEY", "dev-key")
 	t.Setenv("TOOLPLANE_STORAGE_MODE", "memory")
 
-	port, err := pickFreePort()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("pick port: %v", err)
+		t.Fatalf("bind listener: %v", err)
 	}
+	port := lis.Addr().(*net.TCPAddr).Port
 	ctx, cancel := context.WithCancel(context.Background())
 	opts := server.DefaultOptions()
-	opts.Port = port
+	opts.Listener = lis
 	done := make(chan int, 1)
 	go func() { done <- server.RunContext(ctx, opts) }()
 	// One cleanup doing cancel-then-join: Cleanup runs LIFO, so separate

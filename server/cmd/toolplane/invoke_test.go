@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	"net"
 	"toolplane/internal/cli"
 	"toolplane/internal/server"
 	proto "toolplane/proto"
@@ -27,12 +28,14 @@ func invokeE2E(t *testing.T) (proto.ToolServiceClient, proto.RequestsServiceClie
 	t.Setenv("TOOLPLANE_AUTH_FIXED_API_KEY", "dev-key")
 	t.Setenv("TOOLPLANE_STORAGE_MODE", "memory")
 
-	port, err := pickFreePort()
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("pick port: %v", err)
+		t.Fatalf("bind listener: %v", err)
 	}
+	port := lis.Addr().(*net.TCPAddr).Port
 	serverCtx, cancelServer := context.WithCancel(context.Background())
 	opts := server.DefaultOptions()
+	opts.Listener = lis
 	opts.Port = port
 	done := make(chan int, 1)
 	go func() { done <- server.RunContext(serverCtx, opts) }()

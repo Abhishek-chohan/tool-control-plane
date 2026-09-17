@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"net"
 
 	"toolplane/internal/server"
 	proto "toolplane/proto"
@@ -175,4 +176,85 @@ func pollReady(t *testing.T, address, apiKey string) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// TestToolsListOpenAIFormat pins the OpenAI function-calling rendering:
+// the schema must arrive as a parsed JSON object inside the function
+// definition — never the double-encoded string the deleted server-side
+// helper produced.
+func TestToolsListOpenAIFormat(t *testing.T) {
+	address, cleanup := bootAdminE2EServer(t)
+	defer cleanup()
+
+	// Register a tool over the real RPC surface so the listing has data.
+	gconn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer gconn.Close()
+	authCtx := metadata.AppendToOutgoingContext(context.Background(), "api_key", "dev-key")
+	machineSvc := proto.NewMachinesServiceClient(gconn)
+	regCtx, regCancel := context.WithTimeout(authCtx, 5*time.Second)
+	_, err = machineSvc.RegisterMachine(regCtx, &proto.RegisterMachineRequest{
+		SessionId:   "sess-openai",
+		MachineId:   "machine-openai",
+		SdkVersion:  "test",
+		SdkLanguage: "go",
+		Tools: []*proto.RegisterToolRequest{{
+			Name:        "add",
+			Description: "Add two numbers",
+			Schema:      `{"type":"object","properties":{"a":{"type":"integer"}}}`,
+		}},
+	})
+	regCancel()
+	if err != nil {
+		t.Fatalf("register machine: %v", err)
+	}
+
+	output := runRootCommand(t, "tools", "list", "--session", "sess-openai",
+		"--openai", "--format", "json", "--address", address, "--api-key", "dev-key")
+	var payload []struct {
+		Type     string `json:"type"`
+		Function struct {
+			Name        string      `json:"name"`
+			Description string      `json:"description"`
+			Parameters  interface{} `json:"parameters"`
+		} `json:"function"`
+	}
+	if err := json.Unmarshal([]byte(output), &payload); err != nil {
+		t.Fatalf("openai output not JSON: %v (%s)", err, output)
+	}
+	if len(payload) != 1 || payload[0].Function.Name != "add" {
+		t.Fatalf("unexpected payload: %+v", payload)
+	}
+	params, ok := payload[0].Function.Parameters.(map[string]interface{})
+	if !ok || params["type"] != "object" {
+		t.Fatalf("parameters must be a parsed schema object, got: %#v", payload[0].Function.Parameters)
+	}
+}
+
+// bootAdminE2EServer starts the in-memory control plane and returns its
+// address.
+func bootAdminE2EServer(t *testing.T) (string, func()) {
+	t.Helper()
+	t.Setenv("TOOLPLANE_ENV_MODE", "development")
+	t.Setenv("TOOLPLANE_AUTH_MODE", "fixed")
+	t.Setenv("TOOLPLANE_AUTH_FIXED_API_KEY", "dev-key")
+	t.Setenv("TOOLPLANE_STORAGE_MODE", "memory")
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("bind listener: %v", err)
+	}
+	port := lis.Addr().(*net.TCPAddr).Port
+	ctx, cancel := context.WithCancel(context.Background())
+	opts := server.DefaultOptions()
+	opts.Listener = lis
+	done := make(chan int, 1)
+	go func() { done <- server.RunContext(ctx, opts) }()
+	cleanup := func() {
+		cancel()
+		<-done
+	}
+	return fmt.Sprintf("localhost:%d", port), cleanup
 }

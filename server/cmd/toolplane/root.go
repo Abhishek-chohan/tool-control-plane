@@ -37,5 +37,8 @@ scripts branch without parsing output.`,
 	root.AddCommand(newKeyCommand())
 	root.AddCommand(newMachinesCommand())
 	root.AddCommand(newAuditCommand())
+	root.AddCommand(newRequestCommand())
+	root.AddCommand(newTaskCommand())
+	root.AddCommand(newToolsCommand())
 	return root
 }
