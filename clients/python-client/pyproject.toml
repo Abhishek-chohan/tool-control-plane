@@ -24,6 +24,9 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+[project.scripts]
+toolplane-provider = "toolplane.provider_cli:main"
+
 dependencies = [
     "grpcio>=1.80.0",
     "grpcio-tools>=1.80.0",

@@ -139,7 +139,7 @@ class ProviderRuntime:
 
     def tool(
         self,
-        session_id: str,
+        session_id: Optional[str] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         stream: bool = False,
@@ -149,7 +149,9 @@ class ProviderRuntime:
 
         Decorating defers the (network) registration until
         start_in_background/run_forever/poll_once, so importing a module of
-        decorated tools performs no I/O.
+        decorated tools performs no I/O. session_id may be omitted when the
+        runtime manages exactly one session: the tool binds to it at
+        start (file-based tool modules use this to stay session-free).
         """
 
         def decorator(func: Callable) -> Callable:
@@ -168,6 +170,19 @@ class ProviderRuntime:
 
         return decorator
 
+    def _resolve_default_session(self) -> str:
+        """Resolve the session an unbound (session_id=None) deferred tool
+        registers into: the runtime's single managed session. Ambiguous or
+        empty setups fail loudly instead of guessing."""
+        managed = self.managed_session_ids()
+        if len(managed) == 1:
+            return managed[0]
+        raise ToolplaneError(
+            "tool has no session_id and the runtime does not manage exactly "
+            f"one session (managed: {managed or 'none'}); bind it explicitly "
+            "or manage a single session"
+        )
+
     def _apply_pending_registrations(self) -> None:
         """Attach sessions and register every deferred tool.
 
@@ -182,7 +197,7 @@ class ProviderRuntime:
 
             try:
                 self.register_tool(
-                    session_id=item.session_id,
+                    session_id=item.session_id or self._resolve_default_session(),
                     name=item.name,
                     func=item.func,
                     description=item.description,
