@@ -1,11 +1,11 @@
-package main
+package server
 
 import (
 	"fmt"
 	"os"
 	"strings"
 
-	"toolplane/cmd/server/auth"
+	"toolplane/internal/auth"
 )
 
 type serverConfig struct {

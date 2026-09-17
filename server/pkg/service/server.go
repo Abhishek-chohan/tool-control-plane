@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"toolplane/cmd/server/auth"
+	"toolplane/internal/auth"
 	"toolplane/pkg/model"
 	proto "toolplane/proto"
 )
