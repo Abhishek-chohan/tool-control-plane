@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"strings"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 // Defaults shared by every server-facing verb.
@@ -38,4 +43,20 @@ func NewConnection(address, apiKey string, timeout time.Duration) Connection {
 		timeout = DefaultTimeout
 	}
 	return Connection{Address: address, APIKey: apiKey, Timeout: timeout}
+}
+
+// Dial opens a gRPC connection to the resolved address. The connection is
+// lazy; Call attaches the authenticated metadata per invocation.
+func (c Connection) Dial() (*grpc.ClientConn, error) {
+	return grpc.NewClient(c.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+}
+
+// Call derives an invocation context: the caller's timeout plus the API
+// key metadata when a key is configured.
+func (c Connection) Call(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(parent, c.Timeout)
+	if c.APIKey != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "api_key", c.APIKey)
+	}
+	return ctx, cancel
 }

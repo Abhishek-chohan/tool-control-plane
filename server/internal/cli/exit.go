@@ -38,7 +38,9 @@ func ExitCodeFor(err error) int {
 		return ExitOK
 	}
 	switch status.Code(err) {
-	case codes.InvalidArgument:
+	case codes.InvalidArgument, codes.OutOfRange:
+		// Over-ceiling caller durations (wait/timeout seconds) arrive as
+		// OUT_OF_RANGE; both are "your input was invalid" to a script.
 		return ExitInvalidArgument
 	case codes.NotFound:
 		return ExitNotFound

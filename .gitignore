@@ -134,3 +134,9 @@ pnpm-debug.log*
 docs/
 # The maintained server documentation lives in server/docs/ and is tracked.
 !server/docs/
+
+# local build artifacts
+server/toolplane
+server/toolplane-server
+server/toolplane-gateway
+server/toolplane-mcp-gateway
