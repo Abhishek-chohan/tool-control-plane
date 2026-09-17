@@ -145,6 +145,7 @@ func convertModelMachineToProto(in *model.Machine) *proto.Machine {
 		Ip:          in.IP,
 		CreatedAt:   timestampProto(in.CreatedAt),
 		LastPingAt:  timestampProto(in.LastPingAt),
+		Draining:    in.Draining,
 	}
 	return out
 }

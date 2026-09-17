@@ -16,7 +16,7 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash, draining FROM machines`)
 	if err != nil {
 		return nil, fmt.Errorf("query machines: %w", err)
 	}
@@ -25,10 +25,14 @@ func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	var machines []*model.Machine
 	for rows.Next() {
 		m := &model.Machine{}
-		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
-		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+		var (
+			sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+			draining                               sql.NullBool
+		)
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash, &draining); err != nil {
 			return nil, fmt.Errorf("scan machine: %w", err)
 		}
+		m.Draining = draining.Valid && draining.Bool
 		if sdkVersion.Valid {
 			m.SDKVersion = sdkVersion.String
 		}
@@ -52,7 +56,7 @@ func (s *Store) ListMachinesBySession(ctx context.Context, sessionID string) ([]
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE session_id=$1`, sessionID)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash, draining FROM machines WHERE session_id=$1`, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("list machines by session: %w", err)
 	}
@@ -61,10 +65,14 @@ func (s *Store) ListMachinesBySession(ctx context.Context, sessionID string) ([]
 	var machines []*model.Machine
 	for rows.Next() {
 		m := &model.Machine{}
-		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
-		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+		var (
+			sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+			draining                               sql.NullBool
+		)
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash, &draining); err != nil {
 			return nil, fmt.Errorf("scan machine: %w", err)
 		}
+		m.Draining = draining.Valid && draining.Bool
 		if sdkVersion.Valid {
 			m.SDKVersion = sdkVersion.String
 		}
@@ -88,15 +96,19 @@ func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machin
 	if s == nil {
 		return nil, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE id=$1`, machineID)
+	row := s.db.QueryRowContext(ctx, `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash, draining FROM machines WHERE id=$1`, machineID)
 	m := &model.Machine{}
-	var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
-	if err := row.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+	var (
+		sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+		draining                               sql.NullBool
+	)
+	if err := row.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash, &draining); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("get machine: %w", err)
 	}
+	m.Draining = draining.Valid && draining.Bool
 	if sdkVersion.Valid {
 		m.SDKVersion = sdkVersion.String
 	}
@@ -191,7 +203,7 @@ func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit i
 	if s == nil {
 		return nil, nil
 	}
-	query := `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash FROM machines WHERE last_ping_at < $1 ORDER BY last_ping_at ASC`
+	query := `SELECT id, session_id, sdk_version, sdk_language, ip, created_at, last_ping_at, token_hash, draining FROM machines WHERE last_ping_at < $1 ORDER BY last_ping_at ASC`
 	var rows *sql.Rows
 	var err error
 	if limit > 0 {
@@ -208,10 +220,14 @@ func (s *Store) ListStaleMachines(ctx context.Context, cutoff time.Time, limit i
 	var machines []*model.Machine
 	for rows.Next() {
 		m := &model.Machine{}
-		var sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
-		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash); err != nil {
+		var (
+			sdkVersion, sdkLanguage, ip, tokenHash sql.NullString
+			draining                               sql.NullBool
+		)
+		if err := rows.Scan(&m.ID, &m.SessionID, &sdkVersion, &sdkLanguage, &ip, &m.CreatedAt, &m.LastPingAt, &tokenHash, &draining); err != nil {
 			return nil, fmt.Errorf("scan stale machine: %w", err)
 		}
+		m.Draining = draining.Valid && draining.Bool
 		if sdkVersion.Valid {
 			m.SDKVersion = sdkVersion.String
 		}
