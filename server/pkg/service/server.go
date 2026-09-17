@@ -372,6 +372,42 @@ func (s *GRPCServer) RevokeApiKey(ctx context.Context, req *proto.RevokeApiKeyRe
 	}, nil
 }
 
+// ListAuditEvents implements the gRPC ListAuditEvents method: the durable
+// audit trail, newest first, paged, filterable. The authz table gates the
+// call to the admin capability.
+func (s *GRPCServer) ListAuditEvents(ctx context.Context, req *proto.ListAuditEventsRequest) (*proto.ListAuditEventsResponse, error) {
+	offset, err := decodePageOffset(req.PageToken)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+	}
+	pageSize := int(req.PageSize)
+	if pageSize <= 0 || pageSize > defaultListPageSize*10 {
+		pageSize = defaultListPageSize
+	}
+
+	events, total, err := s.sessionService.ListAuditEvents(model.AuditEventFilter{
+		SessionID:  req.SessionId,
+		ActorKeyID: req.ActorKeyId,
+		Event:      req.Event,
+		Limit:      pageSize,
+		Offset:     offset,
+	})
+	if err != nil {
+		return nil, statusFromDomainError("list audit events", err)
+	}
+
+	protoEvents := make([]*proto.AuditEvent, 0, len(events))
+	for _, event := range events {
+		protoEvents = append(protoEvents, convertModelAuditEventToProto(event))
+	}
+
+	page, err := buildListPage(offset, len(protoEvents), total)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+	}
+	return &proto.ListAuditEventsResponse{Events: protoEvents, Page: page}, nil
+}
+
 // ======================
 // Machine Management Methods (Belongs to MachinesService)
 // ======================

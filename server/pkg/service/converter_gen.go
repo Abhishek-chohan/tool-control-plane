@@ -223,3 +223,29 @@ func requestStatusFromProto(s proto.RequestStatus) model.RequestStatus {
 		return ""
 	}
 }
+
+// convertModelAuditEventToProto maps the durable audit record onto its v1
+// shape. Details render as a JSON object string (the API's JSON-as-string
+// convention); values that cannot encode are dropped rather than failing
+// the read.
+func convertModelAuditEventToProto(in *model.AuditEvent) *proto.AuditEvent {
+	if in == nil {
+		return nil
+	}
+	out := &proto.AuditEvent{
+		Id:         in.ID,
+		CreatedAt:  timestampProto(in.CreatedAt),
+		Event:      in.Event,
+		SessionId:  in.SessionID,
+		MachineId:  in.MachineID,
+		RequestId:  in.RequestID,
+		TaskId:     in.TaskID,
+		ActorKeyId: in.ActorKeyID,
+	}
+	if len(in.Details) > 0 {
+		if encoded, err := json.Marshal(in.Details); err == nil {
+			out.Details = string(encoded)
+		}
+	}
+	return out
+}

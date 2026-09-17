@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"toolplane/pkg/model"
@@ -279,6 +280,84 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 		return fmt.Errorf("record audit event: %w", err)
 	}
 	return nil
+}
+
+// ListAuditEvents returns the durable audit trail newest-first with the
+// filter applied, plus the total matching count. The id tiebreaker keeps
+// same-timestamp rows in a stable order across pages (created_at has
+// microsecond resolution; several events can share a tick).
+func (s *Store) ListAuditEvents(ctx context.Context, filter model.AuditEventFilter) ([]*model.AuditEvent, int, error) {
+	if s == nil {
+		return nil, 0, nil
+	}
+
+	where := []string{"TRUE"}
+	args := []any{}
+	add := func(condition string, value string) {
+		if value != "" {
+			args = append(args, value)
+			where = append(where, fmt.Sprintf("%s = $%d", condition, len(args)))
+		}
+	}
+	add("session_id", filter.SessionID)
+	add("actor_key_id", filter.ActorKeyID)
+	add("event", filter.Event)
+
+	var total int
+	if err := s.db.QueryRowContext(ctx,
+		fmt.Sprintf(`SELECT COUNT(*) FROM audit_events WHERE %s`, strings.Join(where, " AND ")),
+		args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count audit events: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	// #nosec G201 -- WHERE fragments come from the fixed allowlist built
+	// above; all values are bound parameters.
+	query := fmt.Sprintf(`
+        SELECT id, created_at, event, session_id, machine_id, request_id, task_id, actor_key_id, details
+        FROM audit_events WHERE %s
+        ORDER BY created_at DESC, id DESC
+        LIMIT %d OFFSET %d
+    `, strings.Join(where, " AND "), limit, offset)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list audit events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []*model.AuditEvent
+	for rows.Next() {
+		var (
+			event                         model.AuditEvent
+			sessionID, machineID          sql.NullString
+			requestID, taskID, actorKeyID sql.NullString
+			details                       []byte
+		)
+		if err := rows.Scan(&event.ID, &event.CreatedAt, &event.Event, &sessionID, &machineID,
+			&requestID, &taskID, &actorKeyID, &details); err != nil {
+			return nil, 0, fmt.Errorf("scan audit event: %w", err)
+		}
+		event.SessionID = sessionID.String
+		event.MachineID = machineID.String
+		event.RequestID = requestID.String
+		event.TaskID = taskID.String
+		event.ActorKeyID = actorKeyID.String
+		if len(details) > 0 {
+			var decoded map[string]any
+			if err := json.Unmarshal(details, &decoded); err == nil {
+				event.Details = decoded
+			}
+		}
+		events = append(events, &event)
+	}
+	return events, total, rows.Err()
 }
 
 // RenewTaskAdoption refreshes the owning instance's lease. It returns false

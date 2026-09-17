@@ -1103,6 +1103,113 @@ export namespace ListApiKeysResponse {
     }
 }
 
+export class AuditEvent extends jspb.Message { 
+    getId(): number;
+    setId(value: number): AuditEvent;
+
+    hasCreatedAt(): boolean;
+    clearCreatedAt(): void;
+    getCreatedAt(): google_protobuf_timestamp_pb.Timestamp | undefined;
+    setCreatedAt(value?: google_protobuf_timestamp_pb.Timestamp): AuditEvent;
+    getEvent(): string;
+    setEvent(value: string): AuditEvent;
+    getSessionId(): string;
+    setSessionId(value: string): AuditEvent;
+    getMachineId(): string;
+    setMachineId(value: string): AuditEvent;
+    getRequestId(): string;
+    setRequestId(value: string): AuditEvent;
+    getTaskId(): string;
+    setTaskId(value: string): AuditEvent;
+    getActorKeyId(): string;
+    setActorKeyId(value: string): AuditEvent;
+    getDetails(): string;
+    setDetails(value: string): AuditEvent;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): AuditEvent.AsObject;
+    static toObject(includeInstance: boolean, msg: AuditEvent): AuditEvent.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: AuditEvent, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): AuditEvent;
+    static deserializeBinaryFromReader(message: AuditEvent, reader: jspb.BinaryReader): AuditEvent;
+}
+
+export namespace AuditEvent {
+    export type AsObject = {
+        id: number,
+        createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
+        event: string,
+        sessionId: string,
+        machineId: string,
+        requestId: string,
+        taskId: string,
+        actorKeyId: string,
+        details: string,
+    }
+}
+
+export class ListAuditEventsRequest extends jspb.Message { 
+    getSessionId(): string;
+    setSessionId(value: string): ListAuditEventsRequest;
+    getActorKeyId(): string;
+    setActorKeyId(value: string): ListAuditEventsRequest;
+    getEvent(): string;
+    setEvent(value: string): ListAuditEventsRequest;
+    getPageSize(): number;
+    setPageSize(value: number): ListAuditEventsRequest;
+    getPageToken(): string;
+    setPageToken(value: string): ListAuditEventsRequest;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): ListAuditEventsRequest.AsObject;
+    static toObject(includeInstance: boolean, msg: ListAuditEventsRequest): ListAuditEventsRequest.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: ListAuditEventsRequest, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): ListAuditEventsRequest;
+    static deserializeBinaryFromReader(message: ListAuditEventsRequest, reader: jspb.BinaryReader): ListAuditEventsRequest;
+}
+
+export namespace ListAuditEventsRequest {
+    export type AsObject = {
+        sessionId: string,
+        actorKeyId: string,
+        event: string,
+        pageSize: number,
+        pageToken: string,
+    }
+}
+
+export class ListAuditEventsResponse extends jspb.Message { 
+    clearEventsList(): void;
+    getEventsList(): Array<AuditEvent>;
+    setEventsList(value: Array<AuditEvent>): ListAuditEventsResponse;
+    addEvents(value?: AuditEvent, index?: number): AuditEvent;
+
+    hasPage(): boolean;
+    clearPage(): void;
+    getPage(): ListPage | undefined;
+    setPage(value?: ListPage): ListAuditEventsResponse;
+
+    serializeBinary(): Uint8Array;
+    toObject(includeInstance?: boolean): ListAuditEventsResponse.AsObject;
+    static toObject(includeInstance: boolean, msg: ListAuditEventsResponse): ListAuditEventsResponse.AsObject;
+    static extensions: {[key: number]: jspb.ExtensionFieldInfo<jspb.Message>};
+    static extensionsBinary: {[key: number]: jspb.ExtensionFieldBinaryInfo<jspb.Message>};
+    static serializeBinaryToWriter(message: ListAuditEventsResponse, writer: jspb.BinaryWriter): void;
+    static deserializeBinary(bytes: Uint8Array): ListAuditEventsResponse;
+    static deserializeBinaryFromReader(message: ListAuditEventsResponse, reader: jspb.BinaryReader): ListAuditEventsResponse;
+}
+
+export namespace ListAuditEventsResponse {
+    export type AsObject = {
+        eventsList: Array<AuditEvent.AsObject>,
+        page?: ListPage.AsObject,
+    }
+}
+
 export class RevokeApiKeyRequest extends jspb.Message { 
     getSessionId(): string;
     setSessionId(value: string): RevokeApiKeyRequest;

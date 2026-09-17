@@ -8,6 +8,13 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`SessionsService/ListAuditEvents`**: the durable audit trail becomes
+  readable — newest-first, paged via the standard ListPage trailer,
+  filterable by session, actor key, or event type, gated to the admin
+  capability. Additive per the compatibility policy; stubs ship for all
+  three SDKs. See
+  `server/docs/release-notes/2026-09-17-list-audit-events.md`.
+
 - **`toolplane serve --config`**: a YAML config file supplies the base
   configuration layer — flags override environment variables, which
   override the file, which override defaults. Unknown keys are a boot

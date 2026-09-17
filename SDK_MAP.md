@@ -113,6 +113,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `CreateApiKey` | `full`: `create_api_key()` | `full`: `CreateAPIKey()` | `full`: `createApiKey()` | Capabilities are required and must be non-empty (least-privilege minting; the read+execute+admin default is gone). Values: `read`, `invoke` (consumer), `provide` (provider), `admin`; the legacy `execute` is accepted and expands to invoke+provide. Covered by `conformance/cases/api_key_lifecycle.json` |
 | `ListApiKeys` | `full`: `list_api_keys()` | `full`: `ListAPIKeys()` | `full`: `listApiKeys()` | Covered by `conformance/cases/api_key_lifecycle.json` |
 | `RevokeApiKey` | `full`: `revoke_api_key()` | `full`: `RevokeAPIKey()` | `full`: `revokeApiKey()` | Covered by `conformance/cases/api_key_lifecycle.json` |
+| `ListAuditEvents` | `stub` (generated client; no wrapper) | `stub` (generated client; no wrapper) | `stub` (generated client; no wrapper) | Admin capability. Newest-first, paged, filterable by session/actor/event; empty `actor_key_id` marks system-driven events. Conformance not covered (writes are async/bounded); the CLI's `audit list` verb is the intended reader |
 
 ## MachinesService
 

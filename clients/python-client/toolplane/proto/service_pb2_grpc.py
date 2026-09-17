@@ -667,6 +667,11 @@ class SessionsServiceStub(object):
                 request_serializer=proto_dot_service__pb2.RevokeApiKeyRequest.SerializeToString,
                 response_deserializer=proto_dot_service__pb2.RevokeApiKeyResponse.FromString,
                 _registered_method=True)
+        self.ListAuditEvents = channel.unary_unary(
+                '/api.v1.SessionsService/ListAuditEvents',
+                request_serializer=proto_dot_service__pb2.ListAuditEventsRequest.SerializeToString,
+                response_deserializer=proto_dot_service__pb2.ListAuditEventsResponse.FromString,
+                _registered_method=True)
 
 
 class SessionsServiceServicer(object):
@@ -754,6 +759,18 @@ class SessionsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ListAuditEvents(self, request, context):
+        """List the durable audit trail: newest first, paged, filterable by
+        session, actor key, or event type. Admin capability gates the call —
+        the trail spans sessions when no session filter is given. System-
+        driven events and rows predating actor attribution carry an empty
+        actor_key_id; the trail is append-only and pruned on the audit
+        retention schedule.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_SessionsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -816,6 +833,11 @@ def add_SessionsServiceServicer_to_server(servicer, server):
                     servicer.RevokeApiKey,
                     request_deserializer=proto_dot_service__pb2.RevokeApiKeyRequest.FromString,
                     response_serializer=proto_dot_service__pb2.RevokeApiKeyResponse.SerializeToString,
+            ),
+            'ListAuditEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAuditEvents,
+                    request_deserializer=proto_dot_service__pb2.ListAuditEventsRequest.FromString,
+                    response_serializer=proto_dot_service__pb2.ListAuditEventsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1145,6 +1167,33 @@ class SessionsService(object):
             '/api.v1.SessionsService/RevokeApiKey',
             proto_dot_service__pb2.RevokeApiKeyRequest.SerializeToString,
             proto_dot_service__pb2.RevokeApiKeyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAuditEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/api.v1.SessionsService/ListAuditEvents',
+            proto_dot_service__pb2.ListAuditEventsRequest.SerializeToString,
+            proto_dot_service__pb2.ListAuditEventsResponse.FromString,
             options,
             channel_credentials,
             insecure,

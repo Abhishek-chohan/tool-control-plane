@@ -872,6 +872,70 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 	return nil
 }
 
+// ListAuditEvents mirrors the Postgres listing: newest-first
+// (created_at, id — the append order is already that order), filtered,
+// with the total matching count for pagination.
+func (s *Store) ListAuditEvents(ctx context.Context, filter model.AuditEventFilter) ([]*model.AuditEvent, int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	matches := func(e *model.AuditEvent) bool {
+		if filter.SessionID != "" && e.SessionID != filter.SessionID {
+			return false
+		}
+		if filter.ActorKeyID != "" && e.ActorKeyID != filter.ActorKeyID {
+			return false
+		}
+		if filter.Event != "" && e.Event != filter.Event {
+			return false
+		}
+		return true
+	}
+
+	total := 0
+	for _, e := range s.auditLog {
+		if matches(e) {
+			total++
+		}
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var events []*model.AuditEvent
+	// auditLog is append-ordered oldest→newest; walk newest-first.
+	skipped := 0
+	for i := len(s.auditLog) - 1; i >= 0 && len(events) < limit; i-- {
+		e := s.auditLog[i]
+		if !matches(e) {
+			continue
+		}
+		if skipped < offset {
+			skipped++
+			continue
+		}
+		events = append(events, cloneAuditEvent(e))
+	}
+	return events, total, nil
+}
+
+func cloneAuditEvent(e *model.AuditEvent) *model.AuditEvent {
+	clone := *e
+	if e.Details != nil {
+		clone.Details = make(map[string]any, len(e.Details))
+		for k, v := range e.Details {
+			clone.Details[k] = v
+		}
+	}
+	return &clone
+}
+
 // AuditEvents returns the retained audit trail (newest last).
 func (s *Store) AuditEvents() []*model.AuditEvent {
 	s.mu.RLock()

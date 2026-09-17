@@ -237,6 +237,7 @@ interface ISessionsServiceService extends grpc.ServiceDefinition<grpc.UntypedSer
     createApiKey: ISessionsServiceService_ICreateApiKey;
     listApiKeys: ISessionsServiceService_IListApiKeys;
     revokeApiKey: ISessionsServiceService_IRevokeApiKey;
+    listAuditEvents: ISessionsServiceService_IListAuditEvents;
 }
 
 interface ISessionsServiceService_ICreateSession extends grpc.MethodDefinition<proto_service_pb.CreateSessionRequest, proto_service_pb.CreateSessionResponse> {
@@ -347,6 +348,15 @@ interface ISessionsServiceService_IRevokeApiKey extends grpc.MethodDefinition<pr
     responseSerialize: grpc.serialize<proto_service_pb.RevokeApiKeyResponse>;
     responseDeserialize: grpc.deserialize<proto_service_pb.RevokeApiKeyResponse>;
 }
+interface ISessionsServiceService_IListAuditEvents extends grpc.MethodDefinition<proto_service_pb.ListAuditEventsRequest, proto_service_pb.ListAuditEventsResponse> {
+    path: "/api.v1.SessionsService/ListAuditEvents";
+    requestStream: false;
+    responseStream: false;
+    requestSerialize: grpc.serialize<proto_service_pb.ListAuditEventsRequest>;
+    requestDeserialize: grpc.deserialize<proto_service_pb.ListAuditEventsRequest>;
+    responseSerialize: grpc.serialize<proto_service_pb.ListAuditEventsResponse>;
+    responseDeserialize: grpc.deserialize<proto_service_pb.ListAuditEventsResponse>;
+}
 
 export const SessionsServiceService: ISessionsServiceService;
 
@@ -363,6 +373,7 @@ export interface ISessionsServiceServer extends grpc.UntypedServiceImplementatio
     createApiKey: grpc.handleUnaryCall<proto_service_pb.CreateApiKeyRequest, proto_service_pb.ApiKey>;
     listApiKeys: grpc.handleUnaryCall<proto_service_pb.ListApiKeysRequest, proto_service_pb.ListApiKeysResponse>;
     revokeApiKey: grpc.handleUnaryCall<proto_service_pb.RevokeApiKeyRequest, proto_service_pb.RevokeApiKeyResponse>;
+    listAuditEvents: grpc.handleUnaryCall<proto_service_pb.ListAuditEventsRequest, proto_service_pb.ListAuditEventsResponse>;
 }
 
 export interface ISessionsServiceClient {
@@ -402,6 +413,9 @@ export interface ISessionsServiceClient {
     revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
     revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
     revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
+    listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
+    listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
+    listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
 }
 
 export class SessionsServiceClient extends grpc.Client implements ISessionsServiceClient {
@@ -442,6 +456,9 @@ export class SessionsServiceClient extends grpc.Client implements ISessionsServi
     public revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
     public revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
     public revokeApiKey(request: proto_service_pb.RevokeApiKeyRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.RevokeApiKeyResponse) => void): grpc.ClientUnaryCall;
+    public listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
+    public listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, metadata: grpc.Metadata, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
+    public listAuditEvents(request: proto_service_pb.ListAuditEventsRequest, metadata: grpc.Metadata, options: Partial<grpc.CallOptions>, callback: (error: grpc.ServiceError | null, response: proto_service_pb.ListAuditEventsResponse) => void): grpc.ClientUnaryCall;
 }
 
 interface IMachinesServiceService extends grpc.ServiceDefinition<grpc.UntypedServiceImplementation> {
