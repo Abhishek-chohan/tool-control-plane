@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"toolplane/internal/cli"
+	"toolplane/pkg/service"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=<tag>";
@@ -23,6 +24,9 @@ type exitError struct{ code int }
 func (e exitError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
 
 func main() {
+	// HealthCheck reports the same identity `toolplane --version` prints,
+	// so a client and the server it talks to can be compared directly.
+	service.BuildVersion = version
 	root := newRootCommand(version)
 	if err := root.Execute(); err != nil {
 		var coded exitError

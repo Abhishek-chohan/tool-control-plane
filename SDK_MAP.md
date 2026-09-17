@@ -95,7 +95,7 @@ The HTTP JSON-RPC `/rpc` endpoint remains a server-side reference surface during
 | `ResumeStream` | `full`: `request_manager.resume_stream()` (gRPC + HTTP) | `full`: `ResumeStream()` | `full`: `resumeStream()` | Replays retained chunks after `last_seq` and streams live until the final marker; the server returns `OUT_OF_RANGE` when replay falls behind the retained window. The Python `stream()` fallback resumes through it instead of re-invoking |
 | `InvokeTool` | `full`: `invoke()` / awaitable `ainvoke()` | `full`: `ExecuteTool()` | `full`: `executeTool()` | v1 invocation name. Covered by `conformance/cases/invoke_unary.json`; live execution still requires a provider loop |
 | `ExecuteTool` | deprecated alias of `InvokeTool` | `full` via `ExecuteTool()` | `full` via `executeTool()` | Deprecated v0 alias, retained for migration |
-| `HealthCheck` | `partial`: `ToolplaneHTTP.health()` plus connect probes | `full`: gRPC `Ping()` / `Connect()` | `full`: gRPC `ping()` / `connect()` | TypeScript and Go treat health checks as part of the maintained gRPC connection path |
+| `HealthCheck` | `partial`: `ToolplaneHTTP.health()` plus connect probes | `full`: gRPC `Ping()` / `Connect()` | `full`: gRPC `ping()` / `connect()` | TypeScript and Go treat health checks as part of the maintained gRPC connection path. The response's `version` carries the server's build identity (ldflags-injected; `dev` for source builds) for skew detection |
 
 ## SessionsService
 

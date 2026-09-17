@@ -947,11 +947,17 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 // Health Check Method (Belongs to ToolService)
 // ======================
 
+// BuildVersion is the control plane's build identity, reported by
+// HealthCheck so operators and clients can detect client/server skew.
+// Entry points override it at build time (-ldflags -X) or at startup;
+// "dev" is the honest default for source builds.
+var BuildVersion = "dev"
+
 // HealthCheck implements the gRPC HealthCheck method
 func (s *GRPCServer) HealthCheck(ctx context.Context, req *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {
 	return &proto.HealthCheckResponse{
 		Status:  "ok",
-		Version: "1.0.0",
+		Version: BuildVersion,
 	}, nil
 }
 

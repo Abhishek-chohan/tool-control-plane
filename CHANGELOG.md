@@ -18,6 +18,14 @@ release notes live in `server/docs/release-notes/`.
   `(file)`/`(default)`), secrets masked. See
   `server/docs/release-notes/2026-09-17-serve-config-file.md`.
 
+- **HealthCheck reports the real build version**: the `version` field on
+  `HealthCheckResponse` returned a hardcoded `"1.0.0"` placeholder; it
+  now carries the ldflags-injected build identity (`git describe`, `dev`
+  for source builds), and `toolplane --version` prints the same
+  identity — client/server skew is visible by comparing two commands.
+  No wire change (the field already existed). See
+  `server/docs/release-notes/2026-09-17-build-version-on-health.md`.
+
 - **`toolplane` unified command**: `toolplane serve` runs the gRPC
   control plane with the same flags, `TOOLPLANE_*` environment contract,
   dev-posture banner, and production gates as the standalone

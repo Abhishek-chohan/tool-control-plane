@@ -28,6 +28,12 @@ PROTO_DRIFT_FILES = \
 
 all: build
 
+# Build identity injected into the binaries: HealthCheck reports it so
+# operators can detect client/server skew. main.version feeds each
+# binary's own --version; pkg/service.BuildVersion feeds HealthCheck.
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+GO_LDFLAGS = -X toolplane/pkg/service.BuildVersion=$(VERSION) -X main.version=$(VERSION)
+
 TOOLPLANE_ENV_MODE ?= development
 TOOLPLANE_AUTH_MODE ?= fixed
 TOOLPLANE_AUTH_FIXED_API_KEY ?= toolplane-conformance-fixture-key
@@ -46,7 +52,10 @@ RELEASE_GATE_ENV = \
 
 # Go server commands
 build:
-	go build -o bin/toolplane-server ./cmd/server
+	go build -ldflags "$(GO_LDFLAGS)" -o bin/toolplane-server ./cmd/server
+	go build -ldflags "$(GO_LDFLAGS)" -o bin/toolplane-gateway ./cmd/proxy
+	go build -ldflags "$(GO_LDFLAGS)" -o bin/toolplane-mcp-gateway ./cmd/mcp-gateway
+	go build -ldflags "$(GO_LDFLAGS)" -o bin/toolplane ./cmd/toolplane
 
 run:
 	TOOLPLANE_ENV_MODE=$(TOOLPLANE_ENV_MODE) TOOLPLANE_AUTH_MODE=$(TOOLPLANE_AUTH_MODE) TOOLPLANE_AUTH_FIXED_API_KEY=$(TOOLPLANE_AUTH_FIXED_API_KEY) TOOLPLANE_STORAGE_MODE=$(TOOLPLANE_STORAGE_MODE) ./bin/toolplane-server
