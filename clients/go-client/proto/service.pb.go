@@ -702,7 +702,10 @@ type Machine struct {
 	// registration that minted it (empty otherwise). Provide-scoped RPCs must
 	// present it via the x-toolplane-machine-token metadata/header when the
 	// server runs session-key auth. Stored server-side only as a hash.
-	MachineToken  string `protobuf:"bytes,8,opt,name=machine_token,json=machineToken,proto3" json:"machine_token,omitempty"`
+	MachineToken string `protobuf:"bytes,8,opt,name=machine_token,json=machineToken,proto3" json:"machine_token,omitempty"`
+	// True while the machine is draining: it stopped accepting new work
+	// and finishes (or sheds) in-flight requests before unregistering.
+	Draining      bool `protobuf:"varint,9,opt,name=draining,proto3" json:"draining,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -791,6 +794,13 @@ func (x *Machine) GetMachineToken() string {
 		return x.MachineToken
 	}
 	return ""
+}
+
+func (x *Machine) GetDraining() bool {
+	if x != nil {
+		return x.Draining
+	}
+	return false
 }
 
 // Request definition
@@ -5268,7 +5278,7 @@ const file_proto_service_proto_rawDesc = "" +
 	"\vkey_preview\x18\t \x01(\tR\n" +
 	"keyPreview\x12#\n" +
 	"\rallowed_tools\x18\n" +
-	" \x03(\tR\fallowedTools\"\xaa\x02\n" +
+	" \x03(\tR\fallowedTools\"\xc6\x02\n" +
 	"\aMachine\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -5281,7 +5291,8 @@ const file_proto_service_proto_rawDesc = "" +
 	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12<\n" +
 	"\flast_ping_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"lastPingAt\x12#\n" +
-	"\rmachine_token\x18\b \x01(\tR\fmachineToken\"\xbe\x04\n" +
+	"\rmachine_token\x18\b \x01(\tR\fmachineToken\x12\x1a\n" +
+	"\bdraining\x18\t \x01(\bR\bdraining\"\xbe\x04\n" +
 	"\aRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +

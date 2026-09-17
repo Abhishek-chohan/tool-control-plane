@@ -271,6 +271,8 @@ export class Machine extends jspb.Message {
     setLastPingAt(value?: google_protobuf_timestamp_pb.Timestamp): Machine;
     getMachineToken(): string;
     setMachineToken(value: string): Machine;
+    getDraining(): boolean;
+    setDraining(value: boolean): Machine;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): Machine.AsObject;
@@ -292,6 +294,7 @@ export namespace Machine {
         createdAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         lastPingAt?: google_protobuf_timestamp_pb.Timestamp.AsObject,
         machineToken: string,
+        draining: boolean,
     }
 }
 

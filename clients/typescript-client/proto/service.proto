@@ -489,6 +489,9 @@ message Machine {
   // present it via the x-toolplane-machine-token metadata/header when the
   // server runs session-key auth. Stored server-side only as a hash.
   string machine_token = 8;
+  // True while the machine is draining: it stopped accepting new work
+  // and finishes (or sheds) in-flight requests before unregistering.
+  bool draining = 9;
 }
 
 // Request definition

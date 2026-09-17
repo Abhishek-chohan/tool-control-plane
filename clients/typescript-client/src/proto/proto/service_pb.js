@@ -3695,7 +3695,8 @@ proto.api.v1.Machine.toObject = function(includeInstance, msg) {
     ip: jspb.Message.getFieldWithDefault(msg, 5, ""),
     createdAt: (f = msg.getCreatedAt()) && google_protobuf_timestamp_pb.Timestamp.toObject(includeInstance, f),
     lastPingAt: (f = msg.getLastPingAt()) && google_protobuf_timestamp_pb.Timestamp.toObject(includeInstance, f),
-    machineToken: jspb.Message.getFieldWithDefault(msg, 8, "")
+    machineToken: jspb.Message.getFieldWithDefault(msg, 8, ""),
+    draining: jspb.Message.getBooleanFieldWithDefault(msg, 9, false)
   };
 
   if (includeInstance) {
@@ -3765,6 +3766,10 @@ proto.api.v1.Machine.deserializeBinaryFromReader = function(msg, reader) {
     case 8:
       var value = /** @type {string} */ (reader.readString());
       msg.setMachineToken(value);
+      break;
+    case 9:
+      var value = /** @type {boolean} */ (reader.readBool());
+      msg.setDraining(value);
       break;
     default:
       reader.skipField();
@@ -3850,6 +3855,13 @@ proto.api.v1.Machine.serializeBinaryToWriter = function(message, writer) {
   if (f.length > 0) {
     writer.writeString(
       8,
+      f
+    );
+  }
+  f = message.getDraining();
+  if (f) {
+    writer.writeBool(
+      9,
       f
     );
   }
@@ -4035,6 +4047,24 @@ proto.api.v1.Machine.prototype.getMachineToken = function() {
  */
 proto.api.v1.Machine.prototype.setMachineToken = function(value) {
   return jspb.Message.setProto3StringField(this, 8, value);
+};
+
+
+/**
+ * optional bool draining = 9;
+ * @return {boolean}
+ */
+proto.api.v1.Machine.prototype.getDraining = function() {
+  return /** @type {boolean} */ (jspb.Message.getBooleanFieldWithDefault(this, 9, false));
+};
+
+
+/**
+ * @param {boolean} value
+ * @return {!proto.api.v1.Machine} returns this
+ */
+proto.api.v1.Machine.prototype.setDraining = function(value) {
+  return jspb.Message.setProto3BooleanField(this, 9, value);
 };
 
 

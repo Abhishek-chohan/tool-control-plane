@@ -253,6 +253,9 @@ type Machine struct {
 	// never persisted or listed.
 	TokenHash string `json:"-"`
 	Token     string `json:"-"`
+	// Draining is true from DrainMachine until the machine unregisters: it
+	// stopped accepting new work and is finishing in-flight requests.
+	Draining bool `json:"draining"`
 }
 
 // NewMachine creates a new machine with generated ID (if not provided) and

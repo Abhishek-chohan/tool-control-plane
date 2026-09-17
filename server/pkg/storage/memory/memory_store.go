@@ -394,12 +394,21 @@ func (s *Store) MachineInFlightCount(ctx context.Context, sessionID, machineID s
 
 // ---------------- Machines ----------------
 
+// machineDrainingLocked reports drain state from the dedicated drain map.
+// Callers hold s.mu (read or write).
+func (s *Store) machineDrainingLocked(machineID string) bool {
+	_, ok := s.draining[machineID]
+	return ok
+}
+
 func (s *Store) AllMachines(ctx context.Context) ([]*model.Machine, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*model.Machine, 0, len(s.machines))
 	for _, m := range s.machines {
-		out = append(out, cloneMachine(m))
+		clone := cloneMachine(m)
+		clone.Draining = s.machineDrainingLocked(m.ID)
+		out = append(out, clone)
 	}
 	return out, nil
 }
@@ -411,7 +420,9 @@ func (s *Store) ListMachinesBySession(ctx context.Context, sessionID string) ([]
 	var out []*model.Machine
 	for _, m := range s.machines {
 		if m != nil && m.SessionID == sessionID {
-			out = append(out, cloneMachine(m))
+			clone := cloneMachine(m)
+			clone.Draining = s.machineDrainingLocked(m.ID)
+			out = append(out, clone)
 		}
 	}
 	return out, nil
@@ -424,7 +435,9 @@ func (s *Store) GetMachine(ctx context.Context, machineID string) (*model.Machin
 	if !ok || m == nil {
 		return nil, nil
 	}
-	return cloneMachine(m), nil
+	clone := cloneMachine(m)
+	clone.Draining = s.machineDrainingLocked(machineID)
+	return clone, nil
 }
 
 func (s *Store) SaveMachine(ctx context.Context, machine *model.Machine) error {
