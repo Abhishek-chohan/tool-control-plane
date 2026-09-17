@@ -533,15 +533,25 @@ func TestTasksServiceTaskResultIsJSONPersisted(t *testing.T) {
 	}
 	waitForTaskStatus(t, tasksService, sessionID, task.ID, model.StatusCompleted, 15*time.Second)
 
-	readCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
-	defer cancel()
-	stored, err := store.GetTaskByID(readCtx, task.ID)
-	if err != nil {
-		t.Fatalf("read stored task: %v", err)
-	}
+	// The store write is asynchronous best-effort: poll the durable row
+	// until the completed result lands (bounded), so shared-database
+	// timing cannot fail the assertion.
 	var decoded map[string]interface{}
-	if err := json.Unmarshal([]byte(stored.Result), &decoded); err != nil {
-		t.Fatalf("stored task result is not JSON: %q (err %v)", stored.Result, err)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		readCtx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+		stored, err := store.GetTaskByID(readCtx, task.ID)
+		cancel()
+		if err != nil {
+			t.Fatalf("read stored task: %v", err)
+		}
+		if jsonErr := json.Unmarshal([]byte(stored.Result), &decoded); jsonErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("stored task result never became JSON: %q", stored.Result)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 	if decoded["answer"] != float64(42) {
 		t.Fatalf("stored task result answer = %v, want 42", decoded["answer"])
