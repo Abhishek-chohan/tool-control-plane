@@ -49,6 +49,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Same-tick listings are deterministic**: `ListRequests` sorted by
+  `CreatedAt` alone with an unstable sort over map iteration, so requests
+  created in the same clock tick could reshuffle between pages and between
+  identical calls. The store now orders by `(created_at, id)` and the
+  service sorts with the same tiebreak — pages are reproducible on both
+  storage modes. The pagination comments also stop overclaiming: the v1
+  token is a reversible offset (not "non-enumerable"), and it addresses the
+  live ordering, not a snapshot — pages may skip or repeat under mutation.
+  See `server/docs/release-notes/2026-09-16-listing-determinism.md`.
+
 - **Audit events name the acting key**: `audit_events` gains a nullable
   `actor_key_id` — API-key creation/revocation, session deletion/bulk
   deletion, and the session kill switch now record the acting API key

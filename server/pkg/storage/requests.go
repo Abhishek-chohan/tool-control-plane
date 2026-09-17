@@ -439,7 +439,7 @@ func (s *Store) ListRequestsBySession(ctx context.Context, sessionID string) ([]
 	if s == nil {
 		return nil, nil
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE session_id=$1 ORDER BY created_at ASC`, requestColumns), sessionID)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`SELECT %s FROM requests WHERE session_id=$1 ORDER BY created_at ASC, id ASC`, requestColumns), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query requests by session: %w", err)
 	}

@@ -7,11 +7,15 @@ import (
 	"strings"
 )
 
-// pageTokenCodec converts numeric list offsets into opaque v1 page tokens.
-// The token is deliberately non-enumerable but carries no secrets: it is a
-// base64-wrapped offset that clients pass back verbatim. Changing the wire
-// format invalidates outstanding tokens, which is acceptable — clients
-// simply restart from the first page.
+// pageTokenCodec converts numeric list offsets into v1 page tokens. The
+// token is a reversible base64-wrapped offset — opaque to casual eyeballs,
+// but not a secret and trivially decodable; it carries no authority, so a
+// forged or stale token at worst yields an empty or repeated page. The
+// offset addresses the live ordering, not a snapshot: rows that appear or
+// leave the filtered set mid-walk shift positions, so pages may skip or
+// repeat under mutation. Changing the wire format invalidates outstanding
+// tokens, which is acceptable — clients simply restart from the first
+// page.
 var pageTokenCodec pageTokenCodecType
 
 type pageTokenCodecType struct{}
