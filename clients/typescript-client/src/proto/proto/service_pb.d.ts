@@ -2015,6 +2015,8 @@ export class HealthCheckResponse extends jspb.Message {
     setStatus(value: string): HealthCheckResponse;
     getVersion(): string;
     setVersion(value: string): HealthCheckResponse;
+    getStorage(): string;
+    setStorage(value: string): HealthCheckResponse;
 
     serializeBinary(): Uint8Array;
     toObject(includeInstance?: boolean): HealthCheckResponse.AsObject;
@@ -2030,6 +2032,7 @@ export namespace HealthCheckResponse {
     export type AsObject = {
         status: string,
         version: string,
+        storage: string,
     }
 }
 

@@ -16730,7 +16730,8 @@ proto.api.v1.HealthCheckResponse.prototype.toObject = function(opt_includeInstan
 proto.api.v1.HealthCheckResponse.toObject = function(includeInstance, msg) {
   var f, obj = {
     status: jspb.Message.getFieldWithDefault(msg, 1, ""),
-    version: jspb.Message.getFieldWithDefault(msg, 2, "")
+    version: jspb.Message.getFieldWithDefault(msg, 2, ""),
+    storage: jspb.Message.getFieldWithDefault(msg, 3, "")
   };
 
   if (includeInstance) {
@@ -16775,6 +16776,10 @@ proto.api.v1.HealthCheckResponse.deserializeBinaryFromReader = function(msg, rea
       var value = /** @type {string} */ (reader.readString());
       msg.setVersion(value);
       break;
+    case 3:
+      var value = /** @type {string} */ (reader.readString());
+      msg.setStorage(value);
+      break;
     default:
       reader.skipField();
       break;
@@ -16818,6 +16823,13 @@ proto.api.v1.HealthCheckResponse.serializeBinaryToWriter = function(message, wri
       f
     );
   }
+  f = message.getStorage();
+  if (f.length > 0) {
+    writer.writeString(
+      3,
+      f
+    );
+  }
 };
 
 
@@ -16854,6 +16866,24 @@ proto.api.v1.HealthCheckResponse.prototype.getVersion = function() {
  */
 proto.api.v1.HealthCheckResponse.prototype.setVersion = function(value) {
   return jspb.Message.setProto3StringField(this, 2, value);
+};
+
+
+/**
+ * optional string storage = 3;
+ * @return {string}
+ */
+proto.api.v1.HealthCheckResponse.prototype.getStorage = function() {
+  return /** @type {string} */ (jspb.Message.getFieldWithDefault(this, 3, ""));
+};
+
+
+/**
+ * @param {string} value
+ * @return {!proto.api.v1.HealthCheckResponse} returns this
+ */
+proto.api.v1.HealthCheckResponse.prototype.setStorage = function(value) {
+  return jspb.Message.setProto3StringField(this, 3, value);
 };
 
 

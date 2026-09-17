@@ -117,6 +117,7 @@ func RunContext(ctx context.Context, opts Options) int {
 		case errors.Is(err, storage.ErrExplicitInMemoryMode):
 			store = memory.New()
 			storageState = "memory (explicit, non-durable)"
+			service.StorageSummary = "memory"
 			slog.Info("storage mode: explicit in-memory")
 		case errors.Is(err, storage.ErrConfigMissing):
 			slog.Error("storage configuration error", slog.Any("err", err))
@@ -128,6 +129,7 @@ func RunContext(ctx context.Context, opts Options) int {
 	} else {
 		store = pgStore
 		storageState = "postgres (durable)"
+		service.StorageSummary = "postgres"
 		// Serialization-retry telemetry: only the Postgres store has a
 		// retry loop to observe (memory-mode stores serialize under a lock).
 		pgStore.SetSerializationObserver(metricsCollector)

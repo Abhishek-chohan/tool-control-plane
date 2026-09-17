@@ -989,11 +989,17 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 // "dev" is the honest default for source builds.
 var BuildVersion = "dev"
 
+// StorageSummary is the resolved storage mode reported by HealthCheck
+// ("memory" or "postgres"). The server sets it after storage resolution;
+// empty means the server predates the field.
+var StorageSummary = ""
+
 // HealthCheck implements the gRPC HealthCheck method
 func (s *GRPCServer) HealthCheck(ctx context.Context, req *proto.HealthCheckRequest) (*proto.HealthCheckResponse, error) {
 	return &proto.HealthCheckResponse{
 		Status:  "ok",
 		Version: BuildVersion,
+		Storage: StorageSummary,
 	}, nil
 }
 

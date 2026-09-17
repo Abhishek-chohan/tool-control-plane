@@ -4717,9 +4717,12 @@ func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
 }
 
 type HealthCheckResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Status  string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Version string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	// Resolved storage mode (memory or postgres). Empty on servers predating
+	// the field.
+	Storage       string `protobuf:"bytes,3,opt,name=storage,proto3" json:"storage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4764,6 +4767,13 @@ func (x *HealthCheckResponse) GetStatus() string {
 func (x *HealthCheckResponse) GetVersion() string {
 	if x != nil {
 		return x.Version
+	}
+	return ""
+}
+
+func (x *HealthCheckResponse) GetStorage() string {
+	if x != nil {
+		return x.Storage
 	}
 	return ""
 }
@@ -5630,10 +5640,11 @@ const file_proto_service_proto_rawDesc = "" +
 	"machine_id\x18\x03 \x01(\tR\tmachineId\x12\x1f\n" +
 	"\vlease_epoch\x18\x04 \x01(\x03R\n" +
 	"leaseEpoch\"\x14\n" +
-	"\x12HealthCheckRequest\"G\n" +
+	"\x12HealthCheckRequest\"a\n" +
 	"\x13HealthCheckResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"\xc6\x03\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x18\n" +
+	"\astorage\x18\x03 \x01(\tR\astorage\"\xc6\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +

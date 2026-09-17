@@ -8,6 +8,15 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`toolplane status` and `toolplane doctor`**: status shows
+  reachability, the server's build version, and its resolved storage
+  mode; doctor validates configuration (environment contract +
+  production gates, without booting), connectivity, version skew, and —
+  with `--database-url` — database reachability and schema freshness,
+  naming the exact fix for each failure. Additive
+  `HealthCheckResponse.storage` field carries the resolved mode. See
+  `server/docs/release-notes/2026-09-17-status-and-doctor.md`.
+
 - **`toolplane-provider` console script**: serve, validate, test, and
   inspect tools files — Python modules using a bare `@tool` decorator
   that imports no session and performs no I/O at import. `serve` binds
