@@ -653,6 +653,8 @@ func (s *Store) FindAdoptableTasks(ctx context.Context, now time.Time, leaseTTL 
 	}
 	leaseCutoff := now.Add(-leaseTTL)
 	var out []*model.Task
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	for _, t := range s.tasks {
 		if len(out) >= limit {
 			break

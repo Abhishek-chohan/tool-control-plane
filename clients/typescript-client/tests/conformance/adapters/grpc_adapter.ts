@@ -141,6 +141,9 @@ function normalizeGrpcErrorCode(code: grpc.status): string {
   if (code === grpc.status.NOT_FOUND) {
     return 'not_found';
   }
+  if (code === grpc.status.INVALID_ARGUMENT) {
+    return 'invalid_argument';
+  }
 
   return String(code).toLowerCase();
 }
