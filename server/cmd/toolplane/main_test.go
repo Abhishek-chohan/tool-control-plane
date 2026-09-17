@@ -11,8 +11,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 
 	"toolplane/internal/server"
+	"toolplane/pkg/service"
+	proto "toolplane/proto"
 )
 
 // TestServeHelpDocumentsLifecycle pins the help surface a newcomer sees:
@@ -69,6 +72,9 @@ func TestServeCommandBootsAndServesHealth(t *testing.T) {
 	t.Setenv("TOOLPLANE_AUTH_MODE", "fixed")
 	t.Setenv("TOOLPLANE_AUTH_FIXED_API_KEY", "dev-key")
 	t.Setenv("TOOLPLANE_STORAGE_MODE", "memory")
+	// A distinctive build identity: the health response must carry exactly
+	// this value, proving the version plumbing reaches the wire.
+	service.BuildVersion = "test-build-42"
 
 	opts := server.DefaultOptions()
 	opts.Port = 0 // port 0: kernel-assigned, parallel-test safe
@@ -120,6 +126,22 @@ func TestServeCommandBootsAndServesHealth(t *testing.T) {
 	if resp.Status != healthpb.HealthCheckResponse_SERVING {
 		cancel()
 		t.Fatalf("health status = %v, want SERVING", resp.Status)
+	}
+	// The build identity flows through the api.v1 HealthCheck so clients
+	// can detect skew against their own version. The call authenticates
+	// like any api.v1 RPC: it presents the fixed dev key as metadata.
+	apiClient := proto.NewToolServiceClient(conn)
+	apiCtx, apiCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer apiCancel()
+	apiCtx = metadata.AppendToOutgoingContext(apiCtx, "api_key", "dev-key")
+	apiHealth, err := apiClient.HealthCheck(apiCtx, &proto.HealthCheckRequest{})
+	if err != nil {
+		cancel()
+		t.Fatalf("api.v1 health check: %v", err)
+	}
+	if apiHealth.Version != service.BuildVersion {
+		cancel()
+		t.Fatalf("api.v1 health version = %q, want the injected build %q", apiHealth.Version, service.BuildVersion)
 	}
 
 	cancel()
