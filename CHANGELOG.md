@@ -6,6 +6,19 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Added
+
+- **`toolplane` unified command**: `toolplane serve` runs the gRPC
+  control plane with the same flags, `TOOLPLANE_*` environment contract,
+  dev-posture banner, and production gates as the standalone
+  `toolplane-server` binary (`--version` reports the build; generated
+  shell completions via `toolplane completion ...`). Client verbs exit
+  with a stable code mapped from the failure's gRPC status (2 invalid
+  input, 3 not found, 4 denied, 5 precondition, 6 exhausted,
+  7 unavailable, 8 deadline, 9 cancelled), pinned by tests. The
+  standalone binaries are unchanged. See
+  `server/docs/release-notes/2026-09-17-unified-cli.md`.
+
 ### Changed
 
 - **Task results as durable JSON**: completed tasks record and serve their
