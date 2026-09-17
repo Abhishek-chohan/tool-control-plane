@@ -17,11 +17,15 @@ import (
 // dev builds report "dev".
 var version = "dev"
 
-// exitError carries a command's resolved exit code through cobra's RunE
-// to main, which owns os.Exit.
-type exitError struct{ code int }
+// exitError carries a command's resolved exit code — and, when the
+// failure should print guidance, the message for stderr — through
+// cobra's RunE to main, which owns os.Exit.
+type exitError struct {
+	code int
+	msg  string
+}
 
-func (e exitError) Error() string { return fmt.Sprintf("exit code %d", e.code) }
+func (e exitError) Error() string { return e.msg }
 
 func main() {
 	// HealthCheck reports the same identity `toolplane --version` prints,
@@ -31,6 +35,9 @@ func main() {
 	if err := root.Execute(); err != nil {
 		var coded exitError
 		if errors.As(err, &coded) {
+			if coded.msg != "" {
+				fmt.Fprintln(os.Stderr, coded.msg)
+			}
 			os.Exit(coded.code)
 		}
 		fmt.Fprintln(os.Stderr, err)

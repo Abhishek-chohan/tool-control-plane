@@ -64,7 +64,7 @@ Output is a table by default or JSON with --format json.`,
 				Format:         formatParsed,
 			})
 			if invokeErr != nil {
-				fmt.Fprintln(os.Stderr, teachError(invokeErr, conn))
+				fmt.Fprintln(os.Stderr, cli.TeachError(invokeErr, conn))
 			}
 			return exitError{code: code}
 		},
@@ -193,12 +193,4 @@ func streamInvoke(tool proto.ToolServiceClient, ctx context.Context, out io.Writ
 		}
 	}
 	return cli.ExitOK, nil
-}
-
-// teachError upgrades common failures into next-step guidance.
-func teachError(err error, conn cli.Connection) string {
-	if cli.IsUnavailable(err) {
-		return fmt.Sprintf("%v\nnothing is answering on %s — start a server with:\n  toolplane serve", err, conn.Address)
-	}
-	return err.Error()
 }
