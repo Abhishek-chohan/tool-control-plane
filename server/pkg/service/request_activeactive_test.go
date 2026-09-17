@@ -36,7 +36,7 @@ func newActiveActiveStacks(t *testing.T) (*memory.Store, *RequestsService, *Mach
 // hold across both instances.
 func seedSessionForAA(t *testing.T, store *memory.Store) {
 	t.Helper()
-	sess := model.NewSession("s1", "test", "user", "", "")
+	sess := model.NewSession("s1", "test", "user", "")
 	sess.ID = "sess-aa"
 	_ = store.SaveSession(context.Background(), sess)
 }

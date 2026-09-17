@@ -194,6 +194,15 @@ func (s *Store) migrate(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events (created_at)`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS draining BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE machines ADD COLUMN IF NOT EXISTS token_hash TEXT`,
+		// Audit attribution: the acting API key behind each audited event.
+		// Existing rows predate attribution and stay NULL — the trail is
+		// append-only, so no backfill is possible or needed.
+		`ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS actor_key_id TEXT`,
+		// The legacy session-lock column is dead: written (always empty) by
+		// every session upsert, read by nothing. Pre-1.0 with no tagged
+		// releases, the wire-only compatibility policy does not pin internal
+		// storage shape.
+		`ALTER TABLE sessions DROP COLUMN IF EXISTS api_key`,
 	}
 
 	conn, err := s.db.Conn(ctx)

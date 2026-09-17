@@ -497,7 +497,7 @@ func TestTasksServiceTaskResultIsJSONPersisted(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 	t.Cleanup(func() {
-		_ = sessionService.DeleteSession(session.ID)
+		_ = sessionService.DeleteSession(session.ID, "")
 	})
 	sessionID := session.ID
 	const machineID = "machine-task-result-persisted"

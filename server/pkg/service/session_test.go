@@ -23,16 +23,16 @@ func TestSessionsServiceRecordsAuditEvents(t *testing.T) {
 		t.Fatalf("update session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"}, nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", "", []string{"read", "execute", "admin"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
 
-	if err := svc.RevokeApiKey(session.ID, apiKey.ID); err != nil {
+	if err := svc.RevokeApiKey(session.ID, apiKey.ID, ""); err != nil {
 		t.Fatalf("revoke api key: %v", err)
 	}
 
-	if err := svc.DeleteSession(session.ID); err != nil {
+	if err := svc.DeleteSession(session.ID, ""); err != nil {
 		t.Fatalf("delete session: %v", err)
 	}
 
@@ -57,7 +57,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", []string{"read", "execute", "admin"}, nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "primary", "user-audit", "", []string{"read", "execute", "admin"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestSessionsServiceValidateApiKeyAcceptsActiveAndRejectsRevoked(t *testing.
 		t.Fatalf("validate bearer api key returned session %q, want %q", resolvedSessionID, session.ID)
 	}
 
-	if err := svc.RevokeApiKey(session.ID, apiKey.ID); err != nil {
+	if err := svc.RevokeApiKey(session.ID, apiKey.ID, ""); err != nil {
 		t.Fatalf("revoke api key: %v", err)
 	}
 
@@ -99,7 +99,7 @@ func TestSessionsServiceListAPIKeysRedactsSecretsAndPreservesCapabilities(t *tes
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "reader", "user-audit", []string{"read", "execute"}, nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "reader", "user-audit", "", []string{"read", "execute"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSessionsServiceAuthenticateAPIKeyReturnsPrincipal(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "runner", "user-audit", []string{"execute"}, nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "runner", "user-audit", "", []string{"execute"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -217,23 +217,23 @@ func TestSessionsServiceCreateApiKeyRequiresExplicitCapabilities(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	if _, err := svc.CreateApiKey(session.ID, "no-caps", "user-caps", nil, nil); err == nil {
+	if _, err := svc.CreateApiKey(session.ID, "no-caps", "user-caps", "", nil, nil); err == nil {
 		t.Fatal("CreateApiKey with no capabilities should fail")
 	}
-	if _, err := svc.CreateApiKey(session.ID, "blank-caps", "user-caps", []string{"", "  "}, nil); err == nil {
+	if _, err := svc.CreateApiKey(session.ID, "blank-caps", "user-caps", "", []string{"", "  "}, nil); err == nil {
 		t.Fatal("CreateApiKey with only blank capabilities should fail")
 	}
-	if _, err := svc.CreateApiKey(session.ID, "blank-tools", "user-caps", []string{"read"}, []string{"", "  "}); err == nil {
+	if _, err := svc.CreateApiKey(session.ID, "blank-tools", "user-caps", "", []string{"read"}, []string{"", "  "}); err == nil {
 		t.Fatal("CreateApiKey with only blank allowed_tools should fail")
 	}
-	restricted, err := svc.CreateApiKey(session.ID, "restricted", "user-caps", []string{"read"}, []string{" alpha ", "beta", "alpha", ""})
+	restricted, err := svc.CreateApiKey(session.ID, "restricted", "user-caps", "", []string{"read"}, []string{" alpha ", "beta", "alpha", ""})
 	if err != nil {
 		t.Fatalf("CreateApiKey with allowlist: %v", err)
 	}
 	if len(restricted.AllowedTools) != 2 || restricted.AllowedTools[0] != "alpha" || restricted.AllowedTools[1] != "beta" {
 		t.Fatalf("allowed tools not trimmed/deduped: %v", restricted.AllowedTools)
 	}
-	if _, err := svc.CreateApiKey(session.ID, "reader", "user-caps", []string{"read"}, nil); err != nil {
+	if _, err := svc.CreateApiKey(session.ID, "reader", "user-caps", "", []string{"read"}, nil); err != nil {
 		t.Fatalf("CreateApiKey with explicit capabilities: %v", err)
 	}
 }
@@ -245,7 +245,7 @@ func TestSessionsServiceApiKeySecretDoesNotEmbedSessionID(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	apiKey, err := svc.CreateApiKey(session.ID, "fmt", "user-fmt", []string{"read"}, nil)
+	apiKey, err := svc.CreateApiKey(session.ID, "fmt", "user-fmt", "", []string{"read"}, nil)
 	if err != nil {
 		t.Fatalf("create api key: %v", err)
 	}
@@ -264,11 +264,11 @@ func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
 		t.Fatalf("create session: %v", err)
 	}
 
-	first, err := svc.CreateApiKey(session.ID, "first", "user-inval", []string{"read", "execute"}, nil)
+	first, err := svc.CreateApiKey(session.ID, "first", "user-inval", "", []string{"read", "execute"}, nil)
 	if err != nil {
 		t.Fatalf("create first key: %v", err)
 	}
-	second, err := svc.CreateApiKey(session.ID, "second", "user-inval", []string{"admin"}, nil)
+	second, err := svc.CreateApiKey(session.ID, "second", "user-inval", "", []string{"admin"}, nil)
 	if err != nil {
 		t.Fatalf("create second key: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
 		t.Fatalf("authenticate second before invalidation: %v", err)
 	}
 
-	revoked, err := svc.InvalidateSession(session.ID, "suspected compromise")
+	revoked, err := svc.InvalidateSession(session.ID, "suspected compromise", "")
 	if err != nil {
 		t.Fatalf("invalidate session: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestSessionsServiceInvalidateSessionRevokesEveryLiveKey(t *testing.T) {
 	}
 
 	// Invalidating again is a no-op, not an error.
-	revokedAgain, err := svc.InvalidateSession(session.ID, "already done")
+	revokedAgain, err := svc.InvalidateSession(session.ID, "already done", "")
 	if err != nil {
 		t.Fatalf("second invalidation: %v", err)
 	}

@@ -213,8 +213,8 @@ func (s *GRPCServer) UpdateSession(ctx context.Context, req *proto.UpdateSession
 
 // DeleteSession implements the gRPC DeleteSession method
 func (s *GRPCServer) DeleteSession(ctx context.Context, req *proto.DeleteSessionRequest) (*proto.DeleteSessionResponse, error) {
-	// Delete session
-	err := s.sessionService.DeleteSession(req.SessionId)
+	// Delete session, attributing the deletion to the acting API key
+	err := s.sessionService.DeleteSession(req.SessionId, actingPrincipalKeyID(ctx))
 	if err != nil {
 		return nil, statusFromDomainError("delete session", err)
 	}
@@ -267,6 +267,7 @@ func (s *GRPCServer) BulkDeleteSessions(ctx context.Context, req *proto.BulkDele
 		req.UserId,
 		req.SessionIds,
 		req.Filter,
+		actingPrincipalKeyID(ctx),
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to bulk delete sessions: %v", err)
@@ -295,8 +296,9 @@ func (s *GRPCServer) GetSessionStats(ctx context.Context, req *proto.GetSessionS
 
 // InvalidateSession implements the gRPC InvalidateSession method
 func (s *GRPCServer) InvalidateSession(ctx context.Context, req *proto.InvalidateSessionRequest) (*proto.InvalidateSessionResponse, error) {
-	// Revoke every live API key for the session (session-wide kill switch).
-	revoked, err := s.sessionService.InvalidateSession(req.SessionId, req.Reason)
+	// Revoke every live API key for the session (session-wide kill switch),
+	// attributing the switch pull to the acting admin key.
+	revoked, err := s.sessionService.InvalidateSession(req.SessionId, req.Reason, actingPrincipalKeyID(ctx))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to invalidate session: %v", err)
 	}
@@ -313,14 +315,21 @@ func (s *GRPCServer) InvalidateSession(ctx context.Context, req *proto.Invalidat
 
 // CreateApiKey implements the gRPC CreateApiKey method
 func (s *GRPCServer) CreateApiKey(ctx context.Context, req *proto.CreateApiKeyRequest) (*proto.ApiKey, error) {
-	// Get the user ID from the session
-	session, err := s.sessionService.GetSessionByID(req.SessionId)
-	if err != nil {
-		return nil, statusFromDomainError("get session", err)
+	// Attribution: the acting principal, not the session owner — a key
+	// minted by an admin-for-the-session key must not be recorded as the
+	// session creator's doing. Human attribution prefers the principal's
+	// user identity, falling back to the key id.
+	principal, _ := auth.PrincipalFromContext(ctx)
+	createdBy := ""
+	if principal != nil {
+		createdBy = principal.UserID
+		if createdBy == "" {
+			createdBy = principal.KeyID
+		}
 	}
 
 	// Create API key
-	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, session.CreatedBy, req.Capabilities, req.AllowedTools)
+	apiKey, err := s.sessionService.CreateApiKey(req.SessionId, req.Name, createdBy, actingPrincipalKeyID(ctx), req.Capabilities, req.AllowedTools)
 	if err != nil {
 		return nil, statusFromDomainError("create API key", err)
 	}
@@ -349,8 +358,8 @@ func (s *GRPCServer) ListApiKeys(ctx context.Context, req *proto.ListApiKeysRequ
 
 // RevokeApiKey implements the gRPC RevokeApiKey method
 func (s *GRPCServer) RevokeApiKey(ctx context.Context, req *proto.RevokeApiKeyRequest) (*proto.RevokeApiKeyResponse, error) {
-	// Revoke API key
-	err := s.sessionService.RevokeApiKey(req.SessionId, req.KeyId)
+	// Revoke API key, attributing the revocation to the acting API key
+	err := s.sessionService.RevokeApiKey(req.SessionId, req.KeyId, actingPrincipalKeyID(ctx))
 	if err != nil {
 		return nil, statusFromDomainError("revoke API key", err)
 	}
@@ -731,6 +740,16 @@ func sendExecuteToolSnapshot(send func(*proto.ExecuteToolChunk) error, snapshot 
 	}
 
 	return nil
+}
+
+// actingPrincipalKeyID returns the API key id of the authenticated caller
+// for audit attribution — empty when no principal is on the call path
+// (wiring bug or a test driving the handler directly).
+func actingPrincipalKeyID(ctx context.Context) string {
+	if principal, ok := auth.PrincipalFromContext(ctx); ok && principal != nil {
+		return principal.KeyID
+	}
+	return ""
 }
 
 func marshalExecuteToolResult(result interface{}) string {

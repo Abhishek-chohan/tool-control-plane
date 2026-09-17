@@ -273,9 +273,9 @@ func (s *Store) RecordAuditEvent(ctx context.Context, event *model.AuditEvent) e
 		}
 	}
 	if _, err := s.db.ExecContext(ctx, `
-        INSERT INTO audit_events (created_at, event, session_id, machine_id, request_id, task_id, details)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-    `, event.CreatedAt, event.Event, nullString(event.SessionID), nullString(event.MachineID), nullString(event.RequestID), nullString(event.TaskID), details); err != nil {
+        INSERT INTO audit_events (created_at, event, session_id, machine_id, request_id, task_id, actor_key_id, details)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `, event.CreatedAt, event.Event, nullString(event.SessionID), nullString(event.MachineID), nullString(event.RequestID), nullString(event.TaskID), nullString(event.ActorKeyID), details); err != nil {
 		return fmt.Errorf("record audit event: %w", err)
 	}
 	return nil

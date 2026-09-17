@@ -49,6 +49,17 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **Audit events name the acting key**: `audit_events` gains a nullable
+  `actor_key_id` — API-key creation/revocation, session deletion/bulk
+  deletion, and the session kill switch now record the acting API key
+  (CreateApiKey previously attributed the session owner; the kill switch
+  recorded no actor at all). System-driven events stay unattributed; the
+  append-only trail cannot be backfilled. The audit contract is documented
+  in `server/docs/observability.md`, and the dead legacy
+  `sessions.api_key` column is dropped (written always-empty, read by
+  nothing; the retirement drain went with it). See
+  `server/docs/release-notes/2026-09-16-audit-actor-attribution.md`.
+
 - **Serialization retries: jittered, counted, and retryable when
   exhausted**: the SERIALIZABLE transaction wrapper (behind every claim
   and fenced write) retried with deterministic 2/4/8ms backoff, no
