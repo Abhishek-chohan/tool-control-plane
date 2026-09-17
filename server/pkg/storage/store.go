@@ -255,6 +255,11 @@ type Storer interface {
 	// transitions, written best-effort (failures are logged, never surfaced
 	// to the operation that produced the event).
 	RecordAuditEvent(ctx context.Context, event *model.AuditEvent) error
+	// ListAuditEvents returns the durable audit trail newest-first
+	// (created_at, id) with the filter applied, plus the total matching
+	// count for pagination. Audit is append-only and pruned on the
+	// retention schedule; the listing reflects whatever the window holds.
+	ListAuditEvents(ctx context.Context, filter model.AuditEventFilter) ([]*model.AuditEvent, int, error)
 
 	// Tools
 	AllTools(ctx context.Context) ([]*model.Tool, error)

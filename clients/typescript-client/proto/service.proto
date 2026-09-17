@@ -243,6 +243,18 @@ service SessionsService {
       body: "*";
     };
   }
+  // List the durable audit trail: newest first, paged, filterable by
+  // session, actor key, or event type. Admin capability gates the call —
+  // the trail spans sessions when no session filter is given. System-
+  // driven events and rows predating actor attribution carry an empty
+  // actor_key_id; the trail is append-only and pruned on the audit
+  // retention schedule.
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse) {
+    option (google.api.http) = {
+      post: "/api.v1/ListAuditEvents";
+      body: "*";
+    };
+  }
 }
 
 // ======================
@@ -703,6 +715,39 @@ message ListApiKeysRequest {
 // ListApiKeysResponse
 message ListApiKeysResponse {
   repeated ApiKey api_keys = 1;
+}
+
+// AuditEvent is a durable, append-only record of a security- or
+// lifecycle-relevant transition: session and API-key lifecycle, machine
+// registration, and terminal dead-letter outcomes.
+message AuditEvent {
+  int64 id = 1;
+  google.protobuf.Timestamp created_at = 2;
+  string event = 3;
+  string session_id = 4;
+  string machine_id = 5;
+  string request_id = 6;
+  string task_id = 7;
+  // The API key that performed the action; empty for system-driven
+  // events and rows predating actor attribution.
+  string actor_key_id = 8;
+  // Details as a JSON object string; omitted when empty.
+  string details = 9;
+}
+
+// ListAuditEventsRequest filters the durable audit trail. Empty filters
+// list everything the retention window holds.
+message ListAuditEventsRequest {
+  string session_id = 1;
+  string actor_key_id = 2;
+  string event = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  ListPage page = 2;
 }
 
 // RevokeApiKeyRequest

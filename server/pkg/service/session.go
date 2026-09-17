@@ -455,6 +455,18 @@ func (s *SessionsService) ListApiKeys(sessionID string) ([]*model.ApiKey, error)
 	return apiKeys, nil
 }
 
+// ListAuditEvents reads the durable audit trail through the store:
+// newest-first, filtered, paged. Audit requires a store (the recorder is
+// store-backed); with no store the trail is empty by definition.
+func (s *SessionsService) ListAuditEvents(filter model.AuditEventFilter) ([]*model.AuditEvent, int, error) {
+	if s.store == nil {
+		return []*model.AuditEvent{}, 0, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultPersistenceTimeout)
+	defer cancel()
+	return s.store.ListAuditEvents(ctx, filter)
+}
+
 // RevokeApiKey revokes an API key. actorKeyID is the API key performing
 // the revocation (audit attribution).
 func (s *SessionsService) RevokeApiKey(sessionID, keyID, actorKeyID string) error {

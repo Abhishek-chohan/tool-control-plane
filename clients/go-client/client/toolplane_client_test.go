@@ -203,6 +203,10 @@ func (s *sessionsServiceClientStub) GetSessionStats(ctx context.Context, in *pb.
 	return nil, unexpectedSessionCall("GetSessionStats")
 }
 
+func (s *sessionsServiceClientStub) ListAuditEvents(ctx context.Context, in *pb.ListAuditEventsRequest, opts ...grpc.CallOption) (*pb.ListAuditEventsResponse, error) {
+	return nil, unexpectedSessionCall("ListAuditEvents")
+}
+
 func (s *sessionsServiceClientStub) InvalidateSession(ctx context.Context, in *pb.InvalidateSessionRequest, opts ...grpc.CallOption) (*pb.InvalidateSessionResponse, error) {
 	return nil, unexpectedSessionCall("InvalidateSession")
 }

@@ -21,3 +21,13 @@ type AuditEvent struct {
 	ActorKeyID string         `json:"actorKeyId,omitempty"`
 	Details    map[string]any `json:"details,omitempty"`
 }
+
+// AuditEventFilter narrows a ListAuditEvents query. Empty fields match
+// everything; Limit <= 0 uses the store's default page size.
+type AuditEventFilter struct {
+	SessionID  string
+	ActorKeyID string
+	Event      string
+	Limit      int
+	Offset     int
+}

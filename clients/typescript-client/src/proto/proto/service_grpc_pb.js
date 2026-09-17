@@ -495,6 +495,28 @@ function deserialize_api_v1_ListApiKeysResponse(buffer_arg) {
   return proto_service_pb.ListApiKeysResponse.deserializeBinary(new Uint8Array(buffer_arg));
 }
 
+function serialize_api_v1_ListAuditEventsRequest(arg) {
+  if (!(arg instanceof proto_service_pb.ListAuditEventsRequest)) {
+    throw new Error('Expected argument of type api.v1.ListAuditEventsRequest');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_api_v1_ListAuditEventsRequest(buffer_arg) {
+  return proto_service_pb.ListAuditEventsRequest.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
+function serialize_api_v1_ListAuditEventsResponse(arg) {
+  if (!(arg instanceof proto_service_pb.ListAuditEventsResponse)) {
+    throw new Error('Expected argument of type api.v1.ListAuditEventsResponse');
+  }
+  return Buffer.from(arg.serializeBinary());
+}
+
+function deserialize_api_v1_ListAuditEventsResponse(buffer_arg) {
+  return proto_service_pb.ListAuditEventsResponse.deserializeBinary(new Uint8Array(buffer_arg));
+}
+
 function serialize_api_v1_ListMachinesRequest(arg) {
   if (!(arg instanceof proto_service_pb.ListMachinesRequest)) {
     throw new Error('Expected argument of type api.v1.ListMachinesRequest');
@@ -1145,6 +1167,23 @@ createApiKey: {
     requestDeserialize: deserialize_api_v1_RevokeApiKeyRequest,
     responseSerialize: serialize_api_v1_RevokeApiKeyResponse,
     responseDeserialize: deserialize_api_v1_RevokeApiKeyResponse,
+  },
+  // List the durable audit trail: newest first, paged, filterable by
+// session, actor key, or event type. Admin capability gates the call —
+// the trail spans sessions when no session filter is given. System-
+// driven events and rows predating actor attribution carry an empty
+// actor_key_id; the trail is append-only and pruned on the audit
+// retention schedule.
+listAuditEvents: {
+    path: '/api.v1.SessionsService/ListAuditEvents',
+    requestStream: false,
+    responseStream: false,
+    requestType: proto_service_pb.ListAuditEventsRequest,
+    responseType: proto_service_pb.ListAuditEventsResponse,
+    requestSerialize: serialize_api_v1_ListAuditEventsRequest,
+    requestDeserialize: deserialize_api_v1_ListAuditEventsRequest,
+    responseSerialize: serialize_api_v1_ListAuditEventsResponse,
+    responseDeserialize: deserialize_api_v1_ListAuditEventsResponse,
   },
 };
 

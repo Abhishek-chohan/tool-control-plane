@@ -607,6 +607,7 @@ const (
 	SessionsService_CreateApiKey_FullMethodName       = "/api.v1.SessionsService/CreateApiKey"
 	SessionsService_ListApiKeys_FullMethodName        = "/api.v1.SessionsService/ListApiKeys"
 	SessionsService_RevokeApiKey_FullMethodName       = "/api.v1.SessionsService/RevokeApiKey"
+	SessionsService_ListAuditEvents_FullMethodName    = "/api.v1.SessionsService/ListAuditEvents"
 )
 
 // SessionsServiceClient is the client API for SessionsService service.
@@ -636,6 +637,13 @@ type SessionsServiceClient interface {
 	CreateApiKey(ctx context.Context, in *CreateApiKeyRequest, opts ...grpc.CallOption) (*ApiKey, error)
 	ListApiKeys(ctx context.Context, in *ListApiKeysRequest, opts ...grpc.CallOption) (*ListApiKeysResponse, error)
 	RevokeApiKey(ctx context.Context, in *RevokeApiKeyRequest, opts ...grpc.CallOption) (*RevokeApiKeyResponse, error)
+	// List the durable audit trail: newest first, paged, filterable by
+	// session, actor key, or event type. Admin capability gates the call —
+	// the trail spans sessions when no session filter is given. System-
+	// driven events and rows predating actor attribution carry an empty
+	// actor_key_id; the trail is append-only and pruned on the audit
+	// retention schedule.
+	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
 }
 
 type sessionsServiceClient struct {
@@ -766,6 +774,16 @@ func (c *sessionsServiceClient) RevokeApiKey(ctx context.Context, in *RevokeApiK
 	return out, nil
 }
 
+func (c *sessionsServiceClient) ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAuditEventsResponse)
+	err := c.cc.Invoke(ctx, SessionsService_ListAuditEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SessionsServiceServer is the server API for SessionsService service.
 // All implementations must embed UnimplementedSessionsServiceServer
 // for forward compatibility.
@@ -793,6 +811,13 @@ type SessionsServiceServer interface {
 	CreateApiKey(context.Context, *CreateApiKeyRequest) (*ApiKey, error)
 	ListApiKeys(context.Context, *ListApiKeysRequest) (*ListApiKeysResponse, error)
 	RevokeApiKey(context.Context, *RevokeApiKeyRequest) (*RevokeApiKeyResponse, error)
+	// List the durable audit trail: newest first, paged, filterable by
+	// session, actor key, or event type. Admin capability gates the call —
+	// the trail spans sessions when no session filter is given. System-
+	// driven events and rows predating actor attribution carry an empty
+	// actor_key_id; the trail is append-only and pruned on the audit
+	// retention schedule.
+	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
 	mustEmbedUnimplementedSessionsServiceServer()
 }
 
@@ -838,6 +863,9 @@ func (UnimplementedSessionsServiceServer) ListApiKeys(context.Context, *ListApiK
 }
 func (UnimplementedSessionsServiceServer) RevokeApiKey(context.Context, *RevokeApiKeyRequest) (*RevokeApiKeyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RevokeApiKey not implemented")
+}
+func (UnimplementedSessionsServiceServer) ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListAuditEvents not implemented")
 }
 func (UnimplementedSessionsServiceServer) mustEmbedUnimplementedSessionsServiceServer() {}
 func (UnimplementedSessionsServiceServer) testEmbeddedByValue()                         {}
@@ -1076,6 +1104,24 @@ func _SessionsService_RevokeApiKey_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionsService_ListAuditEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAuditEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionsServiceServer).ListAuditEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionsService_ListAuditEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionsServiceServer).ListAuditEvents(ctx, req.(*ListAuditEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SessionsService_ServiceDesc is the grpc.ServiceDesc for SessionsService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1130,6 +1176,10 @@ var SessionsService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RevokeApiKey",
 			Handler:    _SessionsService_RevokeApiKey_Handler,
+		},
+		{
+			MethodName: "ListAuditEvents",
+			Handler:    _SessionsService_ListAuditEvents_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
