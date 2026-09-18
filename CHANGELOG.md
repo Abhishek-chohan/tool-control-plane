@@ -113,6 +113,15 @@ release notes live in `server/docs/release-notes/`.
 
 ### Fixed
 
+- **The demo reaps its provider**: `toolplane demo` leaked the provider
+  subprocess on every happy-path run (the teardown only ran in the
+  `--drill` branch) — the orphan also held inherited stdout pipes open,
+  so a piped demo never finished. The provider is now killed and reaped
+  on every exit path, and it writes straight to the terminal fds, which
+  also removes a data race between the output copier and the demo's own
+  prints. See
+  `server/docs/release-notes/2026-09-18-demo-provider-teardown.md`.
+
 - **Tool schemas clear a validity bar at registration**: a non-empty
   schema must be well-formed JSON with an object root — anything else is
   `INVALID_ARGUMENT` on both RegisterTool and machine registration (a

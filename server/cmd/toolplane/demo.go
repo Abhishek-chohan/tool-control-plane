@@ -132,12 +132,25 @@ func runDemo(cmd *cobra.Command, providerPath string, drill bool) int {
 	providerArgs := []string{"serve", toolsFile, "--session", sessionID,
 		"--host", "localhost", "--port", fmt.Sprintf("%d", port), "--api-key", "dev-key"}
 	providerCmd := exec.Command(providerBin, providerArgs...)
-	providerCmd.Stdout = out
+	// The subprocess writes straight to the terminal fds: fd passthrough
+	// means no parent-side copier goroutine, so provider output streams
+	// live AND nothing races the command's own writer (a shared buffer
+	// here is a data race between the copier and this function's prints).
+	providerCmd.Stdout = os.Stdout
 	providerCmd.Stderr = os.Stderr
 	if err := providerCmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\nthe provider CLI is missing — install it with:\n  pip install toolplane-python-client\n", err)
 		return cli.ExitError
 	}
+	// The provider must not outlive the demo on any exit path. The happy
+	// path returns before the drill's explicit kill, and an orphaned
+	// provider also holds any inherited pipe open — a piped
+	// `toolplane demo | tail` would never see the pipe close. Wait (not
+	// Process.Wait) also joins the exec machinery.
+	defer func() {
+		_ = providerCmd.Process.Kill()
+		_ = providerCmd.Wait()
+	}()
 	fmt.Fprintf(out, "==> provider serving tools.py in session %s\n", sessionID)
 
 	// Wait for the provider to finish registering: poll the tool until it
@@ -206,7 +219,7 @@ func runDemo(cmd *cobra.Command, providerPath string, drill bool) int {
 	pendingRequestID := resp.GetRequestId()
 	fmt.Fprintf(out, "==> request %s pending; killing the provider...", pendingRequestID)
 	_ = providerCmd.Process.Kill()
-	_, _ = providerCmd.Process.Wait()
+	_ = providerCmd.Wait()
 
 	// The dead provider's machine still owns the session's tools. The
 	// replacement provider cannot register a taken name, so release the
@@ -236,7 +249,7 @@ func runDemo(cmd *cobra.Command, providerPath string, drill bool) int {
 
 	// A second provider takes over the session to finish the work.
 	providerCmd2 := exec.Command(providerBin, providerArgs...)
-	providerCmd2.Stdout = out
+	providerCmd2.Stdout = os.Stdout
 	providerCmd2.Stderr = os.Stderr
 	if err := providerCmd2.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -244,7 +257,7 @@ func runDemo(cmd *cobra.Command, providerPath string, drill bool) int {
 	}
 	defer func() {
 		_ = providerCmd2.Process.Kill()
-		_, _ = providerCmd2.Process.Wait()
+		_ = providerCmd2.Wait()
 	}()
 
 	requests, reqCtx, cancelReq, gconnReq, err := dialRequests(conn)
