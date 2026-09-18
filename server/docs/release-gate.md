@@ -154,7 +154,7 @@ The `.github/workflows/release-gate.yml` workflow runs the same `make release-ga
 | Workflow | Role |
 | --- | --- |
 | `release-gate.yml` | Authoritative release gate: one canonical secure end-to-end scenario |
-| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript, the Python SDK unit suites, and the Go server suite (race detector on every package except `pkg/service`, which runs without it until the clone-at-the-boundary fix lands) on every pull request and push to `main` |
+| `conformance-python.yml` | SDK Conformance & Verification: cross-SDK shared-fixture coverage for Python, Go, and TypeScript, the Python SDK unit suites, and the Go server suite (race detector on every package) on every pull request and push to `main` |
 
 The release gate remains intentionally narrow and fast. Shared conformance is broader and verifies parity across SDKs. Both must pass before a release is trusted.
 
@@ -165,5 +165,5 @@ Provider-runtime coverage in shared conformance now explicitly includes claim-an
 - Live Postgres-backed API-key validation. The gate now proves the production storage guardrail and a Postgres-backed recovery path, but it does not exercise that production auth backend directly.
 - Reference deployment TLS certificate provisioning or the proxy's custom CA bundle wiring. Use `make reference-deployment-integration` when you need that exact deployment path exercised.
 - The separate server-side `/rpc` reference path documented in `server/docs/rpc-retirement.md`.
-- Tool-discovery RPCs without shared fixture coverage (see `SDK_MAP.md` for current `partial` claims).
+- Tool-discovery RPCs have shared fixture coverage (`tool_discovery.json`, including the registration-ownership and schema-validation legs); per-SDK wrapper parity beyond what the fixtures assert is still `SDK_MAP.md`'s to state.
 - Every transport permutation (HTTP gateway behavior is covered by shared conformance, not duplicated here).

@@ -18,7 +18,7 @@ It is grounded in maintained signals only:
 Use observability first when the question is about runtime state across many requests or machines.
 
 - `session_trace` events with stable top-level `sessionId`, `machineId`, `toolId`, `requestId`, and `taskId`
-- `/metrics` on the server for queue depth, in-flight work, retries, dead letters, active machines, draining machines, and machine load
+- `/metrics` on the server for queue depth, in-flight work, retries, dead letters, active machines, draining machines, machine load, and serializable-transaction retry/exhaustion counters (`toolplane_storage_serialization_retries_total` climbing on one replica indicates Postgres contention between replicas; `_exhausted_total` increments mean work was refused as `UNAVAILABLE`)
 - `/health` on the gateway for circuit and throttle state
 - proxy throttle logs with `reason`, `retry_after`, `api_key_present`, and redacted `client_fingerprint`
 
@@ -33,10 +33,16 @@ Use request inspection when the question is about one request, one machine owner
 
 Replay-window state belongs here, not in the maintained observability contract.
 
+The `toolplane` CLI wraps the same inspection calls with table or `--format json` output (`toolplane request list|inspect|stream`, `toolplane machine list|status`) and exits with a code matching the failure's gRPC status, so operator scripts can branch without parsing curl output. The curl examples below use the gateway directly and remain equivalent.
+
 ### Control Actions
 
 - `CancelRequest` stops one request without changing provider ownership globally.
 - `DrainMachine` stops new routing to one provider while preserving in-flight completion behavior.
+
+### Audit Trail
+
+Credential and lifecycle events persist to the audit trail with the acting API key recorded (`actor_key_id`): session create/delete, API-key create/revoke (including the session-wide kill switch), machine register/unregister, and terminal dead-letters. `toolplane audit list --session <id> [--actor <key-id>]` reads it; system-driven events carry an empty actor. The contract (what is recorded, delivery semantics, retention) is documented in `server/docs/observability.md`.
 
 ### MCP Facade
 
