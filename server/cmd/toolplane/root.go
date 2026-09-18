@@ -34,6 +34,7 @@ scripts branch without parsing output.`,
 	root.AddCommand(newGatewayCommand())
 	root.AddCommand(newMCPCommand())
 	root.AddCommand(newSessionCommand())
+	root.AddCommand(newDemoCommand())
 	root.AddCommand(newKeyCommand())
 	root.AddCommand(newMachinesCommand())
 	root.AddCommand(newAuditCommand())
