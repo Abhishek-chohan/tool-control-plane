@@ -15,6 +15,7 @@ import sys
 from typing import List, Optional, Tuple
 
 from toolplane import Toolplane
+from toolplane.core.errors import ToolplaneError
 from toolplane.provider_registry import RegistryTool, clear, collect
 from toolplane.utils.schema import generate_schema_from_function
 
@@ -129,8 +130,22 @@ def cmd_serve(args: argparse.Namespace) -> int:
         server_port=args.port,
         api_key=args.api_key or "",
     )
-    runtime = client.provider_runtime(poll_interval=args.poll_interval)
-    session = runtime.create_session(session_id=args.session or None)
+    client = Toolplane(
+        server_host=args.host,
+        server_port=args.port,
+        api_key=args.api_key or "",
+    )
+    runtime = client.provider_runtime()
+    runtime._poll_interval = args.poll_interval
+    try:
+        session = runtime.create_session(session_id=args.session or None)
+    except ToolplaneError as exc:
+        # The session already exists (a re-serve or another provider owns
+        # it): attach to it instead of failing.
+        if args.session and "already exists" in str(exc).lower():
+            session = runtime.attach_session(args.session)
+        else:
+            raise
 
     for entry in tools:
         schema = entry.schema or generate_schema_from_function(entry.func)

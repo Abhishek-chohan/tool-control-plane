@@ -37,7 +37,26 @@ Prerequisites: Go 1.24+, Python 3.8–3.12, and `make`/bash (on Windows, use WSL
 pip install -r clients/python-client/requirements.txt
 ```
 
-### One command
+### Unified command
+
+Build the `toolplane` command once:
+
+```bash
+cd server && make build
+```
+
+Then scaffold and run the full loop:
+
+```bash
+toolplane init                                  # tools.py + toolplane.yaml + .env
+toolplane serve                                 # terminal 1: control plane
+toolplane-provider serve tools.py               # terminal 2: serve your tools
+toolplane invoke add --session demo --input '{"a":2,"b":3}' --wait 30s
+```
+
+`toolplane` also carries the operator surface: `status`, `doctor`, `session`, `key`, `machine`, `request`, `task`, `tools`, `audit`, and a self-contained `demo` (`--drill` kills the provider mid-request to show durable execution). Every command exits with a code mapped from the failure's gRPC status — scripts branch without parsing output.
+
+### One command (SDK examples)
 
 From `server/`:
 
