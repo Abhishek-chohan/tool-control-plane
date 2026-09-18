@@ -40,13 +40,24 @@ jobs:
         working-directory: clients/python-client
         run: python -m flake8 toolplane
 
-      # Advisory only: the codebase is not fully annotated yet, so mypy
-      # reports type drift without failing the build. Flip continue-on-error
-      # to false once the error count reaches zero.
-      - name: Run mypy (advisory)
+      # mypy runs as a ratchet: the codebase is not fully annotated yet
+      # (generated protobuf stubs included), so the error count is
+      # baseline-tracked rather than blocking. The baseline lives in
+      # clients/python-client/.mypy-baseline; the step fails when the
+      # current error count exceeds it. Drive it to zero by fixing types
+      # and lowering the baseline in the same PR, then flip this to a
+      # plain blocking run.
+      - name: Run mypy (ratcheted)
         working-directory: clients/python-client
-        continue-on-error: true
-        run: python -m mypy toolplane --ignore-missing-imports
+        run: |
+          python -m mypy toolplane --ignore-missing-imports > mypy.out 2>&1 || true
+          current=$(grep -cE '^[^ ]+\.py:[0-9]+: error:' mypy.out || true)
+          baseline=$(cat .mypy-baseline)
+          echo "mypy errors: $current (baseline $baseline)"
+          if [ "$current" -gt "$baseline" ]; then
+            echo "::error::mypy error count increased above the baseline ($baseline -> $current). Fix the new type errors or lower the baseline in the same PR."
+            exit 1
+          fi
 
   go:
     name: Go Lint (${{ matrix.module-name }})
