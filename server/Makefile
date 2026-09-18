@@ -116,8 +116,13 @@ conformance-python:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -q
 
 # Python SDK unit suites outside the conformance marker (request wrappers,
-# gRPC TLS, standalone toolkit self-tests).
+# gRPC TLS, standalone toolkit self-tests). Coverage is informational
+# only — printed, never gated; the conformance suite is the quality
+# signal that blocks.
 python-unit:
+	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py toolplane/toolkits/standalone_tools -q --cov=toolplane --cov-report=term
+
+python-unit-no-cov:
 	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py toolplane/toolkits/standalone_tools -q
 
 # Server suite under the race detector, every package.

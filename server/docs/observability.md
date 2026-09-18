@@ -94,6 +94,12 @@ Source of truth:
 - per-reason throttle counters in `throttle`
 - a UTC `timestamp`
 
+Rate limiting and the circuit breaker are **per gateway instance**: each
+process holds its own token buckets and breaker state, so N replicas
+behind a load balancer apply an effective N× limit and trip
+independently. This is the intended v1 semantics — front the fleet with
+a shared limiter if a global budget is required.
+
 The supported throttle reasons are:
 
 - `api_rate_limit`
