@@ -96,9 +96,12 @@ func runDemo(cmd *cobra.Command, providerPath string, drill bool) int {
 	opts := server.DefaultOptions()
 	opts.Listener = lis
 	opts.MetricsListen = ""
-	go func() { _ = server.RunContext(ctx, opts) }()
-	service.StorageSummary = "memory"
+	// Build identity is set before the server goroutine starts: the
+	// goroutine-creation edge orders this write before every serving
+	// read (HealthCheck reports it). StorageSummary needs no assignment
+	// here — the server resolves and publishes it from the storage mode.
 	service.BuildVersion = version
+	go func() { _ = server.RunContext(ctx, opts) }()
 
 	// Readiness: the health flip happens after service registration.
 	conn := cli.NewConnection(fmt.Sprintf("localhost:%d", port), "dev-key", 2*time.Second)
