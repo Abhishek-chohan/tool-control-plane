@@ -223,6 +223,20 @@ python test_failure_analysis.py --test_output pytest_output.txt --test_framework
 python replace_string_in_file.py api.py "old_api_call" "new_api_call" --dry_run
 ```
 
+## Testing
+
+The suite lives in `test_standalone_toolkit.py` and runs on the standard
+library alone:
+
+```bash
+cd clients/python-client/toolplane/toolkits/standalone_tools
+python -m pytest test_standalone_toolkit.py -v
+```
+
+Select a tool's tests with `-k` (e.g. `-k file_search`). Tests run in
+isolated temporary directories and clean up after themselves. The same
+suite runs in CI as part of `make python-unit` from `server/`.
+
 ## Contributing
 
 To add new tools:

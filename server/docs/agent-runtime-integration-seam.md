@@ -64,7 +64,7 @@ An edge adapter should answer these questions without owning core runtime semant
 
 ## Current Maintained Gaps
 
-- `ResumeStream` and `GetRequestChunks` exist at the server contract level, but they are not exposed as maintained public wrappers across every SDK projection.
+- `ResumeStream` and `GetRequestChunks` are exposed as maintained wrappers in all three SDKs (replay-aware `resume_stream`/`ResumeStream`/`resumeStream`); the remaining gap is conformance coverage of the HTTP replay path in the Go client, not wrapper availability.
 - TypeScript provider mode is maintained, but the broader TypeScript public surface remains narrower than Python.
 - The TypeScript MCP adapter is a useful edge example, not proof of general SDK parity.
 

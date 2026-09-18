@@ -7,7 +7,7 @@ name: SDK Conformance & Verification
 # signal that maintained SDK behavior and the translated adapter boundary still
 # match the repo's validation story.
 # See conformance/README.md
-# for the fixture semantics and conformance/ARCHITECTURE.md for coverage model.
+# for the fixture semantics and coverage model.
 #
 # This is NOT the authoritative release gate; see release-gate.yml for the
 # end-to-end secure-startup scenario.

@@ -157,9 +157,11 @@ toolplane-mcp-gateway --listen :8081 --backend localhost:9001
 
 For stdio-only environments, `clients/typescript-mcp-adapter` wraps one Toolplane session behind a stdio transport and handles both protocol generations.
 
+**ACP editors (Zed, JetBrains, Neovim):** ACP and MCP compose — ACP carries the editor-to-agent session, MCP carries agent-to-tools, and Toolplane is the MCP side. Your ACP agent reaches Toolplane tools by attaching the gateway as one of the session's MCP servers: point the `mcpServers` entry of your agent's ACP config at the HTTP URL of `toolplane-mcp-gateway` with your API key. What Toolplane adds over a plain MCP server is what the session layer doesn't give you: every tool call becomes a durable request that outlives the editor, the agent process, and the gateway — close your editor mid-execution and the request either finished (result waiting) or is still running under its lease.
+
 ## Development and testing
 
-`conformance/cases/` holds 22 transport-neutral JSON fixtures covering sessions, requests, bounded stream replay, invocation, machines, provider runtime, multi-instance, and MCP. Python and TypeScript run every fixture over both gRPC and HTTP; Go has opt-in live integration tests instead of the shared harness.
+`conformance/cases/` holds 25 transport-neutral JSON fixtures covering sessions, requests, bounded stream replay, invocation, machines, tool discovery, provider runtime, multi-instance, and MCP. Python and TypeScript run every fixture over both gRPC and HTTP; Go has opt-in live integration tests instead of the shared harness.
 
 ```bash
 cd server

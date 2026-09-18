@@ -30,13 +30,20 @@ See `../server/docs/economic-case.md` for how this conformance model fits into t
 - `session_list`
 - `invoke_unary`
 - `invoke_stream`
-- `tool_discovery`
+- `tool_discovery` (listing, lookup, delete, registration-ownership conflicts)
+- `tool_schema_validation` (the registration schema-validity bar)
 - `session_update`
 - `request_create`
-- `request_recovery`
+- `request_list` (offset pagination over the live set)
+- `request_recovery` (retained window, resume, trimmed window, expired window, and the full 8 MiB window read through every transport)
+- `request_idempotency` (create-retry dedup)
 - `api_key_lifecycle`
 - `machine_lifecycle`
 - `provider_runtime`
+- `multi_instance` (requires `TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1` plus a Postgres `TOOLPLANE_DATABASE_URL`; boots a second server replica)
+- `mcp_tasks` (runs only on the MCP transport; requires `TOOLPLANE_CONFORMANCE_MCP=1`)
+
+The `feature` enum in `schema/test_case.schema.json` is the authoritative family list.
 
 ## Status semantics
 

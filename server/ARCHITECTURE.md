@@ -1,82 +1,38 @@
 # Server Architecture
 
-The server is the contract-owning runtime for Toolplane's remote tool-execution control plane. The maintained product boundary is a protobuf/gRPC contract, an HTTP gateway compatibility layer, and optional ecosystem adapters that sit outside the core runtime. The deprecated `/rpc` endpoint remains a documented server-side migration surface on the path to `v2.0.0`, but no maintained SDK in this repo depends on it.
-
-## Boundary
-
-- This server is the core control plane for sessions, machines, requests, tasks, and tool ownership.
-- The gRPC contract is the primary architecture surface.
-- The HTTP gateway is a maintained compatibility layer over the same contract.
-- `/rpc` is outside the maintained SDK surfaces and remains only as a documented server-side retirement path.
+The server is the contract-owning runtime for Toolplane's remote tool-execution control plane: a canonical gRPC surface generated from `proto/service.proto`, an HTTP gateway compatibility edge, and an MCP JSON-RPC edge. This file is the module map; trace order, conventions, and commands live in the repo root `AGENTS.md` and `server/Makefile` (`make help`).
 
 ## Module Graph
 
 ```text
-proto/service.proto
-  -> cmd/server/main.go
-    -> pkg/service/server.go
-      -> pkg/service/tool.go
-      -> pkg/service/session.go
-      -> pkg/service/machine.go
-      -> pkg/service/requests.go
-      -> pkg/service/task.go
-    -> pkg/storage/*
-    -> pkg/trace/*
-  -> cmd/proxy/main.go
-    -> proto/service.pb.gw.go
+proto/service.proto                  canonical contract (single editable source)
+  -> internal/server                 control-plane lifecycle, config, auth wiring, storage boot
+  -> internal/gateway                HTTP/JSON gateway (grpc-gateway transcode edge)
+  -> internal/mcpgateway             MCP JSON-RPC facade edge
+  -> internal/cli                    shared CLI plumbing (exit codes, rendering, connections)
+  -> internal/auth                   principal extraction and capability checks
+cmd/server, cmd/proxy, cmd/mcp-gateway   thin mains over the internal packages
+cmd/toolplane                            unified binary: serve/gateway/mcp + invoke/status/doctor/demo verbs
+pkg/service                           domain services behind the transport adapter (server.go)
+pkg/storage                           Storer interface + Postgres and memory backends
+pkg/model, pkg/trace, pkg/observability, pkg/mcp   shared model, tracing, metrics, MCP types
 ```
 
 ## Entry Points
 
-- `cmd/server/main.go`: boots the gRPC server, auth interceptors, storage, tracing, and the aggregated service adapter.
-- `cmd/proxy/main.go`: runs the HTTP gateway generated from protobuf HTTP annotations.
-- `proto/service.proto`: canonical API contract for all services and generated stubs.
+- `cmd/toolplane`: the documented operator surface — `toolplane serve`, `gateway serve`, `mcp serve`, plus invoke/session/key/machine/request/task/tool/audit verbs, `status`, `doctor`, `demo`.
+- `cmd/server`, `cmd/proxy`, `cmd/mcp-gateway`: the standalone binaries (used by the compose reference and CI); thin wrappers over `internal/server`, `internal/gateway`, `internal/mcpgateway`.
+- `proto/service.proto`: the canonical API contract; all client stubs are regenerated from it.
 
 ## Transport To Domain Flow
 
-1. `cmd/server/main.go` constructs `ToolService`, `SessionsService`, `MachinesService`, `RequestsService`, and `TasksService`.
-2. `pkg/service/server.go` exposes one `GRPCServer` adapter that implements every protobuf service.
-3. Each handler converts transport payloads into domain-friendly arguments and delegates to the owning service file.
-4. Domain services operate on `pkg/model` entities and optionally persist through `pkg/storage`.
-5. Responses are converted back into protobuf messages and returned through gRPC or the gateway.
-
-## Execution Flow
-
-For a typical tool execution:
-
-1. `ToolService.RegisterTool` or machine registration makes a tool discoverable for a session.
-2. `RequestsService.CreateRequest` creates queue state for a tool invocation.
-3. `RequestsService.ClaimRequest` binds the request to a machine.
-4. `RequestsService.ExecuteTool` waits on request updates until completion, failure, stall, or timeout.
-5. `TasksService` builds on top of `RequestsService` for higher-level scheduled execution.
-
-## Handler Ownership
-
-| Proto service | Adapter file | Domain file |
-| --- | --- | --- |
-| `ToolService` | `pkg/service/server.go` | `pkg/service/tool.go` |
-| `SessionsService` | `pkg/service/server.go` | `pkg/service/session.go` |
-| `MachinesService` | `pkg/service/server.go` | `pkg/service/machine.go` |
-| `RequestsService` | `pkg/service/server.go` | `pkg/service/requests.go` |
-| `TasksService` | `pkg/service/server.go` | `pkg/service/task.go` |
-
-## Key Files
-
-| File | Responsibility |
-| --- | --- |
-| `pkg/service/server.go` | Transport adapter that implements all protobuf services and translates errors into gRPC status codes |
-| `pkg/service/tool.go` | Tool lifecycle, lookup, ping updates, and registration bookkeeping |
-| `pkg/service/session.go` | Session CRUD, user session indexing, API key handling, and namespace metadata |
-| `pkg/service/machine.go` | Machine registration, heartbeat, draining, and machine-to-tool association |
-| `pkg/service/requests.go` | Request queueing, claiming, result submission, chunk handling, and timeout/stall detection |
-| `pkg/service/task.go` | Higher-level task orchestration built on request execution |
-| `pkg/service/persistence.go` | Service persistence glue shared by domain services |
-| `pkg/storage/` | Optional persistent storage backend used when environment configuration is present |
-| `pkg/model/` | Shared in-memory and persisted entity definitions |
-| `pkg/trace/` | Session tracing hooks used by tool and machine flows |
+1. `internal/server` constructs the domain services (`ToolService`, `SessionsService`, `MachinesService`, `RequestsService`, `TasksService`) over the configured storage.
+2. `pkg/service/server.go` is the single gRPC adapter implementing every proto service; handlers convert transport payloads and delegate to the owning service file.
+3. Domain services operate on `pkg/model` entities and persist through `pkg/storage` (the Storer interface is the durability boundary; per-replica caches hold clones, never shared pointers).
+4. Responses convert back through the adapter; errors funnel through the domain-error taxonomy in `pkg/service/errors.go` — never handler-local status codes.
 
 ## Notes For Agents
 
-- Do not edit generated protobuf outputs directly unless the task is specifically about generated files.
-- Contract changes should usually start in `proto/service.proto`, not in `pkg/service/server.go`.
-- Behavior bugs are often split between the transport adapter and the owning domain service, so inspect both before patching.
+- Do not edit generated protobuf outputs; start contract changes in `service.proto` and regenerate.
+- Behavior bugs are usually split between the transport adapter and the owning domain service; inspect both.
+- The exit-code contract for `cmd/toolplane` verbs lives in `internal/cli`.
