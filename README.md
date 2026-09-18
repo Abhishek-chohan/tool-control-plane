@@ -89,7 +89,7 @@ The production-shaped stack lives at `server/deploy/reference/compose.yaml`: Pos
 
 ## Architecture
 
-The canonical API contract is `server/proto/service.proto` (package `api.v1`, 44 RPCs across five services). The Go server owns the runtime semantics; every other component is a projection of them.
+The canonical API contract is `server/proto/service.proto` (package `api.v1`, 46 RPCs across five services). The Go server owns the runtime semantics; every other component is a projection of them.
 
 | Component | Binary | Default port | Purpose |
 | --- | --- | --- | --- |
