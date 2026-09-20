@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all demo build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race python-unit
+.PHONY: all demo build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race bench bench-postgres python-unit
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -128,6 +128,17 @@ python-unit-no-cov:
 # Server suite under the race detector, every package.
 test-race:
 	go test ./... -count=1 -race
+
+# Hot-path micro-benchmarks (request create/claim/resolve, status read,
+# tool discovery, chunk append into a full retained window, replay
+# read). Advisory only: run them, read the numbers against your own
+# hardware, never gate on them. Postgres variants run when
+# TOOLPLANE_DATABASE_URL is set; use a dedicated database — benchmark
+# rows accumulate.
+bench:
+	go test ./pkg/service ./pkg/storage -run '^$$' -bench . -benchmem
+
+bench-postgres: bench
 
 conformance-python-grpc:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k grpc -q
