@@ -57,6 +57,7 @@ type opReport struct {
 type loadReport struct {
 	Mode           string             `json:"mode"`
 	Shape          string             `json:"shape"`
+	Drill          *drillResult       `json:"drill,omitempty"`
 	Sessions       int                `json:"sessions"`
 	DurationSec    float64            `json:"duration_sec"`
 	Ops            []opReport         `json:"ops"`

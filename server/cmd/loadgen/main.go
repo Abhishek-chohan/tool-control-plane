@@ -31,6 +31,7 @@ type config struct {
 	address     string
 	apiKey      string
 	shape       string
+	drill       string
 	sessions    int
 	duration    time.Duration
 	reportPath  string
@@ -46,6 +47,7 @@ func parseFlags(argv []string) (config, error) {
 	fs.StringVar(&cfg.address, "address", "localhost:9001", "server address (external mode)")
 	fs.StringVar(&cfg.apiKey, "api-key", "", "API key; defaults to $TOOLPLANE_API_KEY, then the embedded key")
 	fs.StringVar(&cfg.shape, "shape", "mixed", "workload shape: agent-turn, token-stream, heartbeat-fleet, discovery-churn, mixed")
+	fs.StringVar(&cfg.drill, "drill", "", "run a reliability drill under load instead of a plain shape: provider-kill, drain-under-backlog, multi-instance-contention")
 	fs.IntVar(&cfg.sessions, "sessions", 8, "concurrent load sessions")
 	fs.DurationVar(&cfg.duration, "duration", 60*time.Second, "drive load for this long")
 	fs.StringVar(&cfg.reportPath, "report", "", "write the JSON report here (default: stdout only)")
@@ -65,6 +67,11 @@ func parseFlags(argv []string) (config, error) {
 	case "agent-turn", "token-stream", "heartbeat-fleet", "discovery-churn", "mixed":
 	default:
 		return config{}, fmt.Errorf("unknown shape %q", cfg.shape)
+	}
+	switch cfg.drill {
+	case "", "provider-kill", "drain-under-backlog", "multi-instance-contention":
+	default:
+		return config{}, fmt.Errorf("unknown drill %q", cfg.drill)
 	}
 	if cfg.duration <= 0 {
 		return config{}, fmt.Errorf("--duration must be positive")

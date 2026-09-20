@@ -24,6 +24,30 @@ The source of truth remains:
 | D7. Multi-instance no double-dispatch / no double-requeue | Two server replicas share one Postgres store; each runs its background loops and serves claim requests | A request created on one instance is visible on the other; an explicit claim by a second instance is rejected (no double-dispatch); the lease-expiry reaper requeues each expired request exactly once across both instances (no double-requeue or double `attempts` increment); per-machine capacity stays shared across instances | `cd server && make release-gate-runtime`; `TestActiveActive_CrossInstanceVisibility`; `TestActiveActive_NoDoubleClaim`; `TestActiveActive_CapacityCapHoldsAcrossInstances`; `TestActiveActive_NoDoubleRequeue`; storage contract suite `go test ./pkg/storage` (`TestClaimRequest_GuardedRejectsSecondClaimant`, `TestReclaimExpiredRequest_SingleRequeue`, `TestMachineInFlightCount`); end-to-end two-process conformance `conformance/cases/multi_instance_claim.json` behind `TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1` | The Go-side proofs run against the in-memory store so they do not require a live Postgres; the Postgres-backed variants run when `TOOLPLANE_DATABASE_URL` is set. The end-to-end conformance case requires both `TOOLPLANE_CONFORMANCE_MULTI_INSTANCE=1` and a Postgres `TOOLPLANE_DATABASE_URL` (it boots a second server replica). |
 | D8. Long-running execution with lease renewal and fencing | A healthy provider renews its lease while executing past the unrenewed lease TTL; separately, a stale or forged executor attempts writes after the lease was reclaimed | Renewed leases are not reclaimed mid-flight; renewal can never extend a lease past the request's absolute timeout; once a lease is reclaimed, submissions, chunk appends, updates, and renewals from the stale grant fail with `FAILED_PRECONDITION`, while the current holder's fenced writes complete the request exactly once | `cd server && make release-gate-runtime`; `TestRenewRequestLeasePreventsReclaimAndAbsoluteCapStillBounds`; `TestRenewRequestLeaseCannotCrossAbsoluteTimeout`; `TestFencedWritesAfterReclaim`; `TestActiveActiveFencedWritesAcrossInstances`; `TestGRPCServerFencedWritesMapLeaseConflictToFailedPrecondition`; storage contract suite `TestFencedWritesRejectStaleHolderAfterReclaim` and siblings in `server/pkg/storage/requests_fenced_test.go`; end-to-end `conformance/cases/provider_runtime_fenced_submission.json` | Renewal keeps a lease alive but never past `leased_at + timeout_seconds`; a reclaimed request re-executes from the start under a fresh lease epoch (`idempotency_key` deduplicates create retries but does not prevent re-execution of a reclaimed request, so non-idempotent tools still need their own dedup) |
 
+## Running Drills Under Load
+
+The matrix above proves each failure semantic in isolation. The load
+driver can also inject the same failures while the control plane is
+saturated — the point is not new semantics but the old semantics
+holding under contention:
+
+```bash
+cd server
+go run ./cmd/loadgen --drill provider-kill --sessions 2 --duration 75s   # D1 under load
+go run ./cmd/loadgen --drill drain-under-backlog --sessions 2 --duration 25s   # D4 under load
+TOOLPLANE_DATABASE_URL=<postgres-url> \
+  go run ./cmd/loadgen --drill multi-instance-contention --sessions 2 --duration 30s  # D7 under load
+```
+
+Each drill runs agent-turn load, injects the failure mid-run, and
+prints machine-checked assertions in its JSON report (exit 1 when one
+fails). Notes: `provider-kill` needs ~45s+ because the 30s lease must
+expire before the requeue path can run; its requeue-counter assertion
+applies on the Postgres store (the memory store reclaims expired leases
+lazily at claim time, where the drill asserts the recovery outcome
+instead); `multi-instance-contention` skips without
+`TOOLPLANE_DATABASE_URL` since two replicas need shared durable state.
+
 ## Core Validation Paths
 
 ### First Runnable Path

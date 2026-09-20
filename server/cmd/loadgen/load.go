@@ -35,14 +35,22 @@ type harness struct {
 	mach  proto.MachinesServiceClient
 	reqs  proto.RequestsServiceClient
 
-	collector  *collector
-	sessions   []string
-	machines   []machineRef
-	stop       chan struct{}
-	stopOnce   sync.Once
-	deadlineAt time.Time
-	workerWG   sync.WaitGroup // shape workers — drain before providers stop
-	wg         sync.WaitGroup // fake providers
+	collector     *collector
+	sessions      []string
+	machines      []machineRef
+	providerStops map[string]chan struct{} // per-machine kill switches (drills)
+	stop          chan struct{}
+	stopOnce      sync.Once
+	deadlineAt    time.Time
+	workerWG      sync.WaitGroup // shape workers — drain before providers stop
+	wg            sync.WaitGroup // fake providers
+
+	// Drill plumbing.
+	altTools        proto.ToolServiceClient // consumer traffic rides replica B when set
+	refusalExpected bool                    // FAILED_PRECONDITION invokes are designed refusals, not faults
+	metricsURL      string
+	startMetrics    map[string]float64
+	drillMetrics    map[string]float64
 }
 
 // shutdown stops the fake providers exactly once and waits for them, so
@@ -87,14 +95,15 @@ func runLoad(ctx context.Context, cfg config) int {
 	defer conn.Close()
 
 	h := &harness{
-		cfg:       cfg,
-		conn:      conn,
-		tools:     proto.NewToolServiceClient(conn),
-		sess:      proto.NewSessionsServiceClient(conn),
-		mach:      proto.NewMachinesServiceClient(conn),
-		reqs:      proto.NewRequestsServiceClient(conn),
-		collector: newCollector(),
-		stop:      make(chan struct{}),
+		cfg:           cfg,
+		conn:          conn,
+		tools:         proto.NewToolServiceClient(conn),
+		sess:          proto.NewSessionsServiceClient(conn),
+		mach:          proto.NewMachinesServiceClient(conn),
+		reqs:          proto.NewRequestsServiceClient(conn),
+		collector:     newCollector(),
+		providerStops: map[string]chan struct{}{},
+		stop:          make(chan struct{}),
 	}
 
 	callCtx, cancel := context.WithTimeout(ctx, cfg.duration+90*time.Second)
@@ -113,14 +122,32 @@ func runLoad(ctx context.Context, cfg config) int {
 
 	h.deadlineAt = time.Now().Add(cfg.duration)
 	startMetrics := scrapeMetrics(metricsURL)
-	runShape(callCtx, h)
-	// Drain the providers after the consumers so their resolve/append ops
-	// land in the counts, then scrape with every counter settled (the
-	// server itself stays up until runLoad returns).
-	h.shutdown()
+
+	var drill *drillResult
+	if cfg.drill != "" {
+		h.metricsURL = metricsURL
+		h.startMetrics = startMetrics
+		drill = runDrill(callCtx, h)
+	} else {
+		// Drain the providers after the consumers so their resolve/append
+		// ops land in the counts, then scrape with every counter settled
+		// (the server itself stays up until runLoad returns).
+		runShape(callCtx, h)
+		h.shutdown()
+	}
 	endMetrics := scrapeMetrics(metricsURL)
 
-	report := h.collector.report(cfg, metricsDelta(startMetrics, endMetrics))
+	var metrics map[string]float64
+	if drill != nil {
+		metrics = h.drillMetrics
+	} else {
+		metrics = metricsDelta(startMetrics, endMetrics)
+	}
+	report := h.collector.report(cfg, metrics)
+	report.Drill = drill
+	if drill != nil && drill.failed() {
+		report.Failed = true
+	}
 	encoded, _ := json.MarshalIndent(report, "", "  ")
 	if cfg.reportPath != "" {
 		if err := os.WriteFile(cfg.reportPath, append(encoded, '\n'), 0o600); err != nil {
@@ -234,7 +261,9 @@ func (h *harness) setupSessions(ctx context.Context) error {
 		h.machines = append(h.machines, machineRef{sessionID: sessionID, machineID: machineID})
 
 		h.wg.Add(1)
-		go h.runFakeProvider(sessionID, machineID)
+		machineStop := make(chan struct{})
+		h.providerStops[machineID] = machineStop
+		go h.runFakeProvider(sessionID, machineID, machineStop)
 	}
 	return nil
 }

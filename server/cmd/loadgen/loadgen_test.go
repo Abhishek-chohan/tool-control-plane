@@ -131,3 +131,52 @@ func invokeFloor(invokes int) int {
 	}
 	return invokes - 2
 }
+
+// TestLoadgenDrillDrainUnderBacklog proves the drill path end to end:
+// the drain RPC completes under load, post-drain invocations are counted
+// as designed refusals, and the report carries the assertions.
+func TestLoadgenDrillDrainUnderBacklog(t *testing.T) {
+	if testing.Short() {
+		t.Skip("drill smoke skipped under -short")
+	}
+
+	reportPath := filepath.Join(t.TempDir(), "report.json")
+	cfg := config{
+		mode:       "embedded",
+		drill:      "drain-under-backlog",
+		shape:      "agent-turn",
+		sessions:   2,
+		duration:   25 * time.Second,
+		reportPath: reportPath,
+		apiKey:     embeddedAPIKey,
+		burst:      3,
+	}
+
+	if code := runLoad(context.Background(), cfg); code != 0 {
+		t.Fatalf("loadgen exited %d, want 0", code)
+	}
+
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	var report loadReport
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatalf("parse report: %v", err)
+	}
+	if report.Drill == nil {
+		t.Fatal("report missing drill result")
+	}
+	for _, assertion := range report.Drill.Assertions {
+		if !assertion.OK {
+			t.Fatalf("drill assertion %q failed: %s", assertion.Name, assertion.Detail)
+		}
+	}
+	ops := map[string]opReport{}
+	for _, op := range report.Ops {
+		ops[op.Name] = op
+		if len(op.Errors) > 0 {
+			t.Fatalf("op %q recorded errors: %v", op.Name, op.Errors)
+		}
+	}
+}

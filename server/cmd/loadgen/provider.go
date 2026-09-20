@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	proto "toolplane/proto"
@@ -13,8 +14,9 @@ import (
 // runFakeProvider is the provider side of the load: it speaks the same
 // RPC loop a real provider process speaks — claim, stream, resolve,
 // heartbeat — so the load includes the dispatch path, not just the
-// ingress path.
-func (h *harness) runFakeProvider(sessionID, machineID string) {
+// ingress path. machineStop lets a drill kill exactly this provider
+// (h.stop kills the whole fleet).
+func (h *harness) runFakeProvider(sessionID, machineID string, machineStop chan struct{}) {
 	defer h.wg.Done()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -22,6 +24,8 @@ func (h *harness) runFakeProvider(sessionID, machineID string) {
 	go func() {
 		select {
 		case <-h.stop:
+			cancel()
+		case <-machineStop:
 			cancel()
 		case <-ctx.Done():
 		}
@@ -50,31 +54,32 @@ func (h *harness) runFakeProvider(sessionID, machineID string) {
 		default:
 		}
 
-		callCtx, callCancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 60*time.Second)
 		start := time.Now()
-		resp, err := h.reqs.ClaimNextRequest(callCtx, &proto.ClaimNextRequestRequest{
-			SessionId: sessionID,
-			MachineId: machineID,
-			ToolNames: []string{echoTool, streamTool},
+		var resp *proto.ClaimNextRequestResponse
+		err := h.withRetry(ctx, func() error {
+			callCtx, callCancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 60*time.Second)
+			defer callCancel()
+			var callErr error
+			resp, callErr = h.reqs.ClaimNextRequest(callCtx, &proto.ClaimNextRequestRequest{
+				SessionId: sessionID,
+				MachineId: machineID,
+				ToolNames: []string{echoTool, streamTool},
+			})
+			return callErr
 		})
-		callCancel()
 		if err != nil {
-			// The poll itself failed — that is a driver-visible fault,
+			// FAILED_PRECONDITION on the poll is the draining refusal —
+			// this machine is retired; stop claiming like a real
+			// provider would. Anything else is a driver-visible fault,
 			// unless the run window closed under it.
+			if status.Code(err) == codes.FailedPrecondition {
+				return
+			}
 			code := status.Code(err).String()
 			if ctx.Err() != nil {
 				code = ""
 			}
-			h.collector.recordOp("claim-poll", 0, code)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(idlePollInterval):
-			}
-			continue
-		}
-		if !resp.GetClaimed() {
-			h.collector.recordOp("claim-poll", milliseconds(start), "")
+			h.collector.recordOp("claim-poll", milliseconds(start), code)
 			select {
 			case <-ctx.Done():
 				return
@@ -85,6 +90,14 @@ func (h *harness) runFakeProvider(sessionID, machineID string) {
 		h.collector.recordOp("claim-poll", milliseconds(start), "")
 
 		request := resp.GetRequest()
+		if !resp.GetClaimed() || request == nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(idlePollInterval):
+			}
+			continue
+		}
 		switch request.GetToolName() {
 		case streamTool:
 			h.executeStreamingTool(ctx, sessionID, machineID, request)
@@ -92,6 +105,23 @@ func (h *harness) runFakeProvider(sessionID, machineID string) {
 			h.resolveRequest(ctx, sessionID, machineID, request, `{"loadgen":"done"}`, "resolution")
 		}
 	}
+}
+
+// withRetry retries UNAVAILABLE calls the way real provider SDKs do —
+// UNAVAILABLE is the retryable code (serialization-retry exhaustion
+// among others), and without the retry the fake provider would count
+// transient contention as faults the real fleet absorbs. Three attempts
+// with linear backoff; anything still failing returns to the caller.
+func (h *harness) withRetry(ctx context.Context, call func() error) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = call()
+		if err == nil || status.Code(err) != codes.Unavailable || ctx.Err() != nil {
+			return err
+		}
+		time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+	}
+	return err
 }
 
 // executeStreamingTool emits the token-stream shape on the provider
@@ -111,17 +141,20 @@ func (h *harness) executeStreamingTool(ctx context.Context, sessionID, machineID
 			h.resolveRequest(ctx, sessionID, machineID, request, `{"loadgen":"streamed"}`, "resolution")
 			return
 		case <-ticker.C:
-			appendCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 10*time.Second)
 			start := time.Now()
-			_, err := h.reqs.AppendRequestChunks(appendCtx, &proto.AppendRequestChunksRequest{
-				SessionId:  sessionID,
-				RequestId:  request.GetId(),
-				Chunks:     []string{chunk},
-				ResultType: "streaming",
-				MachineId:  machineID,
-				LeaseEpoch: request.GetLeaseEpoch(),
+			err := h.withRetry(ctx, func() error {
+				appendCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 10*time.Second)
+				defer cancel()
+				_, appendErr := h.reqs.AppendRequestChunks(appendCtx, &proto.AppendRequestChunksRequest{
+					SessionId:  sessionID,
+					RequestId:  request.GetId(),
+					Chunks:     []string{chunk},
+					ResultType: "streaming",
+					MachineId:  machineID,
+					LeaseEpoch: request.GetLeaseEpoch(),
+				})
+				return appendErr
 			})
-			cancel()
 			code := errorCode(err)
 			if ctx.Err() != nil {
 				code = ""
@@ -132,17 +165,20 @@ func (h *harness) executeStreamingTool(ctx context.Context, sessionID, machineID
 }
 
 func (h *harness) resolveRequest(ctx context.Context, sessionID, machineID string, request *proto.Request, result, resultType string) {
-	resolveCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 10*time.Second)
 	start := time.Now()
-	_, err := h.reqs.SubmitRequestResult(resolveCtx, &proto.SubmitRequestResultRequest{
-		SessionId:  sessionID,
-		RequestId:  request.GetId(),
-		Result:     result,
-		ResultType: resultType,
-		MachineId:  machineID,
-		LeaseEpoch: request.GetLeaseEpoch(),
+	err := h.withRetry(ctx, func() error {
+		resolveCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 10*time.Second)
+		defer cancel()
+		_, resolveErr := h.reqs.SubmitRequestResult(resolveCtx, &proto.SubmitRequestResultRequest{
+			SessionId:  sessionID,
+			RequestId:  request.GetId(),
+			Result:     result,
+			ResultType: resultType,
+			MachineId:  machineID,
+			LeaseEpoch: request.GetLeaseEpoch(),
+		})
+		return resolveErr
 	})
-	cancel()
 	code := errorCode(err)
 	if ctx.Err() != nil {
 		code = ""
