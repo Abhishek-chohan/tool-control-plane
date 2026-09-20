@@ -213,3 +213,7 @@ The reference deployment always secures the gateway's hop to the server with gRP
 - HTTP clients use the gateway on `:8080`.
 - Direct gRPC clients that connect to `:9001` must trust the same CA bundle used by the gateway.
 - The reference stack publishes `:9001` because the canonical API is still gRPC-first, but the operator source of truth for this initiative is the split control-plane deployment, not every client transport configuration detail.
+
+### Mesh-terminated transport
+
+Deployments that terminate TLS upstream of the server (service mesh, sidecar, or terminating proxy on the same host) can run the core hop plaintext deliberately: set `TOOLPLANE_SERVER_TRUSTED_TRANSPORT=1` and omit the certificate files. The declaration is the only production-legal plaintext path — it is the server-side counterpart of the gateways' `TOOLPLANE_TRUSTED_PROXY` — and the `toolplane_server_tls_enabled` metric stays `0` so a scrape-based alert can still flag unexpected plaintext. Everything inside the trusted boundary (the server's `:9001` listener) must stay unreachable from outside it.

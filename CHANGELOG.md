@@ -6,6 +6,29 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Error taxonomy completed across all handlers:** the remaining
+  handler-local status calls (list/session/machine/task handlers,
+  page-token decode) funnel through the shared translation. Narrow
+  wire changes: `ListAuditEvents` page-encode failures move
+  INVALID_ARGUMENT → INTERNAL (server-side fault, consistent with other
+  lists); cancelled contexts keep CANCELED (previously surfaced as
+  INTERNAL, e.g. a `DrainMachine` aborted by its caller); `CreateSession`
+  collisions keep bare ALREADY_EXISTS with no payload. See
+  `server/docs/release-notes/2026-09-20-error-taxonomy-completion.md`.
+
+- **Streaming RPC failures route through the shared error taxonomy:**
+  client disconnects mid-stream (`StreamExecuteTool`, `ResumeStream`)
+  still report CANCELED and chunk-delivery failures INTERNAL, but via
+  domain sentinels (`ErrClientDisconnected`, `ErrStreamSendFailed`,
+  `ErrPrincipalRequired`) so codes and messages are consistent across
+  handlers. `ResumeStream` no longer coerces every lookup error to
+  NOT_FOUND — a genuine miss still returns NOT_FOUND (same shape as the
+  cross-session guard, no existence oracle), while other store failures
+  keep their real code. See
+  `server/docs/release-notes/2026-09-20-error-taxonomy-stream-paths.md`.
+
 ### Added
 
 - **Reliability drills under load**: `loadgen --drill provider-kill |
@@ -25,6 +48,14 @@ release notes live in `server/docs/release-notes/`.
   server (memory, or Postgres via `TOOLPLANE_DATABASE_URL`); external
   mode drives any running server. See
   `server/docs/release-notes/2026-09-20-loadgen.md`.
+
+- **Core-server trusted-transport declaration**: `TOOLPLANE_SERVER_TRUSTED_TRANSPORT=1`
+  declares an upstream TLS terminator (mesh, sidecar, terminating proxy)
+  and is the only production-legal way to boot the core gRPC server
+  without certificate files — the server-side counterpart of the
+  gateways' `TOOLPLANE_TRUSTED_PROXY`. A new `toolplane_server_tls_enabled`
+  gauge makes served plaintext visible to alerts instead of boot logs.
+  See `server/docs/release-notes/2026-09-20-server-trusted-transport.md`.
 
 - **`toolplane status` and `toolplane doctor`**: status shows
   reachability, the server's build version, and its resolved storage
