@@ -1,5 +1,5 @@
 # Main Makefile for the Go server
-.PHONY: all demo build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race bench bench-postgres python-unit
+.PHONY: all demo build clean install run docker-build docker-run gen-proto gen-proto-python gen-client-protos gen-proto-all check-proto-drift conformance-python conformance-python-grpc conformance-python-http release-gate release-gate-observability release-gate-runtime reference-deployment-integration test-race bench bench-postgres soak python-unit
 
 PROTO_DRIFT_FILES = \
 	proto/service.pb.go \
@@ -150,6 +150,16 @@ load:
 
 SHAPE ?= mixed
 DURATION ?= 60s
+
+# Sustained mixed-shape load with leak assertions (bounded goroutine
+# growth, memory plateau) in the report. Same store rule as bench: when
+# TOOLPLANE_DATABASE_URL points the run at Postgres, use a throwaway
+# database. The nightly workflow runs this; per-PR CI does not.
+soak:
+	go run ./cmd/loadgen --soak --shape $(SHAPE) --duration $(SOAK_DURATION) --report bin/soak-report.json
+	@cat bin/soak-report.json
+
+SOAK_DURATION ?= 30m
 
 conformance-python-grpc:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k grpc -q

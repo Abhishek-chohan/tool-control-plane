@@ -180,3 +180,51 @@ func TestLoadgenDrillDrainUnderBacklog(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadgenSoakSmoke runs a short soak: the monitor samples runtime
+// gauges, and the post-run assertions (bounded goroutines, memory
+// plateau) must hold on a healthy run.
+func TestLoadgenSoakSmoke(t *testing.T) {
+	if testing.Short() {
+		t.Skip("soak smoke skipped under -short")
+	}
+
+	reportPath := filepath.Join(t.TempDir(), "report.json")
+	cfg := config{
+		mode:        "embedded",
+		soak:        true,
+		shape:       "mixed",
+		sessions:    2,
+		duration:    45 * time.Second,
+		reportPath:  reportPath,
+		apiKey:      embeddedAPIKey,
+		streamCount: 1,
+		burst:       2,
+	}
+
+	if code := runLoad(context.Background(), cfg); code != 0 {
+		t.Fatalf("loadgen exited %d, want 0", code)
+	}
+
+	raw, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatalf("read report: %v", err)
+	}
+	var report loadReport
+	if err := json.Unmarshal(raw, &report); err != nil {
+		t.Fatalf("parse report: %v", err)
+	}
+	if report.Drill == nil || report.Drill.Name != "soak" {
+		t.Fatalf("report missing soak result, got %+v", report.Drill)
+	}
+	for _, assertion := range report.Drill.Assertions {
+		if !assertion.OK {
+			t.Fatalf("soak assertion %q failed: %s", assertion.Name, assertion.Detail)
+		}
+	}
+	for _, op := range report.Ops {
+		if len(op.Errors) > 0 {
+			t.Fatalf("op %q recorded errors: %v", op.Name, op.Errors)
+		}
+	}
+}

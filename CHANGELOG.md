@@ -31,6 +31,14 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **Soak mode and nightly load workflow**: `loadgen --soak` samples
+  goroutines and resident memory during a run and asserts bounded
+  growth afterwards; `make soak` wraps it (default 30 minutes). A new
+  `Load` workflow runs the soak nightly against Postgres (also
+  `workflow_dispatch` with duration/shape inputs) and uploads the
+  report artifact — load evidence is scheduled, never a per-PR gate.
+  See `server/docs/release-notes/2026-09-20-soak-workflow.md`.
+
 - **Reliability drills under load**: `loadgen --drill provider-kill |
   drain-under-backlog | multi-instance-contention` injects the failure
   semantics from the reliability drill matrix (lease-expiry requeue
