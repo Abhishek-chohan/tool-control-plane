@@ -124,21 +124,31 @@ func runLoad(ctx context.Context, cfg config) int {
 	startMetrics := scrapeMetrics(metricsURL)
 
 	var drill *drillResult
+	var soak *soakMonitor
 	if cfg.drill != "" {
 		h.metricsURL = metricsURL
 		h.startMetrics = startMetrics
 		drill = runDrill(callCtx, h)
 	} else {
+		if cfg.soak {
+			soak = newSoakMonitor()
+			go soak.run(metricsURL)
+		}
 		// Drain the providers after the consumers so their resolve/append
 		// ops land in the counts, then scrape with every counter settled
 		// (the server itself stays up until runLoad returns).
 		runShape(callCtx, h)
 		h.shutdown()
+		if soak != nil {
+			soak.halt()
+			soak.finalSample(metricsURL)
+			drill = soak.assertions()
+		}
 	}
 	endMetrics := scrapeMetrics(metricsURL)
 
 	var metrics map[string]float64
-	if drill != nil {
+	if cfg.drill != "" {
 		metrics = h.drillMetrics
 	} else {
 		metrics = metricsDelta(startMetrics, endMetrics)

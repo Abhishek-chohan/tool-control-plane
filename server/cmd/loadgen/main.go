@@ -32,6 +32,7 @@ type config struct {
 	apiKey      string
 	shape       string
 	drill       string
+	soak        bool
 	sessions    int
 	duration    time.Duration
 	reportPath  string
@@ -48,6 +49,7 @@ func parseFlags(argv []string) (config, error) {
 	fs.StringVar(&cfg.apiKey, "api-key", "", "API key; defaults to $TOOLPLANE_API_KEY, then the embedded key")
 	fs.StringVar(&cfg.shape, "shape", "mixed", "workload shape: agent-turn, token-stream, heartbeat-fleet, discovery-churn, mixed")
 	fs.StringVar(&cfg.drill, "drill", "", "run a reliability drill under load instead of a plain shape: provider-kill, drain-under-backlog, multi-instance-contention")
+	fs.BoolVar(&cfg.soak, "soak", false, "sample goroutines and memory during the run and assert bounded growth at the end")
 	fs.IntVar(&cfg.sessions, "sessions", 8, "concurrent load sessions")
 	fs.DurationVar(&cfg.duration, "duration", 60*time.Second, "drive load for this long")
 	fs.StringVar(&cfg.reportPath, "report", "", "write the JSON report here (default: stdout only)")
@@ -72,6 +74,9 @@ func parseFlags(argv []string) (config, error) {
 	case "", "provider-kill", "drain-under-backlog", "multi-instance-contention":
 	default:
 		return config{}, fmt.Errorf("unknown drill %q", cfg.drill)
+	}
+	if cfg.soak && cfg.drill != "" {
+		return config{}, fmt.Errorf("--soak samples a plain shape; it cannot ride a drill")
 	}
 	if cfg.duration <= 0 {
 		return config{}, fmt.Errorf("--duration must be positive")
