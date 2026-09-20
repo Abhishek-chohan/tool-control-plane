@@ -205,6 +205,7 @@ LICENSE                      Apache-2.0
 - [server/docs/reference-deployment.md](server/docs/reference-deployment.md) — production topology, rollout, drain, rollback, validation.
 - [server/docs/operator-runbook.md](server/docs/operator-runbook.md) — symptom-first day-2 workflows.
 - [server/docs/reliability-drills.md](server/docs/reliability-drills.md) — named failure drills, expected outcomes, and what the drills do not claim.
+- [server/docs/capacity.md](server/docs/capacity.md) — measured capacity envelope: hot-path costs on both stores, contention signals, and the load/soak tooling that reproduces every number.
 - [server/docs/compatibility-policy.md](server/docs/compatibility-policy.md) — protobuf, gateway, and SDK compatibility rules; `api.v1` is the version boundary.
 - [server/docs/agent-runtime-integration-seam.md](server/docs/agent-runtime-integration-seam.md) — the integration seam for external agent runtimes and adapters.
 - [server/docs/incremental-adoption.md](server/docs/incremental-adoption.md) — stepwise first-tool migration guide.

@@ -8,6 +8,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **Measured capacity envelope** (`server/docs/capacity.md`): hot-path
+  costs on both stores from the benchmarks (the durable insert and
+  full-window chunk append dominate Postgres costs; reads are
+  sub-millisecond), end-to-end agent-turn numbers from the load driver,
+  contention signals and operator guidance, and the reproduction
+  command for every figure. Linked from the README's documentation
+  index; the observability contract cross-references the serialization
+  counters to it. See
+  `server/docs/release-notes/2026-09-20-capacity-doc.md`.
+
 - **Soak mode and nightly load workflow**: `loadgen --soak` samples
   goroutines and resident memory during a run and asserts bounded
   growth afterwards; `make soak` wraps it (default 30 minutes). A new
