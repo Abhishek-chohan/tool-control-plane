@@ -46,6 +46,8 @@ type RuntimeMetricsCollector struct {
 	storageSerializationRetries   prometheus.Counter
 	storageSerializationExhausted prometheus.Counter
 
+	transportTLS prometheus.Gauge
+
 	grpcRequests  *prometheus.CounterVec
 	grpcDurations *prometheus.HistogramVec
 }
@@ -84,7 +86,11 @@ func NewRuntimeMetricsCollector() *RuntimeMetricsCollector {
 		Name: "toolplane_storage_serialization_exhausted_total",
 		Help: "Total number of SERIALIZABLE transactions abandoned after retry exhaustion.",
 	})
-	c.registry.MustRegister(c.requestRequeues, c.requestDeadLetters, c.taskRetries, c.taskDeadLetters, c.storageSerializationRetries, c.storageSerializationExhausted)
+	c.transportTLS = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "toolplane_server_tls_enabled",
+		Help: "1 when the gRPC server terminates TLS itself, 0 when it serves plaintext (development, or production behind a declared upstream TLS terminator).",
+	})
+	c.registry.MustRegister(c.requestRequeues, c.requestDeadLetters, c.taskRetries, c.taskDeadLetters, c.storageSerializationRetries, c.storageSerializationExhausted, c.transportTLS)
 
 	// Labels are bounded by construction: methods by the proto surface,
 	// codes by the gRPC code set.
@@ -227,6 +233,16 @@ func (c *RuntimeMetricsCollector) SerializationRetry() {
 // after retry exhaustion. Implements storage.SerializationObserver.
 func (c *RuntimeMetricsCollector) SerializationExhausted() {
 	c.storageSerializationExhausted.Inc()
+}
+
+// SetTransportTLS records whether the gRPC server terminates TLS itself,
+// so plaintext serving is visible to alerts instead of boot logs alone.
+func (c *RuntimeMetricsCollector) SetTransportTLS(enabled bool) {
+	if enabled {
+		c.transportTLS.Set(1)
+		return
+	}
+	c.transportTLS.Set(0)
 }
 
 // Bind attaches live service sources used for gauge snapshots.

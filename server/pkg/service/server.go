@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"toolplane/internal/auth"
 	"toolplane/pkg/model"
+	"toolplane/pkg/storage"
 	proto "toolplane/proto"
 )
 
@@ -85,7 +84,7 @@ func (s *GRPCServer) ListTools(ctx context.Context, req *proto.ListToolsRequest)
 	// List tools from our service
 	tools, err := s.toolService.ListTools(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list tools: %v", err)
+		return nil, statusFromDomainError("list tools", err)
 	}
 
 	// Convert models to proto
@@ -155,15 +154,11 @@ func (s *GRPCServer) UpdateToolPing(ctx context.Context, req *proto.UpdateToolPi
 
 // CreateSession implements the gRPC CreateSession method
 func (s *GRPCServer) CreateSession(ctx context.Context, req *proto.CreateSessionRequest) (*proto.CreateSessionResponse, error) {
-	// Create session with optional client-specified ID
+	// On a collision the taxonomy returns bare AlreadyExists with no
+	// payload: fetching and returning the existing session would hand the
+	// caller another tenant's session metadata.
 	session, err := s.sessionService.CreateSession(req.UserId, req.Name, req.Description, req.SessionId, req.Namespace)
 	if err != nil {
-		// Existence-oracle guard: on a collision, return a bare
-		// AlreadyExists with no payload. Fetching and returning the existing
-		// session would hand the caller another tenant's session metadata.
-		if errors.Is(err, ErrAlreadyExists) {
-			return nil, status.Errorf(codes.AlreadyExists, "session %s already exists", req.SessionId)
-		}
 		return nil, statusFromDomainError("create session", err)
 	}
 
@@ -186,7 +181,7 @@ func (s *GRPCServer) ListSessions(ctx context.Context, req *proto.ListSessionsRe
 	// List sessions
 	sessions, err := s.sessionService.ListSessions(req.UserId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list sessions: %v", err)
+		return nil, statusFromDomainError("list sessions", err)
 	}
 
 	// Convert models to proto
@@ -233,7 +228,7 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 	// CreatedAt+ID tiebreak, not from isolation).
 	offset, err := decodePageOffset(req.PageToken)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+		return nil, statusFromDomainError("parse page token", err)
 	}
 
 	sessions, totalCount, err := s.sessionService.ListUserSessions(
@@ -243,7 +238,7 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 		req.Filter,
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list user sessions: %v", err)
+		return nil, statusFromDomainError("list user sessions", err)
 	}
 
 	// Convert models to proto
@@ -254,7 +249,7 @@ func (s *GRPCServer) ListUserSessions(ctx context.Context, req *proto.ListUserSe
 
 	page, err := buildListPage(offset, len(protoSessions), totalCount)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "page token: %v", err)
+		return nil, statusFromDomainError("encode page token", err)
 	}
 
 	return &proto.ListUserSessionsResponse{
@@ -273,7 +268,7 @@ func (s *GRPCServer) BulkDeleteSessions(ctx context.Context, req *proto.BulkDele
 		actingPrincipalKeyID(ctx),
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to bulk delete sessions: %v", err)
+		return nil, statusFromDomainError("bulk delete sessions", err)
 	}
 
 	return &proto.BulkDeleteSessionsResponse{
@@ -287,7 +282,7 @@ func (s *GRPCServer) GetSessionStats(ctx context.Context, req *proto.GetSessionS
 	// Get session statistics
 	totalSessions, activeSessions, expiredSessions, err := s.sessionService.GetSessionStats(req.UserId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get session stats: %v", err)
+		return nil, statusFromDomainError("get session stats", err)
 	}
 
 	return &proto.GetSessionStatsResponse{
@@ -303,7 +298,7 @@ func (s *GRPCServer) InvalidateSession(ctx context.Context, req *proto.Invalidat
 	// attributing the switch pull to the acting admin key.
 	revoked, err := s.sessionService.InvalidateSession(req.SessionId, req.Reason, actingPrincipalKeyID(ctx))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to invalidate session: %v", err)
+		return nil, statusFromDomainError("invalidate session", err)
 	}
 
 	return &proto.InvalidateSessionResponse{
@@ -345,7 +340,7 @@ func (s *GRPCServer) ListApiKeys(ctx context.Context, req *proto.ListApiKeysRequ
 	// List API keys
 	apiKeys, err := s.sessionService.ListApiKeys(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list API keys: %v", err)
+		return nil, statusFromDomainError("list API keys", err)
 	}
 
 	// Convert models to proto
@@ -378,7 +373,7 @@ func (s *GRPCServer) RevokeApiKey(ctx context.Context, req *proto.RevokeApiKeyRe
 func (s *GRPCServer) ListAuditEvents(ctx context.Context, req *proto.ListAuditEventsRequest) (*proto.ListAuditEventsResponse, error) {
 	offset, err := decodePageOffset(req.PageToken)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+		return nil, statusFromDomainError("parse page token", err)
 	}
 	pageSize := int(req.PageSize)
 	if pageSize <= 0 || pageSize > defaultListPageSize*10 {
@@ -403,7 +398,7 @@ func (s *GRPCServer) ListAuditEvents(ctx context.Context, req *proto.ListAuditEv
 
 	page, err := buildListPage(offset, len(protoEvents), total)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+		return nil, statusFromDomainError("parse page token", err)
 	}
 	return &proto.ListAuditEventsResponse{Events: protoEvents, Page: page}, nil
 }
@@ -472,7 +467,7 @@ func (s *GRPCServer) ListMachines(ctx context.Context, req *proto.ListMachinesRe
 	// List machines
 	machines, err := s.machineService.ListMachines(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list machines: %v", err)
+		return nil, statusFromDomainError("list machines", err)
 	}
 
 	// Convert models to proto
@@ -556,7 +551,7 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 	// from the CreatedAt+ID tiebreak, not from isolation).
 	offset, err := decodePageOffset(req.PageToken)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid page_token: %v", err)
+		return nil, statusFromDomainError("parse page token", err)
 	}
 
 	pageSize := int(req.PageSize)
@@ -572,7 +567,7 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 		offset,
 	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list requests: %v", err)
+		return nil, statusFromDomainError("list requests", err)
 	}
 
 	// Convert models to proto
@@ -583,7 +578,7 @@ func (s *GRPCServer) ListRequests(ctx context.Context, req *proto.ListRequestsRe
 
 	page, err := buildListPage(offset, len(protoRequests), totalCount)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "page token: %v", err)
+		return nil, statusFromDomainError("encode page token", err)
 	}
 
 	return &proto.ListRequestsResponse{
@@ -907,7 +902,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 			return statusFromDomainError("stream request", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
-			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
+			return statusFromDomainError("send chunk", wrapf(ErrStreamSendFailed, "%v", err))
 		}
 		if snapshot.IsTerminal() {
 			s.requestService.releaseRequestSignal(request.ID)
@@ -919,7 +914,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 			watch = s.requestService.subscribeRequest(request.ID)
 		case <-fallbackTick.C:
 		case <-stream.Context().Done():
-			return status.Errorf(codes.Canceled, "client disconnected")
+			return statusFromDomainError("follow tool stream", ErrClientDisconnected)
 		}
 	}
 }
@@ -931,19 +926,25 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 	// only reject existing requests, which itself leaks existence.
 	principal, ok := auth.PrincipalFromContext(stream.Context())
 	if !ok || principal == nil {
-		return status.Error(codes.PermissionDenied, "missing authenticated principal")
+		return statusFromDomainError("resume stream", ErrPrincipalRequired)
 	}
 
 	request, err := s.requestService.GetRequestByIDAnySession(req.RequestId)
 	if err != nil {
-		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
+		// A genuine miss collapses to the same not-found shape the session
+		// mismatch below returns; any other store failure keeps its real
+		// code instead of masquerading as a miss.
+		if errors.Is(err, ErrNotFound) || errors.Is(err, storage.ErrNotFound) {
+			return statusFromDomainError("resolve request", wrapf(ErrNotFound, "%s", req.RequestId))
+		}
+		return statusFromDomainError("resolve request", fmt.Errorf("%s: %w", req.RequestId, err))
 	}
 	// Session-scoped check before the capability check, returning the same
 	// NotFound as a missing request: a session-bound caller must not be able
 	// to distinguish "exists in another session" from "does not exist".
 	if principal.Mode != model.AuthModeFixed &&
 		principal.SessionID != "" && principal.SessionID != request.SessionID {
-		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
+		return statusFromDomainError("resolve request", wrapf(ErrNotFound, "%s", req.RequestId))
 	}
 	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityInvoke); err != nil {
 		return err
@@ -962,7 +963,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 			return statusFromDomainError("resume stream", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
-			return status.Errorf(codes.Internal, "failed to send resumed chunk: %v", err)
+			return statusFromDomainError("send resumed chunk", wrapf(ErrStreamSendFailed, "%v", err))
 		}
 		if snapshot.IsTerminal() {
 			s.requestService.releaseRequestSignal(req.RequestId)
@@ -974,7 +975,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 			watch = s.requestService.subscribeRequest(req.RequestId)
 		case <-fallbackTick.C:
 		case <-stream.Context().Done():
-			return status.Errorf(codes.Canceled, "client disconnected during resume")
+			return statusFromDomainError("resume stream", ErrClientDisconnected)
 		}
 	}
 }
@@ -1042,7 +1043,7 @@ func (s *GRPCServer) ListTasks(ctx context.Context, req *proto.ListTasksRequest)
 	// List tasks
 	tasks, err := s.tasksService.ListTasks(req.SessionId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to list tasks: %v", err)
+		return nil, statusFromDomainError("list tasks", err)
 	}
 
 	// Convert models to proto
@@ -1080,7 +1081,7 @@ func (s *GRPCServer) CancelTask(ctx context.Context, req *proto.CancelTaskReques
 // DrainMachine handles graceful machine drain and deregistration
 func (s *GRPCServer) DrainMachine(ctx context.Context, req *proto.DrainMachineRequest) (*proto.DrainMachineResponse, error) {
 	if err := s.machineService.DrainMachine(ctx, req.SessionId, req.MachineId); err != nil {
-		return &proto.DrainMachineResponse{Drained: false}, status.Errorf(codes.Internal, "drain failed: %v", err)
+		return &proto.DrainMachineResponse{Drained: false}, statusFromDomainError("drain machine", err)
 	}
 	return &proto.DrainMachineResponse{Drained: true}, nil
 }
@@ -1128,5 +1129,5 @@ func (s *GRPCServer) GetTool(ctx context.Context, req *proto.GetToolRequest) (*p
 	if strings.TrimSpace(req.ToolName) != "" {
 		return s.GetToolByName(ctx, &proto.GetToolByNameRequest{SessionId: req.SessionId, ToolName: req.ToolName})
 	}
-	return nil, status.Error(codes.InvalidArgument, "failed to get tool: provide either tool_id or tool_name")
+	return nil, statusFromDomainError("get tool", wrapf(ErrInvalidArgument, "provide either tool_id or tool_name"))
 }
