@@ -8,6 +8,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **Error taxonomy completed across all handlers:** the remaining
+  handler-local status calls (list/session/machine/task handlers,
+  page-token decode) funnel through the shared translation. Narrow
+  wire changes: `ListAuditEvents` page-encode failures move
+  INVALID_ARGUMENT → INTERNAL (server-side fault, consistent with other
+  lists); cancelled contexts keep CANCELED (previously surfaced as
+  INTERNAL, e.g. a `DrainMachine` aborted by its caller); `CreateSession`
+  collisions keep bare ALREADY_EXISTS with no payload. See
+  `server/docs/release-notes/2026-09-20-error-taxonomy-completion.md`.
+
 - **Streaming RPC failures route through the shared error taxonomy:**
   client disconnects mid-stream (`StreamExecuteTool`, `ResumeStream`)
   still report CANCELED and chunk-delivery failures INTERNAL, but via
