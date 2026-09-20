@@ -32,21 +32,25 @@ func (pageTokenCodecType) Encode(offset int) (string, error) {
 }
 
 // Decode parses a token into its offset. An empty token decodes to 0.
+// A malformed token is invalid caller input and carries the
+// ErrInvalidArgument sentinel so list handlers translate it through the
+// shared taxonomy.
 func (pageTokenCodecType) Decode(token string) (int, error) {
 	if strings.TrimSpace(token) == "" {
 		return 0, nil
 	}
+	malformed := wrapf(ErrInvalidArgument, "malformed page token")
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
-		return 0, fmt.Errorf("malformed page token")
+		return 0, malformed
 	}
 	value, ok := strings.CutPrefix(string(raw), "offset:")
 	if !ok {
-		return 0, fmt.Errorf("malformed page token")
+		return 0, malformed
 	}
 	offset, err := strconv.Atoi(value)
 	if err != nil || offset < 0 {
-		return 0, fmt.Errorf("malformed page token")
+		return 0, malformed
 	}
 	return offset, nil
 }

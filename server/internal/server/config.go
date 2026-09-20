@@ -129,5 +129,5 @@ func ValidateConfig() error {
 	}
 	certFile := strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_CERT_FILE"))
 	keyFile := strings.TrimSpace(os.Getenv("TOOLPLANE_SERVER_TLS_KEY_FILE"))
-	return validateGRPCTLSSettings(cfg.environment, certFile, keyFile)
+	return validateGRPCTLSSettings(cfg.environment, certFile, keyFile, trustedTransportDeclared())
 }
