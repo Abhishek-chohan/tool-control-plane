@@ -201,8 +201,12 @@ func (h *harness) waitReady(ctx context.Context) error {
 }
 
 func (h *harness) setupSessions(ctx context.Context) error {
+	// Unique per invocation, not per process: against a persistent store
+	// (Postgres, or any external server) a second run from the same
+	// process must not collide with the first run's session rows.
+	runID := time.Now().UnixNano()
 	for i := 0; i < h.cfg.sessions; i++ {
-		sessionID := fmt.Sprintf("loadgen-%d-%d", os.Getpid(), i)
+		sessionID := fmt.Sprintf("loadgen-%d-%d", runID, i)
 		if _, err := h.sess.CreateSession(withAPIKey(ctx, h.cfg.apiKey), &proto.CreateSessionRequest{
 			UserId:      "loadgen",
 			Name:        sessionID,
