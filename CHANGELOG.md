@@ -6,6 +6,19 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Streaming RPC failures route through the shared error taxonomy:**
+  client disconnects mid-stream (`StreamExecuteTool`, `ResumeStream`)
+  still report CANCELED and chunk-delivery failures INTERNAL, but via
+  domain sentinels (`ErrClientDisconnected`, `ErrStreamSendFailed`,
+  `ErrPrincipalRequired`) so codes and messages are consistent across
+  handlers. `ResumeStream` no longer coerces every lookup error to
+  NOT_FOUND — a genuine miss still returns NOT_FOUND (same shape as the
+  cross-session guard, no existence oracle), while other store failures
+  keep their real code. See
+  `server/docs/release-notes/2026-09-20-error-taxonomy-stream-paths.md`.
+
 ### Added
 
 - **`toolplane status` and `toolplane doctor`**: status shows

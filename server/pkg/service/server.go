@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 	"toolplane/internal/auth"
 	"toolplane/pkg/model"
+	"toolplane/pkg/storage"
 	proto "toolplane/proto"
 )
 
@@ -907,7 +908,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 			return statusFromDomainError("stream request", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
-			return status.Errorf(codes.Internal, "failed to send chunk: %v", err)
+			return statusFromDomainError("send chunk", wrapf(ErrStreamSendFailed, "%v", err))
 		}
 		if snapshot.IsTerminal() {
 			s.requestService.releaseRequestSignal(request.ID)
@@ -919,7 +920,7 @@ func (s *GRPCServer) StreamExecuteTool(req *proto.ExecuteToolRequest, stream pro
 			watch = s.requestService.subscribeRequest(request.ID)
 		case <-fallbackTick.C:
 		case <-stream.Context().Done():
-			return status.Errorf(codes.Canceled, "client disconnected")
+			return statusFromDomainError("follow tool stream", ErrClientDisconnected)
 		}
 	}
 }
@@ -931,19 +932,25 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 	// only reject existing requests, which itself leaks existence.
 	principal, ok := auth.PrincipalFromContext(stream.Context())
 	if !ok || principal == nil {
-		return status.Error(codes.PermissionDenied, "missing authenticated principal")
+		return statusFromDomainError("resume stream", ErrPrincipalRequired)
 	}
 
 	request, err := s.requestService.GetRequestByIDAnySession(req.RequestId)
 	if err != nil {
-		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
+		// A genuine miss collapses to the same not-found shape the session
+		// mismatch below returns; any other store failure keeps its real
+		// code instead of masquerading as a miss.
+		if errors.Is(err, ErrNotFound) || errors.Is(err, storage.ErrNotFound) {
+			return statusFromDomainError("resolve request", wrapf(ErrNotFound, "%s", req.RequestId))
+		}
+		return statusFromDomainError("resolve request", fmt.Errorf("%s: %w", req.RequestId, err))
 	}
 	// Session-scoped check before the capability check, returning the same
 	// NotFound as a missing request: a session-bound caller must not be able
 	// to distinguish "exists in another session" from "does not exist".
 	if principal.Mode != model.AuthModeFixed &&
 		principal.SessionID != "" && principal.SessionID != request.SessionID {
-		return status.Errorf(codes.NotFound, "failed to resolve request %s: not found", req.RequestId)
+		return statusFromDomainError("resolve request", wrapf(ErrNotFound, "%s", req.RequestId))
 	}
 	if err := auth.RequireSessionCapability(stream.Context(), request.SessionID, model.APIKeyCapabilityInvoke); err != nil {
 		return err
@@ -962,7 +969,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 			return statusFromDomainError("resume stream", err)
 		}
 		if err := sendExecuteToolSnapshot(stream.Send, snapshot, &lastSeq); err != nil {
-			return status.Errorf(codes.Internal, "failed to send resumed chunk: %v", err)
+			return statusFromDomainError("send resumed chunk", wrapf(ErrStreamSendFailed, "%v", err))
 		}
 		if snapshot.IsTerminal() {
 			s.requestService.releaseRequestSignal(req.RequestId)
@@ -974,7 +981,7 @@ func (s *GRPCServer) ResumeStream(req *proto.ResumeStreamRequest, stream proto.T
 			watch = s.requestService.subscribeRequest(req.RequestId)
 		case <-fallbackTick.C:
 		case <-stream.Context().Done():
-			return status.Errorf(codes.Canceled, "client disconnected during resume")
+			return statusFromDomainError("resume stream", ErrClientDisconnected)
 		}
 	}
 }
