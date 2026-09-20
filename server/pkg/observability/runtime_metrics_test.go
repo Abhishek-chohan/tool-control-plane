@@ -166,3 +166,26 @@ func TestQueueDepthGaugePrefersStoreSourcedCount(t *testing.T) {
 		t.Fatalf("expected fallback queue depth 2, got:\n%s", body)
 	}
 }
+
+// TestTransportTLSGaugeRendersServedTransport pins the served-transport
+// signal: 1 when the server terminates TLS itself, 0 for plaintext —
+// including production plaintext behind a declared upstream terminator.
+func TestTransportTLSGaugeRendersServedTransport(t *testing.T) {
+	scrape := func(c *RuntimeMetricsCollector) string {
+		recorder := httptest.NewRecorder()
+		c.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+		return recorder.Body.String()
+	}
+
+	tlsCollector := NewRuntimeMetricsCollector()
+	tlsCollector.SetTransportTLS(true)
+	if body := scrape(tlsCollector); !strings.Contains(body, "toolplane_server_tls_enabled 1") {
+		t.Fatalf("expected tls_enabled 1 after SetTransportTLS(true), got:\n%s", body)
+	}
+
+	plainCollector := NewRuntimeMetricsCollector()
+	plainCollector.SetTransportTLS(false)
+	if body := scrape(plainCollector); !strings.Contains(body, "toolplane_server_tls_enabled 0") {
+		t.Fatalf("expected tls_enabled 0 after SetTransportTLS(false), got:\n%s", body)
+	}
+}

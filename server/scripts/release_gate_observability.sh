@@ -104,6 +104,7 @@ required_metrics = [
 	"toolplane_task_dead_letter_current",
 	"toolplane_task_retries_total",
 	"toolplane_task_dead_letters_total",
+	"toolplane_server_tls_enabled",
 	"toolplane_grpc_requests_total",
 	"toolplane_grpc_request_duration_seconds_bucket",
 	"go_goroutines",

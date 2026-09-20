@@ -8,6 +8,14 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **Core-server trusted-transport declaration**: `TOOLPLANE_SERVER_TRUSTED_TRANSPORT=1`
+  declares an upstream TLS terminator (mesh, sidecar, terminating proxy)
+  and is the only production-legal way to boot the core gRPC server
+  without certificate files — the server-side counterpart of the
+  gateways' `TOOLPLANE_TRUSTED_PROXY`. A new `toolplane_server_tls_enabled`
+  gauge makes served plaintext visible to alerts instead of boot logs.
+  See `server/docs/release-notes/2026-09-20-server-trusted-transport.md`.
+
 - **`toolplane status` and `toolplane doctor`**: status shows
   reachability, the server's build version, and its resolved storage
   mode; doctor validates configuration (environment contract +
