@@ -213,6 +213,11 @@ func statusFromDomainError(action string, err error) error {
 		// calls carry their own timeouts) keeps its real code instead of
 		// failing closed to INTERNAL.
 		return status.Errorf(codes.DeadlineExceeded, "failed to %s: %v", action, err)
+	case errors.Is(err, context.Canceled):
+		// Same honesty for cancellation: a caller that went away (or a
+		// service loop aborted by one) keeps CANCELED instead of failing
+		// closed to INTERNAL.
+		return status.Errorf(codes.Canceled, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrStreamSendFailed):
 		return status.Errorf(codes.Internal, "failed to %s: %v", action, err)
 	default:

@@ -44,6 +44,7 @@ func TestStatusFromDomainErrorMapping(t *testing.T) {
 		{"client disconnected", wrapf(ErrClientDisconnected, "mid-stream"), codes.Canceled},
 		{"stream send failed", wrapf(ErrStreamSendFailed, "%v", errors.New("broken pipe")), codes.Internal},
 		{"principal required", ErrPrincipalRequired, codes.PermissionDenied},
+		{"canceled context keeps its code", fmt.Errorf("drain machine: %w", context.Canceled), codes.Canceled},
 		{"unmapped fails closed as internal", errors.New("persist claim failed: connection refused"), codes.Internal},
 		{"nil is nil", nil, codes.OK},
 	}
@@ -271,6 +272,43 @@ func TestResumeStreamHidesCrossSessionExistence(t *testing.T) {
 	}
 	if msg := status.Convert(mismatch).Message(); !strings.HasPrefix(msg, wantShape+request.ID) {
 		t.Fatalf("mismatch message = %q, want shape %q<id> with no extra detail", msg, wantShape)
+	}
+}
+
+func TestListHandlerErrorCodeTaxonomy(t *testing.T) {
+	server, sessionService, _, _, _, _ := newTaxonomyTestServer(t)
+
+	// A malformed page token is invalid caller input on every list that
+	// accepts one.
+	for _, handler := range []struct {
+		name string
+		call func() error
+	}{
+		{"list user sessions", func() error {
+			_, err := server.ListUserSessions(context.Background(), &proto.ListUserSessionsRequest{UserId: "u", PageToken: "!!not-base64!!"})
+			return err
+		}},
+		{"list requests", func() error {
+			_, err := server.ListRequests(context.Background(), &proto.ListRequestsRequest{SessionId: "sess-taxonomy", PageToken: "!!not-base64!!"})
+			return err
+		}},
+	} {
+		if err := handler.call(); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("%s with malformed page token = %v, want invalid argument", handler.name, err)
+		}
+	}
+
+	// A create collision is bare AlreadyExists — no existing-session
+	// payload leaks back to the caller.
+	if _, err := sessionService.CreateSession("user", "dup", "", "sess-dup", ""); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	_, err := server.CreateSession(context.Background(), &proto.CreateSessionRequest{UserId: "user", Name: "dup", SessionId: "sess-dup"})
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("duplicate create = %v, want already exists", err)
+	}
+	if msg := status.Convert(err).Message(); strings.Contains(msg, "\"id\"") || strings.Contains(msg, "created_at") {
+		t.Fatalf("collision response leaks session payload: %q", msg)
 	}
 }
 
