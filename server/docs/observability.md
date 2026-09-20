@@ -77,8 +77,9 @@ The supported metrics are:
 - `toolplane_task_dead_letter_current`
 - `toolplane_task_retries_total`
 - `toolplane_task_dead_letters_total`
+- `toolplane_server_tls_enabled`
 
-These metrics are intentionally small and map directly to the first operator questions this repo already supports: how much work is queued, whether work is stuck in flight, whether retries or dead letters are rising, and whether machine drain is making progress.
+These metrics are intentionally small and map directly to the first operator questions this repo already supports: how much work is queued, whether work is stuck in flight, whether retries or dead letters are rising, and whether machine drain is making progress. `toolplane_server_tls_enabled` is the transport exception signal — 0 on a production scrape means the server is serving plaintext, which is only legitimate behind a declared upstream TLS terminator (`TOOLPLANE_SERVER_TRUSTED_TRANSPORT=1`).
 
 The implementation additionally exports `toolplane_storage_serialization_retries_total` and `toolplane_storage_serialization_exhausted_total` (write-contention signals — see [server/docs/capacity.md](server/docs/capacity.md) for the measured envelope they belong to) plus the per-RPC `toolplane_grpc_requests_total` / `toolplane_grpc_request_duration_seconds` histograms recorded by the server's interceptors.
 

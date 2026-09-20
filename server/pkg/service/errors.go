@@ -133,6 +133,21 @@ var (
 	// ErrMachineCredentialRejected reports a failed per-machine credential
 	// check (wrong token on re-registration, or an unknown token).
 	ErrMachineCredentialRejected = errors.New("machine credential rejected")
+
+	// ErrClientDisconnected reports that the RPC's caller went away while a
+	// stream was in flight. The request's execution is unaffected — followers
+	// reattach with ResumeStream from their last received sequence.
+	ErrClientDisconnected = errors.New("client disconnected")
+
+	// ErrStreamSendFailed reports that a streaming response chunk could not
+	// be delivered to the caller. The failure is between the server and the
+	// client; the request's execution and retained window are unaffected.
+	ErrStreamSendFailed = errors.New("stream delivery failed")
+
+	// ErrPrincipalRequired reports a handler reached without an
+	// authenticated principal in the context — a wiring failure, failed
+	// closed before any state is consulted so existence is not leaked.
+	ErrPrincipalRequired = errors.New("authenticated principal required")
 )
 
 // statusFromDomainError translates a service-layer error into its gRPC
@@ -166,7 +181,8 @@ func statusFromDomainError(action string, err error) error {
 		return status.Errorf(codes.InvalidArgument, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineCredentialRejected),
 		errors.Is(err, ErrMachineNotToolOwner),
-		errors.Is(err, storage.ErrMachineNotToolOwner):
+		errors.Is(err, storage.ErrMachineNotToolOwner),
+		errors.Is(err, ErrPrincipalRequired):
 		return status.Errorf(codes.PermissionDenied, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineDraining),
 		errors.Is(err, storage.ErrToolOwnershipConflict),
@@ -177,7 +193,8 @@ func statusFromDomainError(action string, err error) error {
 		errors.Is(err, storage.ErrLeaseConflict),
 		errors.Is(err, storage.ErrRequestTerminal):
 		return status.Errorf(codes.FailedPrecondition, "failed to %s: %v", action, err)
-	case errors.Is(err, ErrRequestCancelled):
+	case errors.Is(err, ErrRequestCancelled),
+		errors.Is(err, ErrClientDisconnected):
 		return status.Errorf(codes.Canceled, "failed to %s: %v", action, err)
 	case errors.Is(err, ErrMachineAtCapacity):
 		return retryableStatus(fmt.Sprintf("failed to %s: %v", action, err), ReasonCapacityExhausted, 2*time.Second)
@@ -196,6 +213,13 @@ func statusFromDomainError(action string, err error) error {
 		// calls carry their own timeouts) keeps its real code instead of
 		// failing closed to INTERNAL.
 		return status.Errorf(codes.DeadlineExceeded, "failed to %s: %v", action, err)
+	case errors.Is(err, context.Canceled):
+		// Same honesty for cancellation: a caller that went away (or a
+		// service loop aborted by one) keeps CANCELED instead of failing
+		// closed to INTERNAL.
+		return status.Errorf(codes.Canceled, "failed to %s: %v", action, err)
+	case errors.Is(err, ErrStreamSendFailed):
+		return status.Errorf(codes.Internal, "failed to %s: %v", action, err)
 	default:
 		var expired *RequestStreamExpiredError
 		if errors.As(err, &expired) {

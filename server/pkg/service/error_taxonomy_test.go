@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"toolplane/internal/auth"
 	"toolplane/pkg/model"
 	"toolplane/pkg/storage"
 	"toolplane/pkg/trace"
@@ -38,6 +41,10 @@ func TestStatusFromDomainErrorMapping(t *testing.T) {
 		{"timeout out of range", wrapf(ErrRequestTimeoutOutOfRange, "7200s"), codes.OutOfRange},
 		{"expired replay window", &RequestStreamExpiredError{}, codes.OutOfRange},
 		{"machine credential rejected", wrapf(ErrMachineCredentialRejected, "machine m1"), codes.PermissionDenied},
+		{"client disconnected", wrapf(ErrClientDisconnected, "mid-stream"), codes.Canceled},
+		{"stream send failed", wrapf(ErrStreamSendFailed, "%v", errors.New("broken pipe")), codes.Internal},
+		{"principal required", ErrPrincipalRequired, codes.PermissionDenied},
+		{"canceled context keeps its code", fmt.Errorf("drain machine: %w", context.Canceled), codes.Canceled},
 		{"unmapped fails closed as internal", errors.New("persist claim failed: connection refused"), codes.Internal},
 		{"nil is nil", nil, codes.OK},
 	}
@@ -180,6 +187,128 @@ func TestCreateRequestErrorCodeTaxonomy(t *testing.T) {
 		SessionId: "sess-taxonomy", ToolName: "orphan",
 	}); status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("create without provider = %v, want failed precondition", err)
+	}
+}
+
+// failingSendStream rejects every chunk, driving the send-failure path.
+type failingSendStream struct {
+	*collectingExecuteToolStream
+}
+
+func (f *failingSendStream) Send(*proto.ExecuteToolChunk) error {
+	return errors.New("broken pipe")
+}
+
+func TestStreamHandlerErrorCodeTaxonomy(t *testing.T) {
+	server, requestService, sessionID := newRequestStreamTestServer(t)
+
+	// A stream caller that goes away mid-flight reports CANCELED; the work
+	// itself keeps running and is reattachable via ResumeStream.
+	liveCtx, cancelLive := context.WithCancel(fixedPrincipalContext())
+	defer cancelLive()
+	time.AfterFunc(50*time.Millisecond, cancelLive)
+	if err := server.StreamExecuteTool(&proto.ExecuteToolRequest{
+		SessionId: sessionID, ToolName: "echo", Input: `{}`,
+	}, newCollectingExecuteToolStream(liveCtx)); status.Code(err) != codes.Canceled {
+		t.Fatalf("client disconnect = %v, want canceled", err)
+	}
+
+	// A resumed stream reports the same condition when its caller leaves.
+	request, err := requestService.CreateRequest(sessionID, "echo", `{}`, 0, "")
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+	claimed := claimForStreamTest(t, requestService, sessionID, request.ID)
+	if err := requestService.AppendRequestChunks(sessionID, request.ID, claimed.LeasedBy, claimed.LeaseEpoch, []string{"alpha"}, model.ResultTypeStreaming); err != nil {
+		t.Fatalf("append chunks: %v", err)
+	}
+	resumeCtx, cancelResume := context.WithCancel(fixedPrincipalContext())
+	defer cancelResume()
+	time.AfterFunc(50*time.Millisecond, cancelResume)
+	if err := server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID}, newCollectingExecuteToolStream(resumeCtx)); status.Code(err) != codes.Canceled {
+		t.Fatalf("resume client disconnect = %v, want canceled", err)
+	}
+
+	// A caller whose transport cannot receive chunks reports INTERNAL.
+	if err := server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID},
+		&failingSendStream{collectingExecuteToolStream: newCollectingExecuteToolStream(fixedPrincipalContext())}); status.Code(err) != codes.Internal {
+		t.Fatalf("send failure = %v, want internal", err)
+	}
+}
+
+func TestResumeStreamFailsClosedWithoutPrincipal(t *testing.T) {
+	server, _, _ := newRequestStreamTestServer(t)
+
+	// No principal in the context: PERMISSION_DENIED before any lookup, so
+	// request existence is not leaked to an unauthenticated caller.
+	stream := newCollectingExecuteToolStream(context.Background())
+	if err := server.ResumeStream(&proto.ResumeStreamRequest{RequestId: "req-any"}, stream); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("resume without principal = %v, want permission denied", err)
+	}
+}
+
+func TestResumeStreamHidesCrossSessionExistence(t *testing.T) {
+	server, requestService, sessionID := newRequestStreamTestServer(t)
+
+	request, err := requestService.CreateRequest(sessionID, "echo", `{}`, 0, "")
+	if err != nil {
+		t.Fatalf("create request: %v", err)
+	}
+
+	// A session-bound principal must get NotFound for a missing request and
+	// for a request in another session, with messages that differ only by
+	// the caller-supplied id — no hint that the second one exists.
+	otherSession := auth.NewContext(context.Background(), &model.AuthPrincipal{Mode: model.AuthModeSessionKey, SessionID: "session-other"})
+
+	missing := server.ResumeStream(&proto.ResumeStreamRequest{RequestId: "req-missing"}, newCollectingExecuteToolStream(otherSession))
+	mismatch := server.ResumeStream(&proto.ResumeStreamRequest{RequestId: request.ID}, newCollectingExecuteToolStream(otherSession))
+
+	if status.Code(missing) != codes.NotFound || status.Code(mismatch) != codes.NotFound {
+		t.Fatalf("missing=%v mismatch=%v, want both not found", missing, mismatch)
+	}
+	wantShape := "failed to resolve request: not found: "
+	if msg := status.Convert(missing).Message(); !strings.HasPrefix(msg, wantShape+"req-missing") {
+		t.Fatalf("missing message = %q, want shape %q<id>", msg, wantShape)
+	}
+	if msg := status.Convert(mismatch).Message(); !strings.HasPrefix(msg, wantShape+request.ID) {
+		t.Fatalf("mismatch message = %q, want shape %q<id> with no extra detail", msg, wantShape)
+	}
+}
+
+func TestListHandlerErrorCodeTaxonomy(t *testing.T) {
+	server, sessionService, _, _, _, _ := newTaxonomyTestServer(t)
+
+	// A malformed page token is invalid caller input on every list that
+	// accepts one.
+	for _, handler := range []struct {
+		name string
+		call func() error
+	}{
+		{"list user sessions", func() error {
+			_, err := server.ListUserSessions(context.Background(), &proto.ListUserSessionsRequest{UserId: "u", PageToken: "!!not-base64!!"})
+			return err
+		}},
+		{"list requests", func() error {
+			_, err := server.ListRequests(context.Background(), &proto.ListRequestsRequest{SessionId: "sess-taxonomy", PageToken: "!!not-base64!!"})
+			return err
+		}},
+	} {
+		if err := handler.call(); status.Code(err) != codes.InvalidArgument {
+			t.Fatalf("%s with malformed page token = %v, want invalid argument", handler.name, err)
+		}
+	}
+
+	// A create collision is bare AlreadyExists — no existing-session
+	// payload leaks back to the caller.
+	if _, err := sessionService.CreateSession("user", "dup", "", "sess-dup", ""); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	_, err := server.CreateSession(context.Background(), &proto.CreateSessionRequest{UserId: "user", Name: "dup", SessionId: "sess-dup"})
+	if status.Code(err) != codes.AlreadyExists {
+		t.Fatalf("duplicate create = %v, want already exists", err)
+	}
+	if msg := status.Convert(err).Message(); strings.Contains(msg, "\"id\"") || strings.Contains(msg, "created_at") {
+		t.Fatalf("collision response leaks session payload: %q", msg)
 	}
 }
 
