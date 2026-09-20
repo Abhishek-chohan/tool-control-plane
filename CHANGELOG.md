@@ -31,6 +31,14 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **Reliability drills under load**: `loadgen --drill provider-kill |
+  drain-under-backlog | multi-instance-contention` injects the failure
+  semantics from the reliability drill matrix (lease-expiry requeue
+  after provider death, drain under saturation, cross-replica
+  contention) while agent-shaped load runs, with machine-checked
+  assertions in the report and an exit code that reflects them. See
+  `server/docs/release-notes/2026-09-20-loadgen-drills.md`.
+
 - **`loadgen` load driver**: `make load` (or `server/cmd/loadgen`)
   drives the control plane with agent-shaped workload — synchronous
   invoke bursts, long token streams, discovery churn, provider

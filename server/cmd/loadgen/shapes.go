@@ -15,7 +15,7 @@ import (
 // alive until all driven work finishes; stopping them earlier would turn
 // every in-flight wait into a timeout.
 func runShape(ctx context.Context, h *harness) {
-	deadline := time.After(time.Until(h.deadlineAt))
+	deadline := deadlineSignal(h)
 
 	switch h.cfg.shape {
 	case "agent-turn":
@@ -49,7 +49,7 @@ func (h *harness) partialOrError(name string, durationMS float64, code string, c
 
 // agentTurnWorkers is the canonical agent loop per session: discover
 // tools, fire a burst of synchronous invokes, repeat.
-func (h *harness) agentTurnWorkers(ctx context.Context, deadline <-chan time.Time) {
+func (h *harness) agentTurnWorkers(ctx context.Context, deadline <-chan struct{}) {
 	for _, sessionID := range h.sessions {
 		h.workerWG.Add(1)
 		go func(sessionID string) {
@@ -80,7 +80,7 @@ func (h *harness) agentTurnWorkers(ctx context.Context, deadline <-chan time.Tim
 
 // tokenStreamWorkers follows long streams end to end — the model-leg
 // shape: a minute-scale request whose chunks arrive continuously.
-func (h *harness) tokenStreamWorkers(ctx context.Context, deadline <-chan time.Time) {
+func (h *harness) tokenStreamWorkers(ctx context.Context, deadline <-chan struct{}) {
 	for i := 0; i < h.cfg.streamCount; i++ {
 		sessionID := h.sessions[i%len(h.sessions)]
 		h.workerWG.Add(1)
@@ -101,7 +101,7 @@ func (h *harness) tokenStreamWorkers(ctx context.Context, deadline <-chan time.T
 }
 
 // discoveryChurnWorkers keeps ListTools warm across sessions.
-func (h *harness) discoveryChurnWorkers(ctx context.Context, deadline <-chan time.Time) {
+func (h *harness) discoveryChurnWorkers(ctx context.Context, deadline <-chan struct{}) {
 	if len(h.sessions) == 0 {
 		return
 	}
@@ -125,10 +125,19 @@ func (h *harness) discoveryChurnWorkers(ctx context.Context, deadline <-chan tim
 	}()
 }
 
+// consumerTools is the client consumer ops ride — replica B in the
+// multi-instance drill, the primary connection otherwise.
+func (h *harness) consumerTools() proto.ToolServiceClient {
+	if h.altTools != nil {
+		return h.altTools
+	}
+	return h.tools
+}
+
 func (h *harness) listTools(ctx context.Context, sessionID string) {
 	callCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 10*time.Second)
 	start := time.Now()
-	_, err := h.tools.ListTools(callCtx, &proto.ListToolsRequest{SessionId: sessionID})
+	_, err := h.consumerTools().ListTools(callCtx, &proto.ListToolsRequest{SessionId: sessionID})
 	cancel()
 	h.collector.recordOp("list-tools", milliseconds(start), errorCode(err))
 }
@@ -136,13 +145,22 @@ func (h *harness) listTools(ctx context.Context, sessionID string) {
 func (h *harness) invokeEcho(ctx context.Context, sessionID string) {
 	callCtx, cancel := context.WithTimeout(withAPIKey(ctx, h.cfg.apiKey), 60*time.Second)
 	start := time.Now()
-	resp, err := h.tools.InvokeTool(callCtx, &proto.ExecuteToolRequest{
+	resp, err := h.consumerTools().InvokeTool(callCtx, &proto.ExecuteToolRequest{
 		SessionId:          sessionID,
 		ToolName:           echoTool,
 		Input:              `{}`,
 		WaitTimeoutSeconds: 30,
 	})
 	cancel()
+	if err != nil && h.refusalExpected &&
+		(status.Code(err).String() == codeNameFailedPrecondition || status.Code(err).String() == codeNameNotFound) {
+		// The designed refusal once a session's provider is drained
+		// away: no-provider FAILED_PRECONDITION while the machine is
+		// draining, NOT_FOUND once the drained machine took its tools
+		// with it. Counted separately, never a fault.
+		h.collector.recordOp("invoke-refused", milliseconds(start), "")
+		return
+	}
 	h.partialOrError("invoke", milliseconds(start), errorCode(err), ctx)
 	if err == nil && resp.GetStatus() != proto.RequestStatus_REQUEST_STATUS_DONE {
 		// The wait expired before the request finished — a dispatch-speed
@@ -181,4 +199,13 @@ func (h *harness) followStream(ctx context.Context, sessionID string) {
 		}
 		chunks++
 	}
+}
+
+// deadlineSignal returns a channel that closes once at the load window's
+// end — closed, not fired once, because every worker goroutine selects
+// on it and a single-value channel would wake only the first.
+func deadlineSignal(h *harness) <-chan struct{} {
+	done := make(chan struct{})
+	time.AfterFunc(time.Until(h.deadlineAt), func() { close(done) })
+	return done
 }
