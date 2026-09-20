@@ -93,7 +93,7 @@ func RunContext(ctx context.Context, opts Options) int {
 	}
 	// migrate-only does not start the gRPC server, so transport settings are not required.
 	if !opts.MigrateOnly {
-		if err := validateGRPCTLSSettings(cfg.environment, opts.TLSCertFile, opts.TLSKeyFile); err != nil {
+		if err := validateGRPCTLSSettings(cfg.environment, opts.TLSCertFile, opts.TLSKeyFile, trustedTransportDeclared()); err != nil {
 			slog.Error("invalid gRPC TLS configuration", slog.Any("err", err))
 			return 1
 		}
@@ -217,6 +217,13 @@ func RunContext(ctx context.Context, opts Options) int {
 	if err != nil {
 		slog.Error("failed to configure gRPC transport", slog.Any("err", err))
 		return 1
+	}
+	metricsCollector.SetTransportTLS(transportSummary == "tls")
+	// The gate above only lets production boot plaintext when an upstream
+	// terminator is declared; say so in the listening line instead of
+	// leaving the plaintext label to explain itself.
+	if transportSummary == "plaintext" && cfg.environment == "production" {
+		transportSummary = "plaintext (upstream TLS terminator declared via TOOLPLANE_SERVER_TRUSTED_TRANSPORT)"
 	}
 	// Explicit message bounds and keepalive enforcement: the defaults leave
 	// message size implicit (4MiB) and idle connections unpoliced. 16MiB
