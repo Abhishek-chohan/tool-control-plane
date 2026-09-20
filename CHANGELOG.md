@@ -31,6 +31,16 @@ release notes live in `server/docs/release-notes/`.
 
 ### Added
 
+- **`loadgen` load driver**: `make load` (or `server/cmd/loadgen`)
+  drives the control plane with agent-shaped workload — synchronous
+  invoke bursts, long token streams, discovery churn, provider
+  heartbeats — with in-process fake providers speaking the real
+  claim/execute loop, and reports per-op latency percentiles, error
+  counts, and server metric deltas as JSON. Embedded mode boots its own
+  server (memory, or Postgres via `TOOLPLANE_DATABASE_URL`); external
+  mode drives any running server. See
+  `server/docs/release-notes/2026-09-20-loadgen.md`.
+
 - **Core-server trusted-transport declaration**: `TOOLPLANE_SERVER_TRUSTED_TRANSPORT=1`
   declares an upstream TLS terminator (mesh, sidecar, terminating proxy)
   and is the only production-legal way to boot the core gRPC server

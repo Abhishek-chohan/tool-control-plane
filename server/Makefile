@@ -140,6 +140,17 @@ bench:
 
 bench-postgres: bench
 
+# One-minute mixed-shape load run against an in-process memory-mode
+# server (agent turns, token streams, discovery churn, heartbeats) with
+# a JSON report on stdout. `make load DURATION=30s SHAPE=agent-turn` to
+# vary it; set TOOLPLANE_DATABASE_URL (point it at a throwaway database)
+# to load the Postgres store. Advisory, like the benchmarks.
+load:
+	go run ./cmd/loadgen --shape $(SHAPE) --duration $(DURATION)
+
+SHAPE ?= mixed
+DURATION ?= 60s
+
 conformance-python-grpc:
 	python -m pytest ../clients/python-client/tests/conformance/test_conformance_runner.py -m conformance -k grpc -q
 
