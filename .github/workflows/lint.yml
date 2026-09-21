@@ -69,8 +69,10 @@ jobs:
         include:
           - module-name: server
             working-directory: server
+            go-sum: server/go.sum
           - module-name: go-client
             working-directory: clients/go-client
+            go-sum: clients/go-client/go.sum
 
     steps:
       - name: Checkout
@@ -80,6 +82,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
+          cache-dependency-path: ${{ matrix.go-sum }}
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -177,7 +180,7 @@ jobs:
       - name: Python wheel install smoke
         run: |
           cd clients/python-client
-          python -m pip install --quiet --target /tmp/wheeltest --no-deps dist/*.whl
+          python -m pip install --quiet --target /tmp/wheeltest dist/*.whl
           PYTHONPATH=/tmp/wheeltest python -c "import toolplane; import toolplane.provider_cli"
 
       - name: Set up Node
