@@ -49,8 +49,8 @@ import (
     "fmt"
     "log"
 
-    "toolplane-go-client/client"
-    pb "toolplane-go-client/proto"
+    "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/client"
+    pb "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/proto"
 )
 
 func main() {

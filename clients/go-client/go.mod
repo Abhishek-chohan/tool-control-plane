@@ -1,4 +1,4 @@
-module toolplane-go-client
+module github.com/Abhishek-chohan/tool-control-plane/clients/go-client
 
 go 1.24
 
