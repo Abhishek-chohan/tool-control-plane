@@ -8,6 +8,13 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **TypeScript package manifest is publishable:** version drops the
+  unreleased `1.0.0` claim for `0.0.0-dev` (the release workflow stamps
+  the tag at publish time), a `files` allowlist keeps the tarball to
+  `dist/` + README + license, and repository/bugs/homepage/engines
+  metadata and `prepublishOnly` build land. See
+  `server/docs/release-notes/2026-09-21-ts-package-manifest.md`.
+
 - **Error taxonomy completed across all handlers:** the remaining
   handler-local status calls (list/session/machine/task handlers,
   page-token decode) funnel through the shared translation. Narrow
