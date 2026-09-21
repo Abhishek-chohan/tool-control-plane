@@ -8,6 +8,13 @@ release notes live in `server/docs/release-notes/`.
 
 ### Changed
 
+- **Python package metadata tells the truth:** `toolplane-python-client`
+  no longer declares version `1.0.0` / Production-Stable — the version
+  is derived from the git tag at build time (untagged trees build as
+  `0.0.0.dev0`), maturity is Alpha, and a `make build-python` target
+  plus a Lint workflow job build and smoke the wheel on every change.
+  See `server/docs/release-notes/2026-09-21-python-package-metadata.md`.
+
 - **Error taxonomy completed across all handlers:** the remaining
   handler-local status calls (list/session/machine/task handlers,
   page-token decode) funnel through the shared translation. Narrow
