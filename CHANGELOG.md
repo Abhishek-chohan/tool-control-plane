@@ -22,6 +22,15 @@ release notes live in `server/docs/release-notes/`.
   metadata and `prepublishOnly` build land. See
   `server/docs/release-notes/2026-09-21-ts-package-manifest.md`.
 
+- **Go client is go-gettable:** the module path was
+  `toolplane-go-client`, unresolvable by any Go toolchain; it is now
+  `github.com/Abhishek-chohan/tool-control-plane/clients/go-client`,
+  with all in-module imports rewritten. `go get` resolves from the
+  first tagged release. The server module is unchanged. See
+  `server/docs/release-notes/2026-09-21-go-client-module-path.md`.
+
+### Changed
+
 - **Error taxonomy completed across all handlers:** the remaining
   handler-local status calls (list/session/machine/task handlers,
   page-token decode) funnel through the shared translation. Narrow

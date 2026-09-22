@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	pb "toolplane-go-client/proto"
 )
 
 type requestsServiceClientStub struct {
@@ -19,10 +19,11 @@ type requestsServiceClientStub struct {
 }
 
 type toolServiceClientStub struct {
-	getToolByIDFunc   func(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error)
-	getToolByNameFunc func(ctx context.Context, in *pb.GetToolByNameRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error)
-	deleteToolFunc    func(ctx context.Context, in *pb.DeleteToolRequest, opts ...grpc.CallOption) (*pb.DeleteToolResponse, error)
-	invokeToolFunc    func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error)
+	getToolFunc func(ctx context.Context, in *pb.GetToolRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error)
+	// The deprecated-RPC methods below exist to satisfy the generated
+	// pb.ToolServiceClient interface; the client itself uses GetTool.
+	deleteToolFunc func(ctx context.Context, in *pb.DeleteToolRequest, opts ...grpc.CallOption) (*pb.DeleteToolResponse, error)
+	invokeToolFunc func(ctx context.Context, in *pb.ExecuteToolRequest, opts ...grpc.CallOption) (*pb.ExecuteToolResponse, error)
 }
 
 type sessionsServiceClientStub struct {
@@ -111,20 +112,17 @@ func (s *toolServiceClientStub) ListTools(ctx context.Context, in *pb.ListToolsR
 }
 
 func (s *toolServiceClientStub) GetTool(ctx context.Context, in *pb.GetToolRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
+	if s.getToolFunc != nil {
+		return s.getToolFunc(ctx, in, opts...)
+	}
 	return nil, unexpectedToolCall("GetTool")
 }
 
-func (s *toolServiceClientStub) GetToolById(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
-	if s.getToolByIDFunc != nil {
-		return s.getToolByIDFunc(ctx, in, opts...)
-	}
+func (s *toolServiceClientStub) GetToolById(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) { //nolint:staticcheck // interface satisfaction only; the client uses GetTool
 	return nil, unexpectedToolCall("GetToolById")
 }
 
-func (s *toolServiceClientStub) GetToolByName(ctx context.Context, in *pb.GetToolByNameRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
-	if s.getToolByNameFunc != nil {
-		return s.getToolByNameFunc(ctx, in, opts...)
-	}
+func (s *toolServiceClientStub) GetToolByName(ctx context.Context, in *pb.GetToolByNameRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) { //nolint:staticcheck // interface satisfaction only; the client uses GetTool
 	return nil, unexpectedToolCall("GetToolByName")
 }
 
@@ -529,12 +527,12 @@ func TestCancelRequestReturnsSuccessFlag(t *testing.T) {
 
 func TestGetToolByIDUsesSessionID(t *testing.T) {
 	client := newConnectedToolClient(&toolServiceClientStub{
-		getToolByIDFunc: func(ctx context.Context, in *pb.GetToolByIdRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
+		getToolFunc: func(ctx context.Context, in *pb.GetToolRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
 			if in.SessionId != "session-1" {
-				t.Fatalf("GetToolById SessionId = %q, want session-1", in.SessionId)
+				t.Fatalf("GetTool SessionId = %q, want session-1", in.SessionId)
 			}
 			if in.ToolId != "tool-1" {
-				t.Fatalf("GetToolById ToolId = %q, want tool-1", in.ToolId)
+				t.Fatalf("GetTool ToolId = %q, want tool-1", in.ToolId)
 			}
 			return &pb.GetToolResponse{Tool: &pb.Tool{Id: in.ToolId, Name: "echo"}}, nil
 		},
@@ -551,12 +549,12 @@ func TestGetToolByIDUsesSessionID(t *testing.T) {
 
 func TestGetToolByNameUsesSessionID(t *testing.T) {
 	client := newConnectedToolClient(&toolServiceClientStub{
-		getToolByNameFunc: func(ctx context.Context, in *pb.GetToolByNameRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
+		getToolFunc: func(ctx context.Context, in *pb.GetToolRequest, opts ...grpc.CallOption) (*pb.GetToolResponse, error) {
 			if in.SessionId != "session-1" {
-				t.Fatalf("GetToolByName SessionId = %q, want session-1", in.SessionId)
+				t.Fatalf("GetTool SessionId = %q, want session-1", in.SessionId)
 			}
 			if in.ToolName != "echo" {
-				t.Fatalf("GetToolByName ToolName = %q, want echo", in.ToolName)
+				t.Fatalf("GetTool ToolName = %q, want echo", in.ToolName)
 			}
 			return &pb.GetToolResponse{Tool: &pb.Tool{Id: "tool-1", Name: in.ToolName}}, nil
 		},

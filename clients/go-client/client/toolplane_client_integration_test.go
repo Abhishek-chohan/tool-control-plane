@@ -14,7 +14,7 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	pb "toolplane-go-client/proto"
+	pb "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/proto"
 )
 
 const testConformanceAPIKey = "toolplane-conformance-fixture-key"

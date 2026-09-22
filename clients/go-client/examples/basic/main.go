@@ -6,8 +6,8 @@ import (
 	"os"
 	"strconv"
 
-	"toolplane-go-client/client"
-	clientpb "toolplane-go-client/proto"
+	"github.com/Abhishek-chohan/tool-control-plane/clients/go-client/client"
+	clientpb "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/proto"
 )
 
 func main() {

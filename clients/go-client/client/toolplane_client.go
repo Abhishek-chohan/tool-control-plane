@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
-	pb "toolplane-go-client/proto"
+	pb "github.com/Abhishek-chohan/tool-control-plane/clients/go-client/proto"
 )
 
 const (
@@ -613,7 +613,7 @@ func (c *ToolplaneClient) GetToolByID(toolID string) (*pb.Tool, error) {
 		return nil, err
 	}
 
-	request := &pb.GetToolByIdRequest{
+	request := &pb.GetToolRequest{
 		SessionId: sessionID,
 		ToolId:    toolID,
 	}
@@ -621,7 +621,7 @@ func (c *ToolplaneClient) GetToolByID(toolID string) (*pb.Tool, error) {
 	ctx, cancel := c.grpcContext(context.Background(), defaultGRPCCallTimeout)
 	defer cancel()
 
-	response, err := c.toolClient.GetToolById(ctx, request)
+	response, err := c.toolClient.GetTool(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -643,7 +643,7 @@ func (c *ToolplaneClient) GetToolByName(toolName string) (*pb.Tool, error) {
 		return nil, err
 	}
 
-	request := &pb.GetToolByNameRequest{
+	request := &pb.GetToolRequest{
 		SessionId: sessionID,
 		ToolName:  toolName,
 	}
@@ -651,7 +651,7 @@ func (c *ToolplaneClient) GetToolByName(toolName string) (*pb.Tool, error) {
 	ctx, cancel := c.grpcContext(context.Background(), defaultGRPCCallTimeout)
 	defer cancel()
 
-	response, err := c.toolClient.GetToolByName(ctx, request)
+	response, err := c.toolClient.GetTool(ctx, request)
 	if err != nil {
 		return nil, err
 	}
