@@ -12,7 +12,18 @@ A model being able to call a tool is not a reason to use Toolplane. If the work 
 
 ## Status
 
-Pre-1.0 and under active development; there are no tagged releases yet, and notable changes land under CHANGELOG `[Unreleased]` until the first tag — expect breaking changes. The wire contract is versioned: `api.v1` is the compatibility boundary per the [compatibility policy](server/docs/compatibility-policy.md). None of the packages are published to a registry, so install from source and pin to a commit.
+Pre-1.0 and under active development — expect breaking changes. The wire contract is versioned: `api.v1` is the compatibility boundary per the [compatibility policy](server/docs/compatibility-policy.md). The first tagged release is `v0.1.0`; notable changes land under CHANGELOG `[Unreleased]` between tags.
+
+The release artifacts are published from the tag:
+
+```bash
+pip install toolplane-python-client==0.1.0      # SDK + toolplane-provider CLI
+npm install toolplane-typescript-client@0.1.0
+docker pull ghcr.io/abhishek-chohan/toolplane-server:0.1.0
+go get github.com/Abhishek-chohan/tool-control-plane/clients/go-client@v0.1.0
+```
+
+Building from source still works exactly as the quickstart below shows.
 
 ## When to use it
 
@@ -116,9 +127,9 @@ Details in [server/DOCUMENTATION.md](server/DOCUMENTATION.md).
 
 | SDK | Install | Transports | Provider runtime |
 | --- | --- | --- | --- |
-| [Python](clients/python-client/README.md) | `pip install -e clients/python-client` | gRPC + HTTP, sync + async | Yes |
-| [Go](clients/go-client/README.md) | `cd clients/go-client && go mod tidy` | gRPC | No (raw machine wrappers only) |
-| [TypeScript](clients/typescript-client/README.md) | `cd clients/typescript-client && npm install && npm run build` | gRPC | Yes |
+| [Python](clients/python-client/README.md) | `pip install toolplane-python-client` | gRPC + HTTP, sync + async | Yes |
+| [Go](clients/go-client/README.md) | `go get github.com/Abhishek-chohan/tool-control-plane/clients/go-client` | gRPC | No (raw machine wrappers only) |
+| [TypeScript](clients/typescript-client/README.md) | `npm install toolplane-typescript-client` | gRPC | Yes |
 | [MCP adapter](clients/typescript-mcp-adapter/README.md) | build typescript-client first, then `cd clients/typescript-mcp-adapter && npm install && npm run build` | stdio | — |
 
 A provider and consumer in one process, using the manual server from the quickstart:

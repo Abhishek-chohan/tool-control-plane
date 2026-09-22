@@ -6,6 +6,8 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-09-22
+
 ### Changed
 
 - **Python package metadata tells the truth:** `toolplane-python-client`
