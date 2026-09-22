@@ -15,6 +15,13 @@ release notes live in `server/docs/release-notes/`.
   plus a Lint workflow job build and smoke the wheel on every change.
   See `server/docs/release-notes/2026-09-21-python-package-metadata.md`.
 
+- **TypeScript package manifest is publishable:** version drops the
+  unreleased `1.0.0` claim for `0.0.0-dev` (the release workflow stamps
+  the tag at publish time), a `files` allowlist keeps the tarball to
+  `dist/` + README + license, and repository/bugs/homepage/engines
+  metadata and `prepublishOnly` build land. See
+  `server/docs/release-notes/2026-09-21-ts-package-manifest.md`.
+
 - **Go client is go-gettable:** the module path was
   `toolplane-go-client`, unresolvable by any Go toolchain; it is now
   `github.com/Abhishek-chohan/tool-control-plane/clients/go-client`,

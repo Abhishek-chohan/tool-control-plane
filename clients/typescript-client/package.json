@@ -1,11 +1,29 @@
 {
   "name": "toolplane-typescript-client",
-  "version": "1.0.0",
+  "version": "0.0.0-dev",
   "description": "TypeScript gRPC client for the Toolplane control plane",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Abhishek-chohan/tool-control-plane.git",
+    "directory": "clients/typescript-client"
+  },
+  "bugs": {
+    "url": "https://github.com/Abhishek-chohan/tool-control-plane/issues"
+  },
+  "homepage": "https://github.com/Abhishek-chohan/tool-control-plane#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc && node scripts/copy-proto-assets.mjs",
+    "prepublishOnly": "npm run build",
     "lint": "eslint --max-warnings=0 \"src/**/*.ts\" \"tests/**/*.ts\"",
     "start": "node dist/client.js",
     "dev": "ts-node src/client.ts",
