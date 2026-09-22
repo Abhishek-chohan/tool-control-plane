@@ -1,29 +1,27 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=45", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "toolplane-python-client"
-version = "1.0.0"
 description = "Python client for the Toolplane control plane"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "Toolplane Team", email = "team@toolplane.io"}
+    {name = "Abhishek Chohan", email = "54611095+Abhishek-chohan@users.noreply.github.com"}
 ]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+dynamic = ["version"]
 
 dependencies = [
     "grpcio>=1.80.0",
@@ -82,6 +80,13 @@ include = ["toolplane*"]
 
 [tool.setuptools.package-dir]
 "" = "."
+
+# The released version comes from the git tag at build time
+# (SETUPTOOLS_SCM_PRETEND_VERSION in the release workflow, or the tag
+# itself); an untagged tree builds as 0.0.0.dev0 so nothing ever claims
+# a version that was not released.
+[tool.setuptools_scm]
+fallback_version = "0.0.0.dev0"
 
 [tool.black]
 line-length = 88

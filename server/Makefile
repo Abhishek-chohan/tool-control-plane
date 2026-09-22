@@ -125,6 +125,13 @@ python-unit:
 python-unit-no-cov:
 	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py toolplane/toolkits/standalone_tools -q
 
+# Build the Python SDK distribution (wheel + sdist) into bin/dist for
+# inspection or upload. The version comes from the git tag when the
+# tree is tagged (or SETUPTOOLS_SCM_PRETEND_VERSION); untagged trees
+# build as 0.0.0.dev0.
+build-python:
+	cd ../clients/python-client && python3 -m build --outdir $(CURDIR)/bin/dist .
+
 # Server suite under the race detector, every package.
 test-race:
 	go test ./... -count=1 -race
