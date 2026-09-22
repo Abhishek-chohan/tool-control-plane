@@ -69,8 +69,10 @@ jobs:
         include:
           - module-name: server
             working-directory: server
+            go-sum: server/go.sum
           - module-name: go-client
             working-directory: clients/go-client
+            go-sum: clients/go-client/go.sum
 
     steps:
       - name: Checkout
@@ -80,6 +82,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.x'
+          cache-dependency-path: ${{ matrix.go-sum }}
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -152,3 +155,50 @@ jobs:
 
       - name: Check generated SDK README sections
         run: python tools/gen_sdk_readmes.py --check
+
+  packaging:
+    name: Package Build Sanity
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build Python distribution
+        run: |
+          python -m pip install --quiet build twine
+          cd clients/python-client
+          python -m build --outdir dist .
+          python -m twine check dist/*
+
+      - name: Python wheel install smoke
+        run: |
+          cd clients/python-client
+          python -m pip install --quiet --target /tmp/wheeltest dist/*.whl
+          PYTHONPATH=/tmp/wheeltest python -c "import toolplane; import toolplane.provider_cli"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: TypeScript package packs and imports
+        working-directory: clients/typescript-client
+        run: |
+          cp ../../LICENSE .
+          npm ci
+          npm run build
+          npm pack --pack-destination dist
+          TARBALL="$(pwd)/dist/$(ls dist | grep '\.tgz$')"
+          tar -tzf "$TARBALL" | grep -q "package/dist/index.js"
+          tar -tzf "$TARBALL" | grep -q "package/README.md"
+          mkdir -p /tmp/npmtest && cd /tmp/npmtest
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$TARBALL" > /dev/null
+          node -e "const m = require('toolplane-typescript-client'); if (!m) process.exit(1); console.log('require ok')"
