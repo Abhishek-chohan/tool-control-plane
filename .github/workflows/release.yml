@@ -1,0 +1,199 @@
+name: Release
+
+# One tag, every artifact: the Python SDK to PyPI, the TypeScript SDK
+# to npm, the server image to ghcr, and a GitHub Release carrying the
+# built artifacts and their checksums. Publish steps run only on `v*`
+# tags; `workflow_dispatch` builds everything in dry-run mode
+# (artifacts uploaded, nothing published) so the pipeline is exercised
+# before any version number is spent.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (build and upload artifacts, publish nothing)"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+jobs:
+  pypi:
+    name: Python SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=0.0.0.dev0" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build distribution
+        working-directory: clients/python-client
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ env.VERSION }}
+        run: |
+          python -m pip install --quiet build twine
+          python -m build --outdir dist .
+          python -m twine check dist/*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: clients/python-client/dist/*
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish to PyPI
+        if: github.event_name == 'push'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: clients/python-client/dist
+
+  npm:
+    name: TypeScript SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=0.0.0-dev" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build and pack
+        working-directory: clients/typescript-client
+        env:
+          VERSION: ${{ env.VERSION }}
+        run: |
+          cp ../../LICENSE .
+          npm ci
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          npm run build
+          npm pack --pack-destination dist
+          echo "TARBALL=$(pwd)/dist/toolplane-typescript-client-${VERSION}.tgz" >> "$GITHUB_ENV"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarball
+          path: clients/typescript-client/dist/*.tgz
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Publish to npm
+        if: github.event_name == 'push'
+        run: npm publish "${TARBALL}" --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  images:
+    name: Server image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION=0.0.0.dev0" >> "$GITHUB_ENV"
+          fi
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER}/toolplane-server" >> "$GITHUB_ENV"
+
+      - name: Build image
+        working-directory: server
+        run: docker build -t "${IMAGE}:${VERSION}" .
+
+      - name: Login to ghcr
+        if: github.event_name == 'push'
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push version tag
+        if: github.event_name == 'push'
+        run: docker push "${IMAGE}:${VERSION}"
+
+      - name: Push latest tag
+        if: github.event_name == 'push'
+        run: |
+          docker tag "${IMAGE}:${VERSION}" "${IMAGE}:latest"
+          docker push "${IMAGE}:latest"
+
+  github-release:
+    name: GitHub Release
+    needs: [pypi, npm, images]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: "*"
+          merge-multiple: true
+
+      - name: Compile checksums
+        working-directory: release-assets
+        run: sha256sum * > SHA256SUMS.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          awk -v sec "## [${VER}]" 'index($0, sec)==1 {flag=1; next} /^## \[/{if (flag) exit} flag' CHANGELOG.md > release-body.md || true
+          [ -s release-body.md ] || echo "Toolplane ${GITHUB_REF_NAME}" > release-body.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Toolplane ${GITHUB_REF_NAME}" \
+            --notes-file release-body.md \
+            release-assets/*
