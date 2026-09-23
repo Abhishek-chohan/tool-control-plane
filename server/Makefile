@@ -120,10 +120,10 @@ conformance-python:
 # only — printed, never gated; the conformance suite is the quality
 # signal that blocks.
 python-unit:
-	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py toolplane/toolkits/standalone_tools -q --cov=toolplane --cov-report=term
+	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py tests/test_errors.py toolplane/toolkits/standalone_tools -q --cov=toolplane --cov-report=term
 
 python-unit-no-cov:
-	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py toolplane/toolkits/standalone_tools -q
+	cd ../clients/python-client && python -m pytest tests/test_request_wrappers.py tests/test_grpc_tls.py tests/test_tool_reconnect.py tests/test_wait_derivation.py tests/test_provider_cli.py tests/test_errors.py toolplane/toolkits/standalone_tools -q
 
 # Build the Python SDK distribution (wheel + sdist) into bin/dist for
 # inspection or upload. The version comes from the git tag when the

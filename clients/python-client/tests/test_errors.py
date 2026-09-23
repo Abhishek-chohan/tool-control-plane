@@ -8,6 +8,7 @@ from toolplane.core.errors import (
     ToolplaneInvalidArgumentError,
     ToolplaneNotFoundError,
     ToolplaneResourceExhaustedError,
+    ToolplaneTimeoutError,
     ToolplaneUnauthenticatedError,
     ToolplaneUnavailableError,
     api_error_from_http_response,
@@ -83,9 +84,7 @@ def test_not_found_and_invalid_argument():
 def test_gateway_body_code_is_authoritative():
     # grpc-gateway maps FAILED_PRECONDITION to HTTP 400 but carries the
     # numeric gRPC code (9) in the body; the body wins over the status.
-    err = api_error_from_http_response(
-        400, '{"code": 9, "message": "lease conflict"}'
-    )
+    err = api_error_from_http_response(400, '{"code": 9, "message": "lease conflict"}')
     assert isinstance(err, ToolplaneFailedPreconditionError)
     assert err.code == "FAILED_PRECONDITION"
     assert err.retryable is False
@@ -117,3 +116,18 @@ def test_retryable_set_is_transport_and_capacity_only():
     assert RETRYABLE_GRPC_CODES == frozenset(
         {grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.RESOURCE_EXHAUSTED}
     )
+
+
+def test_timeout_error_constructs_message_only():
+    # Regression: raising message-only used to explode with a TypeError
+    # about missing keyword arguments, masking the real timeout.
+    err = ToolplaneTimeoutError("timed out after 60s")
+    assert str(err) == "timed out after 60s"
+    assert err.code == "DEADLINE_EXCEEDED"
+    assert err.retryable is True
+
+
+def test_timeout_error_carries_request_context():
+    err = ToolplaneTimeoutError("timed out", request_id="req-1", status="running")
+    assert err.request_id == "req-1"
+    assert err.status == "running"

@@ -172,6 +172,18 @@ class ToolplaneAlreadyExistsError(ToolplaneAPIError):
 class ToolplaneTimeoutError(ToolplaneAPIError):
     """The call exceeded its deadline (DEADLINE_EXCEEDED)."""
 
+    def __init__(self, message, *, request_id=None, status=None, details=None):
+        # Raised message-only from the wait paths; a local timeout is
+        # retryable — the request itself may still be running.
+        super().__init__(
+            message,
+            code="DEADLINE_EXCEEDED",
+            retryable=True,
+            request_id=request_id,
+            status=status,
+            details=details,
+        )
+
 
 class ToolplaneUnavailableError(ToolplaneAPIError):
     """The server or a proxy was momentarily unreachable (UNAVAILABLE);
