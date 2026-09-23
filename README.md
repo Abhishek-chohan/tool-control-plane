@@ -19,7 +19,7 @@ The release artifacts are published from the tag:
 ```bash
 pip install toolplane-python-client==0.1.0      # SDK + toolplane-provider CLI
 npm install toolplane-typescript-client@0.1.0
-docker pull ghcr.io/abhishek-chohan/toolplane-server:0.1.0
+docker pull ghcr.io/abhishek-chohan/toolplane-server:v0.1.0
 go get github.com/Abhishek-chohan/tool-control-plane/clients/go-client@v0.1.0
 ```
 

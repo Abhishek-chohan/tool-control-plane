@@ -6,6 +6,16 @@ release notes live in `server/docs/release-notes/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Python SDK: local-timeout errors construct correctly.**
+  `ToolplaneTimeoutError` raised message-only exploded with a
+  `TypeError` (missing `code`/`retryable`) instead of surfacing the
+  timeout; it now carries `DEADLINE_EXCEEDED` and is marked retryable.
+  The typed-error tests file is also now part of the `python-unit`
+  suite, and the README's Docker install line uses the correct
+  image tag (`v0.1.0`).
+
 ## [0.1.0] — 2026-09-22
 
 ### Changed
