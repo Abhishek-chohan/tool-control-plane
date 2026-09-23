@@ -28,6 +28,10 @@ PROTO_DRIFT_FILES = \
 
 all: build
 
+# List targets with the first line of their comment block.
+help:
+	@awk '/^# /{c = c (c ? " " : "") substr($$0, 3); next} /^[a-zA-Z0-9_-]+:/{if (c) {split($$1, a, ":"); printf "%-36s %s", a[1], c; print ""} c = ""; next} {c = ""}' $(MAKEFILE_LIST)
+
 # Build identity injected into the binaries: HealthCheck reports it so
 # operators can detect client/server skew. main.version feeds each
 # binary's own --version; pkg/service.BuildVersion feeds HealthCheck.
